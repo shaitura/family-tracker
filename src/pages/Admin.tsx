@@ -1,7 +1,18 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/lib/base44Client';
 import { Transaction, CATEGORIES, PAYMENT_METHODS } from '@/types';
+
+// Display labels for enum values stored in English
+const OPTION_LABELS: Record<string, Record<string, string>> = {
+  type:   { expense: 'הוצאה',  income: 'הכנסה' },
+  payer:  { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותפת' },
+  status: { paid: 'שולם', pending: 'ממתין', future: 'עתידי' },
+};
+
+function displayLabel(field: string, value: string): string {
+  return OPTION_LABELS[field]?.[value] ?? value;
+}
 
 const COLUMNS = [
   { key: 'date',           label: 'תאריך',        type: 'date',   width: 120 },
@@ -21,11 +32,7 @@ const PASTE_COL_ORDER = [
   'payer', 'payment_method', 'expense_class', 'status', 'notes',
 ];
 
-type ColKey = typeof COLUMNS[number]['key'];
 type EditingCell = { id: string; field: string } | null;
-
-const DISPLAY_TYPE: Record<string, string> = { expense: 'הוצאה', income: 'הכנסה' };
-const DISPLAY_STATUS: Record<string, string> = { paid: 'שולם', pending: 'ממתין', future: 'עתידי' };
 
 function parseDate(v: string): string {
   const m = v.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
@@ -186,55 +193,89 @@ export default function Admin() {
     else { setSortField(field); setSortDir('asc'); }
   }
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!editingCell) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('[data-cell]')) setEditingCell(null);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [editingCell]);
+
   // ── cell renderer ────────────────────────────────────────────────────────
   function renderCell(row: Transaction, col: typeof COLUMNS[number]) {
     const isEditing = editingCell?.id === row.id && editingCell?.field === col.key;
     const value = row[col.key as keyof Transaction] ?? '';
 
     if (isEditing) {
+      // Custom dropdown for select columns
       if (col.type === 'select' && 'options' in col) {
         return (
-          <select
-            autoFocus
-            className="w-full h-full bg-yellow-50 border-0 outline-none text-sm px-1"
-            value={String(value)}
-            onChange={(e) => { updateCell(row.id, col.key, e.target.value); setEditingCell(null); }}
-            onBlur={() => setEditingCell(null)}
-          >
-            {(col.options as readonly string[]).map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
+          <div data-cell className="relative h-full" style={{ zIndex: 200 }}>
+            {/* Current value bar */}
+            <div className="px-2 py-1 text-sm bg-yellow-50 h-full flex items-center font-medium cursor-default">
+              {displayLabel(col.key, String(value))}
+            </div>
+            {/* Options list */}
+            <div className="absolute top-full right-0 bg-white border border-gray-300 rounded shadow-xl"
+                 style={{ minWidth: '130px', zIndex: 9999 }}>
+              {(col.options as readonly string[]).map((opt) => (
+                <div
+                  key={opt}
+                  className={[
+                    'px-3 py-2 text-sm cursor-pointer whitespace-nowrap',
+                    opt === String(value)
+                      ? 'bg-blue-500 text-white font-medium'
+                      : 'text-gray-800 hover:bg-blue-50',
+                  ].join(' ')}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    updateCell(row.id, col.key, opt);
+                    setEditingCell(null);
+                  }}
+                >
+                  {displayLabel(col.key, opt)}
+                </div>
+              ))}
+            </div>
+          </div>
         );
       }
+
+      // Text / number / date input
       return (
-        <input
-          autoFocus
-          type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
-          className="w-full h-full bg-yellow-50 border-0 outline-none text-sm px-1"
-          defaultValue={String(value)}
-          onBlur={(e) => {
-            const v = col.type === 'number' ? parseFloat(e.target.value) : e.target.value;
-            updateCell(row.id, col.key, v);
-            setEditingCell(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === 'Escape') {
-              const inp = e.target as HTMLInputElement;
-              const v = col.type === 'number' ? parseFloat(inp.value) : inp.value;
+        <div data-cell className="h-full">
+          <input
+            autoFocus
+            type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
+            className="w-full h-full bg-yellow-50 border-0 outline-none text-sm px-2"
+            defaultValue={String(value)}
+            onBlur={(e) => {
+              const v = col.type === 'number' ? parseFloat(e.target.value) : e.target.value;
               updateCell(row.id, col.key, v);
               setEditingCell(null);
-            }
-          }}
-        />
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'Escape') {
+                const inp = e.target as HTMLInputElement;
+                const v = col.type === 'number' ? parseFloat(inp.value) : inp.value;
+                updateCell(row.id, col.key, v);
+                setEditingCell(null);
+              }
+            }}
+          />
+        </div>
       );
     }
 
-    let display = String(value);
-    if (col.key === 'type')   display = DISPLAY_TYPE[display]   ?? display;
-    if (col.key === 'status') display = DISPLAY_STATUS[display] ?? display;
+    // ── Display (read-only) ──
+    let display = displayLabel(col.key, String(value));
     if (col.key === 'amount') display = `₪${Number(value).toLocaleString()}`;
 
     return (
       <div
+        data-cell
         className="px-2 py-1 truncate text-sm cursor-pointer hover:bg-yellow-50 h-full flex items-center"
         onClick={() => setEditingCell({ id: row.id, field: col.key })}
         title={String(value)}
