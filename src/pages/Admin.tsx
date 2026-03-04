@@ -284,7 +284,7 @@ export default function Admin() {
       if (ws1) {
         const cols = 'ABCDEFGHIJKLMNOPQR'.split('');
         const rows: string[][] = [['שורה', ...cols]];
-        for (let r = 1; r <= 20; r++) {
+        for (let r = 1; r <= 30; r++) {
           const rowCells = cols.map(c => {
             const cell = ws1[`${c}${r}`];
             return cell?.v != null ? String(cell.v).substring(0, 15) : '';
