@@ -87,7 +87,8 @@ export default function Admin() {
   const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('desc');
   const [search, setSearch]     = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [pasteOpen, setPasteOpen]     = useState(false);
+  const [pasteOpen, setPasteOpen]         = useState(false);
+  const [confirmClear, setConfirmClear]   = useState(false);
   const [pasteRows, setPasteRows]     = useState<Partial<Transaction>[]>([]);
   const [pasteText, setPasteText]     = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,6 +143,13 @@ export default function Admin() {
     for (const id of selectedIds) await base44.entities.Transaction.delete(id);
     setSelectedIds(new Set());
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
+  }
+
+  function clearAllData() {
+    ['ft_transaction', 'ft_budget', 'ft_initialized'].forEach((k) => localStorage.removeItem(k));
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    setSelectedIds(new Set());
+    setConfirmClear(false);
   }
 
   async function importPasteRows() {
@@ -314,6 +322,7 @@ export default function Admin() {
             </button>
           )}
           <button onClick={exportCSV}        className="bg-gray-200  text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">⬇ ייצא CSV</button>
+          <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
       </div>
 
@@ -411,6 +420,23 @@ export default function Admin() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Confirm Clear Dialog ── */}
+      {confirmClear && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h2 className="text-lg font-bold mb-2">אפס את כל הנתונים?</h2>
+            <p className="text-gray-500 text-sm mb-6">
+              פעולה זו תמחק את כל ההכנסות וההוצאות לצמיתות.<br />לא ניתן לשחזר אותן.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setConfirmClear(false)} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">ביטול</button>
+              <button onClick={clearAllData} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">כן, מחק הכל</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Paste Dialog ── */}
       {pasteOpen && (

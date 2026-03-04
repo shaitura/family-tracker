@@ -196,7 +196,8 @@ function parseTransactionText(text: string): Partial<Transaction>[] {
 // ────────────────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────────────────
-seedData();
+// seedData() intentionally removed — app starts with empty database.
+// Use the Admin panel to import transactions.
 
 export const base44 = {
   entities: {
