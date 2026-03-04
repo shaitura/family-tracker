@@ -279,8 +279,8 @@ export default function Admin() {
       const preview = parseAnnualExcel(workbook, annualYear);
       setAnnualPreview(preview);
 
-      // Diagnostic: show first 15 rows × 18 cols of first sheet
-      const ws1 = workbook.Sheets[workbook.SheetNames[0]];
+      // Diagnostic: show rows of sheet "1" (the first monthly sheet)
+      const ws1 = workbook.Sheets['1'];
       if (ws1) {
         const cols = 'ABCDEFGHIJKLMNOPQR'.split('');
         const rows: string[][] = [['שורה', ...cols]];
@@ -292,9 +292,8 @@ export default function Admin() {
           if (rowCells.some(v => v !== '')) rows.push([String(r), ...rowCells]);
         }
         setAnnualDiag(rows);
-        // Also log to console for debugging
         console.log('Sheet names:', workbook.SheetNames);
-        console.log('First sheet rows (1-20):', rows);
+        console.log('Sheet "1" rows (1-20):', rows);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -662,7 +661,7 @@ export default function Admin() {
               {annualDiag.length > 0 && annualPreview.length === 0 && (
                 <div className="mt-4">
                   <p className="text-xs font-semibold text-gray-500 mb-1">
-                    🔍 תוכן הלשונית "{annualSheetNames[0]}" (שורות עם נתונים):
+                    🔍 תוכן הלשונית "1" (שורות עם נתונים):
                   </p>
                   <div className="overflow-auto border rounded text-xs font-mono max-h-48">
                     <table className="border-collapse w-max">
