@@ -186,12 +186,26 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
 
 // ────────────────────────────────────────────────────────────────────────────
 
+function matchesAllFields(t: Transaction, q: string): boolean {
+  const s = q.toLowerCase();
+  return [
+    t.date, t.sub_category ?? '', t.category, t.notes ?? '',
+    t.payer, OPTION_LABELS.payer?.[t.payer] ?? '',
+    t.payment_method, t.expense_class ?? '',
+    t.type, OPTION_LABELS.type?.[t.type] ?? '',
+    t.status, OPTION_LABELS.status?.[t.status] ?? '',
+    String(t.amount),
+  ].some((v) => v.toLowerCase().includes(s));
+}
+
 export default function Admin() {
   const queryClient = useQueryClient();
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [sortField, setSortField] = useState<string>('date');
   const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('desc');
   const [search, setSearch]     = useState('');
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [showColFilters, setShowColFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pasteOpen, setPasteOpen]         = useState(false);
   const [confirmClear, setConfirmClear]   = useState(false);
@@ -210,17 +224,18 @@ export default function Admin() {
     queryFn: () => base44.entities.Transaction.filter(),
   });
 
+  const activeColFilters = Object.values(colFilters).filter(Boolean).length;
+
   // ── filtered + sorted rows ──────────────────────────────────────────────
   const rows = [...transactions]
     .filter((t) => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return (
-        t.notes?.toLowerCase().includes(s) ||
-        t.category.includes(s) ||
-        t.amount.toString().includes(s) ||
-        t.date.includes(s)
-      );
+      if (search && !matchesAllFields(t, search)) return false;
+      for (const [key, val] of Object.entries(colFilters)) {
+        if (!val) continue;
+        const tv = String(t[key as keyof Transaction] ?? '').toLowerCase();
+        if (!tv.includes(val.toLowerCase())) return false;
+      }
+      return true;
     })
     .sort((a, b) => {
       const av = String(a[sortField as keyof Transaction] ?? '');
@@ -464,11 +479,20 @@ export default function Admin() {
 
         <input
           type="text"
-          placeholder="חיפוש..."
+          placeholder="חיפוש בכל השדות..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border rounded px-3 py-1.5 text-sm w-44 mr-2"
+          className="border rounded px-3 py-1.5 text-sm w-52 mr-2"
         />
+        <button
+          onClick={() => setShowColFilters((v) => !v)}
+          className={`px-3 py-1.5 rounded text-sm border transition-all ${showColFilters || activeColFilters > 0 ? 'bg-blue-100 border-blue-400 text-blue-700 font-medium' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+        >
+          🔽 פילטר עמודות{activeColFilters > 0 ? ` (${activeColFilters})` : ''}
+        </button>
+        {activeColFilters > 0 && (
+          <button onClick={() => setColFilters({})} className="text-xs text-red-500 hover:underline">✕ נקה פילטרים</button>
+        )}
 
         <div className="flex gap-2 mr-auto flex-wrap">
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
@@ -518,10 +542,46 @@ export default function Admin() {
                 >
                   {col.label}{' '}
                   {sortField === col.key ? (sortDir === 'asc' ? '▲' : '▼') : <span className="text-gray-300">↕</span>}
+                  {colFilters[col.key] && <span className="mr-1 text-blue-500 text-xs">●</span>}
                 </th>
               ))}
               <th className="w-14 px-2 py-2 border-b bg-gray-100" />
             </tr>
+
+            {/* ── Column filter row ── */}
+            {showColFilters && (
+              <tr className="bg-blue-50">
+                <th className="border-b border-l" />
+                <th className="border-b border-l" />
+                {COLUMNS.map((col) => (
+                  <th key={col.key} className="border-b border-l px-1 py-1" style={{ minWidth: col.width }}>
+                    {col.type === 'select' && 'options' in col ? (
+                      <select
+                        value={colFilters[col.key] ?? ''}
+                        onChange={(e) => setColFilters((prev) => ({ ...prev, [col.key]: e.target.value }))}
+                        className="w-full text-xs border rounded px-1 py-0.5 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <option value="">הכל</option>
+                        {(col.options as readonly string[]).map((opt) => (
+                          <option key={opt} value={opt}>{displayLabel(col.key, opt)}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={colFilters[col.key] ?? ''}
+                        onChange={(e) => setColFilters((prev) => ({ ...prev, [col.key]: e.target.value }))}
+                        placeholder="סנן..."
+                        className="w-full text-xs border rounded px-1 py-0.5 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                  </th>
+                ))}
+                <th className="border-b" />
+              </tr>
+            )}
           </thead>
 
           <tbody>
