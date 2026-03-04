@@ -15,21 +15,22 @@ function displayLabel(field: string, value: string): string {
 }
 
 const COLUMNS = [
-  { key: 'date',           label: 'תאריך',        type: 'date',   width: 120 },
-  { key: 'type',           label: 'סוג',           type: 'select', options: ['expense', 'income'], width: 90 },
-  { key: 'category',       label: 'קטגוריה',       type: 'select', options: [...CATEGORIES],       width: 110 },
-  { key: 'sub_category',   label: 'תת-קטגוריה',    type: 'text',   width: 120 },
-  { key: 'amount',         label: 'סכום',          type: 'number', width: 90 },
-  { key: 'payer',          label: 'מי שילם',       type: 'select', options: ['Shi', 'Ortal', 'Joint'], width: 90 },
-  { key: 'payment_method', label: 'אמצעי תשלום',   type: 'select', options: PAYMENT_METHODS,        width: 120 },
-  { key: 'expense_class',  label: 'סיווג',         type: 'select', options: ['קבועה', 'משתנה'],     width: 80 },
-  { key: 'status',         label: 'סטטוס',         type: 'select', options: ['paid', 'pending', 'future'], width: 90 },
-  { key: 'notes',          label: 'הערות',         type: 'text',   width: 200 },
+  { key: 'date',           label: 'תאריך',              type: 'date',   width: 110 },
+  { key: 'expense_class',  label: 'סוג הוצאה',          type: 'select', options: ['קבועה', 'משתנה'],                   width: 90  },
+  { key: 'sub_category',   label: 'פרטים',               type: 'text',   width: 160 },
+  { key: 'payer',          label: 'משולם / משותפת',      type: 'select', options: ['Shi', 'Ortal', 'Joint'],           width: 120 },
+  { key: 'amount',         label: 'סכום',                type: 'number', width: 90  },
+  { key: 'payment_method', label: 'שיטת הוצאה',          type: 'select', options: PAYMENT_METHODS,                    width: 120 },
+  { key: 'category',       label: 'סיווג הוצאה',         type: 'select', options: [...CATEGORIES],                    width: 120 },
+  { key: 'notes',          label: 'הערות',               type: 'text',   width: 200 },
+  { key: 'type',           label: 'הכנסה / הוצאה',       type: 'select', options: ['expense', 'income'],              width: 110 },
+  { key: 'status',         label: 'סטטוס',               type: 'select', options: ['paid', 'pending', 'future'],      width: 90  },
 ] as const;
 
+// Paste column order — matches the Excel column order (right→left = A→last)
 const PASTE_COL_ORDER = [
-  'date', 'type', 'category', 'sub_category', 'amount',
-  'payer', 'payment_method', 'expense_class', 'status', 'notes',
+  'date', 'expense_class', 'sub_category', 'payer', 'amount',
+  'payment_method', 'category', 'notes', 'type', 'status',
 ];
 
 type EditingCell = { id: string; field: string } | null;
