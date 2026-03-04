@@ -138,27 +138,16 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
     const expenses: Partial<Transaction>[] = [];
     const incomes:  Partial<Transaction>[] = [];
 
-    // Debug: log first 5 rows of this sheet
-    if (month === 1) {
-      for (let dbgRow = 9; dbgRow <= 15; dbgRow++) {
-        const cells: Record<string, unknown> = {};
-        for (const col of 'ABCDEFGH'.split('')) {
-          cells[col] = ws[`${col}${dbgRow}`]?.v;
-        }
-        console.log(`Sheet1 row${dbgRow}:`, cells, '| E raw:', ws[`E${dbgRow}`], '| parsed:', parseAmount(ws[`E${dbgRow}`]?.v));
-      }
-    }
-
     for (let row = 9; row <= 200; row++) {
-      // ── Expenses: A=יום B=סוג-הוצאה C=פרטים D=מקום/משותפת E=סכום F=שיטה G=סיווג H=הערות
+      // ── Expenses: A=יום B=קבועה/משתנה C=פרטים D=משלם E=סכום F=שיטה G=סיווג H=הערות
       const expAmt = parseAmount(ws[`E${row}`]?.v);
       if (expAmt > 0) {
-        const cls = String(ws[`C${row}`]?.v ?? '').trim();
+        const cls = String(ws[`B${row}`]?.v ?? '').trim();
         expenses.push({
           date,
           type:            'expense',
           expense_class:   cls === 'קבועה' ? 'קבועה' : 'משתנה',
-          sub_category:    String(ws[`B${row}`]?.v ?? '').trim() || undefined,
+          sub_category:    String(ws[`C${row}`]?.v ?? '').trim() || undefined,
           payer:           mapPayer(String(ws[`D${row}`]?.v ?? '')),
           amount:          expAmt,
           payment_method:  mapPaymentMethod(ws[`F${row}`]?.v),
@@ -168,15 +157,15 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
         });
       }
 
-      // ── Incomes: columns L–R (same offset pattern) ────────────────────
+      // ── Incomes: M=קבועה/משתנה N=פירוט O=משלם P=סכום Q=שיטה R=הערות
       const incAmt = parseAmount(ws[`P${row}`]?.v);
       if (incAmt > 0) {
-        const cls = String(ws[`N${row}`]?.v ?? '').trim();
+        const cls = String(ws[`M${row}`]?.v ?? '').trim();
         incomes.push({
           date,
           type:            'income',
           expense_class:   cls === 'קבועה' ? 'קבועה' : 'משתנה',
-          sub_category:    String(ws[`M${row}`]?.v ?? '').trim() || undefined,
+          sub_category:    String(ws[`N${row}`]?.v ?? '').trim() || undefined,
           payer:           mapPayer(String(ws[`O${row}`]?.v ?? '')),
           amount:          incAmt,
           payment_method:  mapPaymentMethod(ws[`Q${row}`]?.v),
