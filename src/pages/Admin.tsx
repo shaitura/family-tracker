@@ -206,6 +206,7 @@ export default function Admin() {
   const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
   const [annualLoading, setAnnualLoading]       = useState(false);
   const [annualSheetNames, setAnnualSheetNames] = useState<string[]>([]);
+  const [annualDiag, setAnnualDiag]             = useState<string[][]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: transactions = [], isLoading } = useQuery({
@@ -275,7 +276,26 @@ export default function Admin() {
     reader.onload = (ev) => {
       const workbook = XLSX.read(ev.target?.result, { type: 'array' });
       setAnnualSheetNames(workbook.SheetNames);
-      setAnnualPreview(parseAnnualExcel(workbook, annualYear));
+      const preview = parseAnnualExcel(workbook, annualYear);
+      setAnnualPreview(preview);
+
+      // Diagnostic: show first 15 rows × 18 cols of first sheet
+      const ws1 = workbook.Sheets[workbook.SheetNames[0]];
+      if (ws1) {
+        const cols = 'ABCDEFGHIJKLMNOPQR'.split('');
+        const rows: string[][] = [['שורה', ...cols]];
+        for (let r = 1; r <= 20; r++) {
+          const rowCells = cols.map(c => {
+            const cell = ws1[`${c}${r}`];
+            return cell?.v != null ? String(cell.v).substring(0, 15) : '';
+          });
+          if (rowCells.some(v => v !== '')) rows.push([String(r), ...rowCells]);
+        }
+        setAnnualDiag(rows);
+        // Also log to console for debugging
+        console.log('Sheet names:', workbook.SheetNames);
+        console.log('First sheet rows (1-20):', rows);
+      }
     };
     reader.readAsArrayBuffer(file);
     e.target.value = '';
@@ -458,7 +478,7 @@ export default function Admin() {
         <div className="flex gap-2 mr-auto flex-wrap">
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
           <button onClick={openPasteDialog}  className="bg-blue-500  text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600">📋 הדבק מאקסל</button>
-          <button onClick={() => { setAnnualPreview([]); setAnnualSheetNames([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
+          <button onClick={() => { setAnnualPreview([]); setAnnualSheetNames([]); setAnnualDiag([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
           {selectedIds.size > 0 && (
             <button onClick={deleteSelected} className="bg-red-500   text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
               🗑 מחק נבחרים ({selectedIds.size})
@@ -635,6 +655,29 @@ export default function Admin() {
                     <li>הכנסות: עמודות <strong>L–R</strong> (שמאל) — סוג | פרטים | מקור | סכום | שיטה | הערות</li>
                     <li>תאריך: <strong>1 לחודש</strong> לפי מספר הלשונית</li>
                   </ul>
+                </div>
+              )}
+
+              {/* Diagnostic: raw sheet preview when no data found */}
+              {annualDiag.length > 0 && annualPreview.length === 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-gray-500 mb-1">
+                    🔍 תוכן הלשונית "{annualSheetNames[0]}" (שורות עם נתונים):
+                  </p>
+                  <div className="overflow-auto border rounded text-xs font-mono max-h-48">
+                    <table className="border-collapse w-max">
+                      <tbody>
+                        {annualDiag.map((row, i) => (
+                          <tr key={i} className={i === 0 ? 'bg-gray-200 font-bold' : i % 2 === 0 ? 'bg-gray-50' : ''}>
+                            {row.map((cell, j) => (
+                              <td key={j} className="border px-1.5 py-0.5 whitespace-nowrap text-gray-700">{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">הקוד מחפש: שורה 9+, סכום הוצאה בעמודה D, סכום הכנסה בעמודה O</p>
                 </div>
               )}
 
