@@ -298,7 +298,7 @@ export default function Admin() {
 
   // ────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 56px - 64px)' }} dir="rtl">
+    <div className="flex flex-col text-gray-900 bg-white" style={{ height: 'calc(100vh - 56px - 64px)' }} dir="rtl">
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-white border-b">
