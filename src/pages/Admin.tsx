@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as XLSX from 'xlsx';
 import { base44 } from '@/lib/base44Client';
-import { Transaction, CATEGORIES, PAYMENT_METHODS } from '@/types';
+import { Transaction, CATEGORIES, PAYMENT_METHODS, Category, PaymentMethod } from '@/types';
 
 // Display labels for enum values stored in English
 const OPTION_LABELS: Record<string, Record<string, string>> = {
@@ -81,6 +82,114 @@ function parsePasteText(text: string): Partial<Transaction>[] {
   return results;
 }
 
+// ── Annual Excel import helpers ──────────────────────────────────────────────
+
+const MONTH_NAMES = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+type MonthPreview = {
+  month: number;
+  monthName: string;
+  expenses: Partial<Transaction>[];
+  incomes: Partial<Transaction>[];
+};
+
+function parseAmount(v: unknown): number {
+  if (v == null || v === '') return 0;
+  const n = parseFloat(String(v).replace(/[,₪\s]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+function mapPayer(raw: string): 'Shi' | 'Ortal' | 'Joint' {
+  const v = raw.trim();
+  if (v === 'אורטל') return 'Ortal';
+  if (v === 'משותפת' || v === 'משותף') return 'Joint';
+  return 'Shi'; // שי / אישי / default
+}
+
+function mapPaymentMethod(v: unknown): PaymentMethod {
+  const s = String(v ?? '').trim();
+  if (s === 'מזומן')       return 'מזומן';
+  if (s === 'ביט')         return 'ביט';
+  if (s === "צ'ק")         return "צ'ק";
+  if (s === 'הוראת קבע')   return 'הוראת קבע';
+  if (s === 'העברה')       return 'העברה';
+  return 'אשראי';
+}
+
+function mapCategory(raw: string): Category {
+  const s = String(raw ?? '').trim();
+  if (!s) return 'שונות';
+  if (CATEGORIES.includes(s as Category)) return s as Category;
+  // partial match: "דיור - שכירות" → "דיור"
+  for (const cat of CATEGORIES) {
+    if (s.startsWith(cat) || s.includes(cat)) return cat;
+  }
+  return 'שונות';
+}
+
+function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[] {
+  const results: MonthPreview[] = [];
+
+  for (let month = 1; month <= 12; month++) {
+    const ws = workbook.Sheets[String(month)];
+    if (!ws) continue;
+
+    const date = `${year}-${String(month).padStart(2, '0')}-01`;
+    const expenses: Partial<Transaction>[] = [];
+    const incomes:  Partial<Transaction>[] = [];
+
+    for (let row = 9; row <= 100; row++) {
+      // ── Expenses: columns A–H ──────────────────────────────────────────
+      const expAmt = parseAmount(ws[`D${row}`]?.v);
+      if (expAmt > 0) {
+        const cls = String(ws[`A${row}`]?.v ?? '').trim();
+        const g   = String(ws[`G${row}`]?.v ?? '').trim();
+        const h   = String(ws[`H${row}`]?.v ?? '').trim();
+        expenses.push({
+          date,
+          type:            'expense',
+          expense_class:   cls === 'קבועה' ? 'קבועה' : 'משתנה',
+          sub_category:    String(ws[`B${row}`]?.v ?? '').trim() || undefined,
+          payer:           mapPayer(String(ws[`C${row}`]?.v ?? '')),
+          amount:          expAmt,
+          payment_method:  mapPaymentMethod(ws[`E${row}`]?.v),
+          category:        mapCategory(String(ws[`F${row}`]?.v ?? '')),
+          notes:           [g, h].filter(Boolean).join(' ') || undefined,
+          status:          'paid',
+        });
+      }
+
+      // ── Incomes: columns L–R ───────────────────────────────────────────
+      const incAmt = parseAmount(ws[`O${row}`]?.v);
+      if (incAmt > 0) {
+        const cls = String(ws[`L${row}`]?.v ?? '').trim();
+        const q   = String(ws[`Q${row}`]?.v ?? '').trim();
+        const r   = String(ws[`R${row}`]?.v ?? '').trim();
+        incomes.push({
+          date,
+          type:            'income',
+          expense_class:   cls === 'קבועה' ? 'קבועה' : 'משתנה',
+          sub_category:    String(ws[`M${row}`]?.v ?? '').trim() || undefined,
+          payer:           mapPayer(String(ws[`N${row}`]?.v ?? '')),
+          amount:          incAmt,
+          payment_method:  mapPaymentMethod(ws[`P${row}`]?.v),
+          category:        'שונות',
+          notes:           [q, r].filter(Boolean).join(' ') || undefined,
+          status:          'paid',
+        });
+      }
+    }
+
+    if (expenses.length > 0 || incomes.length > 0) {
+      results.push({ month, monthName: MONTH_NAMES[month - 1], expenses, incomes });
+    }
+  }
+
+  return results;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 export default function Admin() {
   const queryClient = useQueryClient();
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
@@ -90,9 +199,14 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pasteOpen, setPasteOpen]         = useState(false);
   const [confirmClear, setConfirmClear]   = useState(false);
-  const [pasteRows, setPasteRows]     = useState<Partial<Transaction>[]>([]);
-  const [pasteText, setPasteText]     = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [pasteRows, setPasteRows]         = useState<Partial<Transaction>[]>([]);
+  const [pasteText, setPasteText]         = useState('');
+  const [annualOpen, setAnnualOpen]       = useState(false);
+  const [annualYear, setAnnualYear]       = useState(2025);
+  const [annualPreview, setAnnualPreview] = useState<MonthPreview[]>([]);
+  const [annualLoading, setAnnualLoading] = useState(false);
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const annualFileRef = useRef<HTMLInputElement>(null);
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
@@ -151,6 +265,33 @@ export default function Admin() {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setSelectedIds(new Set());
     setConfirmClear(false);
+  }
+
+  // ── Annual Excel import ─────────────────────────────────────────────────
+  function handleAnnualFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const workbook = XLSX.read(ev.target?.result, { type: 'array' });
+      setAnnualPreview(parseAnnualExcel(workbook, annualYear));
+    };
+    reader.readAsArrayBuffer(file);
+    // reset so same file can be re-uploaded after year change
+    e.target.value = '';
+  }
+
+  async function importAnnualData() {
+    setAnnualLoading(true);
+    for (const m of annualPreview) {
+      for (const row of [...m.expenses, ...m.incomes]) {
+        await base44.entities.Transaction.create(row as Omit<Transaction, 'id'>);
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    setAnnualLoading(false);
+    setAnnualOpen(false);
+    setAnnualPreview([]);
   }
 
   async function importPasteRows() {
@@ -317,6 +458,8 @@ export default function Admin() {
         <div className="flex gap-2 mr-auto flex-wrap">
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
           <button onClick={openPasteDialog}  className="bg-blue-500  text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600">📋 הדבק מאקסל</button>
+          <button onClick={() => { setAnnualPreview([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
+          <input ref={annualFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleAnnualFile} />
           {selectedIds.size > 0 && (
             <button onClick={deleteSelected} className="bg-red-500   text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
               🗑 מחק נבחרים ({selectedIds.size})
@@ -421,6 +564,113 @@ export default function Admin() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Annual Excel Import Dialog ── */}
+      {annualOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col" dir="rtl">
+
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-bold">📂 יבוא קובץ אקסל שנתי</h2>
+              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-5">
+              {/* Step 1 – year + upload */}
+              <div className="flex items-center gap-4 mb-5 flex-wrap">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">שנת הקובץ</label>
+                  <select
+                    value={annualYear}
+                    onChange={(e) => { setAnnualYear(Number(e.target.value)); setAnnualPreview([]); }}
+                    className="border rounded px-3 py-1.5 text-sm text-gray-900"
+                  >
+                    {[2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">קובץ אקסל</label>
+                  <button
+                    onClick={() => annualFileRef.current?.click()}
+                    className="bg-purple-600 text-white px-4 py-1.5 rounded text-sm hover:bg-purple-700"
+                  >
+                    בחר קובץ (.xlsx)
+                  </button>
+                </div>
+                {annualPreview.length > 0 && (
+                  <span className="text-green-700 text-sm font-medium self-end">
+                    ✓ זוהו {annualPreview.reduce((s,m)=>s+m.expenses.length+m.incomes.length,0)} רשומות ב-{annualPreview.length} חודשים
+                  </span>
+                )}
+              </div>
+
+              {/* Format hint */}
+              {annualPreview.length === 0 && (
+                <div className="bg-gray-50 border rounded-lg p-4 text-sm text-gray-600">
+                  <p className="font-medium mb-2">מבנה קובץ נדרש:</p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    <li>לשוניות בשם <strong>1</strong> עד <strong>12</strong> (חודשים)</li>
+                    <li>שורות נתונים מתחילות בשורה <strong>9</strong></li>
+                    <li>הוצאות: עמודות <strong>A–H</strong> (ימין) — סוג | פרטים | משלם | סכום | שיטה | סיווג | הערות</li>
+                    <li>הכנסות: עמודות <strong>L–R</strong> (שמאל) — סוג | פרטים | מקור | סכום | שיטה | הערות</li>
+                    <li>תאריך: <strong>1 לחודש</strong> לפי מספר הלשונית</li>
+                  </ul>
+                </div>
+              )}
+
+              {/* Preview table */}
+              {annualPreview.length > 0 && (
+                <table className="w-full text-sm border-collapse">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-3 py-2 border text-right">חודש</th>
+                      <th className="px-3 py-2 border text-center">הוצאות</th>
+                      <th className="px-3 py-2 border text-center">סה״כ הוצאות</th>
+                      <th className="px-3 py-2 border text-center">הכנסות</th>
+                      <th className="px-3 py-2 border text-center">סה״כ הכנסות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {annualPreview.map((m) => {
+                      const totalExp = m.expenses.reduce((s,r)=>s+(r.amount??0),0);
+                      const totalInc = m.incomes.reduce((s,r)=>s+(r.amount??0),0);
+                      return (
+                        <tr key={m.month} className={m.month % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="px-3 py-2 border font-medium">{m.monthName} {annualYear}</td>
+                          <td className="px-3 py-2 border text-center text-red-600">{m.expenses.length} שורות</td>
+                          <td className="px-3 py-2 border text-center text-red-600">₪{totalExp.toLocaleString()}</td>
+                          <td className="px-3 py-2 border text-center text-green-600">{m.incomes.length} שורות</td>
+                          <td className="px-3 py-2 border text-center text-green-600">₪{totalInc.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-gray-200 font-bold">
+                      <td className="px-3 py-2 border">סה״כ</td>
+                      <td className="px-3 py-2 border text-center text-red-700">{annualPreview.reduce((s,m)=>s+m.expenses.length,0)}</td>
+                      <td className="px-3 py-2 border text-center text-red-700">₪{annualPreview.reduce((s,m)=>s+m.expenses.reduce((ss,r)=>ss+(r.amount??0),0),0).toLocaleString()}</td>
+                      <td className="px-3 py-2 border text-center text-green-700">{annualPreview.reduce((s,m)=>s+m.incomes.length,0)}</td>
+                      <td className="px-3 py-2 border text-center text-green-700">₪{annualPreview.reduce((s,m)=>s+m.incomes.reduce((ss,r)=>ss+(r.amount??0),0),0).toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end p-4 border-t">
+              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); }} className="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ביטול</button>
+              {annualPreview.length > 0 && (
+                <button
+                  onClick={importAnnualData}
+                  disabled={annualLoading}
+                  className="px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm font-medium disabled:opacity-60"
+                >
+                  {annualLoading ? 'מייבא...' : `יבא ${annualPreview.reduce((s,m)=>s+m.expenses.length+m.incomes.length,0)} רשומות →`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Confirm Clear Dialog ── */}
       {confirmClear && (
