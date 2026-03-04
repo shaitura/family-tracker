@@ -137,7 +137,7 @@ export default function Transactions() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{tx.notes || tx.category}</p>
+                          <p className="text-sm font-medium text-white truncate">{tx.sub_category || tx.notes || tx.category}</p>
                           <p className="text-xs text-white/40 mt-0.5">{formatDate(tx.date)} · {PAYER_LABELS[tx.payer]} · {tx.payment_method}</p>
                         </div>
                         <div className="text-left shrink-0">
