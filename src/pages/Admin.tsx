@@ -138,43 +138,39 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
     const expenses: Partial<Transaction>[] = [];
     const incomes:  Partial<Transaction>[] = [];
 
-    for (let row = 9; row <= 100; row++) {
-      // ── Expenses: columns A–H ──────────────────────────────────────────
-      const expAmt = parseAmount(ws[`D${row}`]?.v);
+    for (let row = 9; row <= 200; row++) {
+      // ── Expenses: A=יום B=סוג-הוצאה C=פרטים D=מקום/משותפת E=סכום F=שיטה G=סיווג H=הערות
+      const expAmt = parseAmount(ws[`E${row}`]?.v);
       if (expAmt > 0) {
-        const cls = String(ws[`A${row}`]?.v ?? '').trim();
-        const g   = String(ws[`G${row}`]?.v ?? '').trim();
-        const h   = String(ws[`H${row}`]?.v ?? '').trim();
+        const cls = String(ws[`C${row}`]?.v ?? '').trim();
         expenses.push({
           date,
           type:            'expense',
           expense_class:   cls === 'קבועה' ? 'קבועה' : 'משתנה',
           sub_category:    String(ws[`B${row}`]?.v ?? '').trim() || undefined,
-          payer:           mapPayer(String(ws[`C${row}`]?.v ?? '')),
+          payer:           mapPayer(String(ws[`D${row}`]?.v ?? '')),
           amount:          expAmt,
-          payment_method:  mapPaymentMethod(ws[`E${row}`]?.v),
-          category:        mapCategory(String(ws[`F${row}`]?.v ?? '')),
-          notes:           [g, h].filter(Boolean).join(' ') || undefined,
+          payment_method:  mapPaymentMethod(ws[`F${row}`]?.v),
+          category:        mapCategory(String(ws[`G${row}`]?.v ?? '')),
+          notes:           String(ws[`H${row}`]?.v ?? '').trim() || undefined,
           status:          'paid',
         });
       }
 
-      // ── Incomes: columns L–R ───────────────────────────────────────────
-      const incAmt = parseAmount(ws[`O${row}`]?.v);
+      // ── Incomes: columns L–R (same offset pattern) ────────────────────
+      const incAmt = parseAmount(ws[`P${row}`]?.v);
       if (incAmt > 0) {
-        const cls = String(ws[`L${row}`]?.v ?? '').trim();
-        const q   = String(ws[`Q${row}`]?.v ?? '').trim();
-        const r   = String(ws[`R${row}`]?.v ?? '').trim();
+        const cls = String(ws[`N${row}`]?.v ?? '').trim();
         incomes.push({
           date,
           type:            'income',
           expense_class:   cls === 'קבועה' ? 'קבועה' : 'משתנה',
           sub_category:    String(ws[`M${row}`]?.v ?? '').trim() || undefined,
-          payer:           mapPayer(String(ws[`N${row}`]?.v ?? '')),
+          payer:           mapPayer(String(ws[`O${row}`]?.v ?? '')),
           amount:          incAmt,
-          payment_method:  mapPaymentMethod(ws[`P${row}`]?.v),
+          payment_method:  mapPaymentMethod(ws[`Q${row}`]?.v),
           category:        'שונות',
-          notes:           [q, r].filter(Boolean).join(' ') || undefined,
+          notes:           String(ws[`R${row}`]?.v ?? '').trim() || undefined,
           status:          'paid',
         });
       }
