@@ -201,10 +201,11 @@ export default function Admin() {
   const [confirmClear, setConfirmClear]   = useState(false);
   const [pasteRows, setPasteRows]         = useState<Partial<Transaction>[]>([]);
   const [pasteText, setPasteText]         = useState('');
-  const [annualOpen, setAnnualOpen]       = useState(false);
-  const [annualYear, setAnnualYear]       = useState(2025);
-  const [annualPreview, setAnnualPreview] = useState<MonthPreview[]>([]);
-  const [annualLoading, setAnnualLoading] = useState(false);
+  const [annualOpen, setAnnualOpen]             = useState(false);
+  const [annualYear, setAnnualYear]             = useState(2025);
+  const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
+  const [annualLoading, setAnnualLoading]       = useState(false);
+  const [annualSheetNames, setAnnualSheetNames] = useState<string[]>([]);
   const containerRef  = useRef<HTMLDivElement>(null);
   const annualFileRef = useRef<HTMLInputElement>(null);
 
@@ -274,10 +275,10 @@ export default function Admin() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const workbook = XLSX.read(ev.target?.result, { type: 'array' });
+      setAnnualSheetNames(workbook.SheetNames);
       setAnnualPreview(parseAnnualExcel(workbook, annualYear));
     };
     reader.readAsArrayBuffer(file);
-    // reset so same file can be re-uploaded after year change
     e.target.value = '';
   }
 
@@ -458,7 +459,7 @@ export default function Admin() {
         <div className="flex gap-2 mr-auto flex-wrap">
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
           <button onClick={openPasteDialog}  className="bg-blue-500  text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600">📋 הדבק מאקסל</button>
-          <button onClick={() => { setAnnualPreview([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
+          <button onClick={() => { setAnnualPreview([]); setAnnualSheetNames([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
           <input ref={annualFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleAnnualFile} />
           {selectedIds.size > 0 && (
             <button onClick={deleteSelected} className="bg-red-500   text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
@@ -572,7 +573,7 @@ export default function Admin() {
 
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-bold">📂 יבוא קובץ אקסל שנתי</h2>
-              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); setAnnualSheetNames([]); }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
             </div>
 
             <div className="flex-1 overflow-auto p-5">
@@ -604,8 +605,26 @@ export default function Admin() {
                 )}
               </div>
 
-              {/* Format hint */}
-              {annualPreview.length === 0 && (
+              {/* Sheet names found + error if no match */}
+              {annualSheetNames.length > 0 && annualPreview.length === 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm mb-4">
+                  <p className="font-medium text-red-700 mb-2">⚠️ לא נמצאו נתונים בקובץ</p>
+                  <p className="text-red-600 mb-2">
+                    המערכת מחפשת לשוניות בשם <strong>1, 2, 3 ... 12</strong> אבל הלשוניות בקובץ הן:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {annualSheetNames.map(n => (
+                      <span key={n} className="bg-white border border-red-300 rounded px-2 py-0.5 font-mono text-xs text-red-700">{n}</span>
+                    ))}
+                  </div>
+                  <p className="text-red-500 text-xs mt-2">
+                    יש לשנות את שמות הלשוניות החודשיות ל-1, 2, 3... ולאחר מכן לנסות שוב.
+                  </p>
+                </div>
+              )}
+
+              {/* Format hint — shown only before any file is uploaded */}
+              {annualSheetNames.length === 0 && (
                 <div className="bg-gray-50 border rounded-lg p-4 text-sm text-gray-600">
                   <p className="font-medium mb-2">מבנה קובץ נדרש:</p>
                   <ul className="space-y-1 list-disc list-inside">
@@ -657,7 +676,7 @@ export default function Admin() {
             </div>
 
             <div className="flex gap-3 justify-end p-4 border-t">
-              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); }} className="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ביטול</button>
+              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); setAnnualSheetNames([]); }} className="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ביטול</button>
               {annualPreview.length > 0 && (
                 <button
                   onClick={importAnnualData}
