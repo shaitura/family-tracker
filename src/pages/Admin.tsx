@@ -206,8 +206,7 @@ export default function Admin() {
   const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
   const [annualLoading, setAnnualLoading]       = useState(false);
   const [annualSheetNames, setAnnualSheetNames] = useState<string[]>([]);
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const annualFileRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
@@ -460,7 +459,6 @@ export default function Admin() {
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
           <button onClick={openPasteDialog}  className="bg-blue-500  text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600">📋 הדבק מאקסל</button>
           <button onClick={() => { setAnnualPreview([]); setAnnualSheetNames([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
-          <input ref={annualFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleAnnualFile} />
           {selectedIds.size > 0 && (
             <button onClick={deleteSelected} className="bg-red-500   text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
               🗑 מחק נבחרים ({selectedIds.size})
@@ -591,12 +589,15 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">קובץ אקסל</label>
-                  <button
-                    onClick={() => annualFileRef.current?.click()}
-                    className="bg-purple-600 text-white px-4 py-1.5 rounded text-sm hover:bg-purple-700"
-                  >
+                  <label className="cursor-pointer bg-purple-600 text-white px-4 py-1.5 rounded text-sm hover:bg-purple-700 inline-block">
                     בחר קובץ (.xlsx)
-                  </button>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={handleAnnualFile}
+                    />
+                  </label>
                 </div>
                 {annualPreview.length > 0 && (
                   <span className="text-green-700 text-sm font-medium self-end">
