@@ -1,8 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, List, PlusCircle, BarChart2, Shield, Settings, Database } from 'lucide-react';
+import { Home, List, PlusCircle, BarChart2, Shield, Settings, Database, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createPageUrl } from '@/utils';
+import { UserInfo } from '@/lib/auth';
 
 const NAV_ITEMS = [
   { label: 'בית', icon: Home, href: createPageUrl('Home') },
@@ -14,18 +15,62 @@ const NAV_ITEMS = [
   { label: 'הגדרות', icon: Settings, href: createPageUrl('Settings') },
 ];
 
-export default function Layout({ children }: { children: ReactNode }) {
+export default function Layout({
+  children,
+  user,
+  onLogout,
+}: {
+  children: ReactNode;
+  user: UserInfo;
+  onLogout: () => void;
+}) {
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col" dir="rtl">
       {/* Header */}
-      <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-center glass-dark border-b border-white/10">
+      <header className="fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4 glass-dark border-b border-white/10">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
             <span className="text-white font-black text-xs">FT</span>
           </div>
           <span className="text-base font-bold gradient-text tracking-tight">Family Tracker</span>
+        </div>
+
+        {/* User avatar + logout */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-full focus:outline-none"
+            title={user.name}
+          >
+            <img
+              src={user.picture}
+              alt={user.name}
+              className="w-8 h-8 rounded-full border-2 border-white/20 object-cover"
+              referrerPolicy="no-referrer"
+            />
+          </button>
+
+          {menuOpen && (
+            <div
+              className="absolute left-0 top-10 bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-44 z-50"
+              dir="rtl"
+            >
+              <div className="px-3 py-2 border-b border-gray-100">
+                <p className="text-xs font-semibold text-gray-800 truncate">{user.name}</p>
+                <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
+              </div>
+              <button
+                onClick={() => { setMenuOpen(false); onLogout(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                התנתק
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
