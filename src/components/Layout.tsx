@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, List, PlusCircle, BarChart2, Shield, Settings } from 'lucide-react';
+import { Home, List, PlusCircle, BarChart2, Shield, Settings, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createPageUrl } from '@/utils';
 
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'הוסף', icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
   { label: 'דוחות', icon: BarChart2, href: createPageUrl('Reports') },
   { label: 'נכסים', icon: Shield, href: createPageUrl('Assets') },
+  { label: 'Admin', icon: Database, href: '/admin' },
   { label: 'הגדרות', icon: Settings, href: createPageUrl('Settings') },
 ];
 
@@ -30,7 +31,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       {/* Content */}
       <main className="flex-1 pt-14 pb-20 overflow-y-auto">
-        <div className="max-w-md mx-auto px-4 py-4">
+        <div className={location.pathname === '/admin' ? 'h-full' : 'max-w-md mx-auto px-4 py-4'}>
           {children}
         </div>
       </main>
