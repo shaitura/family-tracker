@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { label: 'הוסף', icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
   { label: 'דוחות', icon: BarChart2, href: createPageUrl('Reports') },
   { label: 'נכסים', icon: Shield, href: createPageUrl('Assets') },
-  { label: 'Admin', icon: Database, href: '/admin' },
+  { label: 'Admin', icon: Database, href: '/admin', desktopOnly: true },
   { label: 'הגדרות', icon: Settings, href: createPageUrl('Settings') },
 ];
 
@@ -39,13 +39,14 @@ export default function Layout({ children }: { children: ReactNode }) {
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 inset-x-0 z-40 h-16 glass-dark border-t border-white/10">
         <div className="max-w-md mx-auto h-full flex items-center justify-around px-2">
-          {NAV_ITEMS.map(({ label, icon: Icon, href, accent }) => {
+          {NAV_ITEMS.map(({ label, icon: Icon, href, accent, desktopOnly }) => {
             const active = location.pathname === href;
             return (
               <Link
                 key={href}
                 to={href}
                 className={cn(
+                  desktopOnly && 'hidden md:flex',
                   'flex flex-col items-center justify-center gap-0.5 w-14 h-12 rounded-2xl transition-all duration-200',
                   accent
                     ? 'bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/30 scale-110 -mt-4'
