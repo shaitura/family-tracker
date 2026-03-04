@@ -138,6 +138,17 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
     const expenses: Partial<Transaction>[] = [];
     const incomes:  Partial<Transaction>[] = [];
 
+    // Debug: log first 5 rows of this sheet
+    if (month === 1) {
+      for (let dbgRow = 9; dbgRow <= 15; dbgRow++) {
+        const cells: Record<string, unknown> = {};
+        for (const col of 'ABCDEFGH'.split('')) {
+          cells[col] = ws[`${col}${dbgRow}`]?.v;
+        }
+        console.log(`Sheet1 row${dbgRow}:`, cells, '| E raw:', ws[`E${dbgRow}`], '| parsed:', parseAmount(ws[`E${dbgRow}`]?.v));
+      }
+    }
+
     for (let row = 9; row <= 200; row++) {
       // ── Expenses: A=יום B=סוג-הוצאה C=פרטים D=מקום/משותפת E=סכום F=שיטה G=סיווג H=הערות
       const expAmt = parseAmount(ws[`E${row}`]?.v);
