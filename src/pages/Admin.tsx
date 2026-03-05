@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
-import { base44 } from '@/lib/base44Client';
+import { base44, migrateLocalToFirestore, hasLocalData } from '@/lib/base44Client';
 import { Transaction, CATEGORIES, PAYMENT_METHODS, Category, PaymentMethod } from '@/types';
 
 // Display labels for enum values stored in English
@@ -211,6 +211,9 @@ export default function Admin() {
   const [confirmClear, setConfirmClear]   = useState(false);
   const [pasteRows, setPasteRows]         = useState<Partial<Transaction>[]>([]);
   const [pasteText, setPasteText]         = useState('');
+  const [migrateOpen, setMigrateOpen]           = useState(false);
+  const [migrateStatus, setMigrateStatus]       = useState('');
+  const [migrateLoading, setMigrateLoading]     = useState(false);
   const [annualOpen, setAnnualOpen]             = useState(false);
   const [annualYear, setAnnualYear]             = useState(2025);
   const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
@@ -272,11 +275,26 @@ export default function Admin() {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
   }
 
-  function clearAllData() {
-    ['ft_transaction', 'ft_budget', 'ft_initialized'].forEach((k) => localStorage.removeItem(k));
+  async function clearAllData() {
+    await base44.entities.Transaction.deleteAll();
+    await base44.entities.Budget.deleteAll();
+    await base44.entities.Asset.deleteAll();
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setSelectedIds(new Set());
     setConfirmClear(false);
+  }
+
+  async function runMigration() {
+    setMigrateLoading(true);
+    setMigrateStatus('מתחיל העברה…');
+    try {
+      const counts = await migrateLocalToFirestore((msg) => setMigrateStatus(msg));
+      setMigrateStatus(`✅ הועברו: ${counts.transactions} עסקאות, ${counts.budgets} תקציבים, ${counts.assets} נכסים`);
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    } catch (e) {
+      setMigrateStatus(`❌ שגיאה: ${String(e)}`);
+    }
+    setMigrateLoading(false);
   }
 
   // ── Annual Excel import ─────────────────────────────────────────────────
@@ -504,6 +522,11 @@ export default function Admin() {
             </button>
           )}
           <button onClick={exportCSV}        className="bg-gray-200  text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">⬇ ייצא CSV</button>
+          {hasLocalData() && (
+            <button onClick={() => setMigrateOpen(true)} className="bg-amber-500 text-white px-3 py-1.5 rounded text-sm hover:bg-amber-600 border border-amber-600 animate-pulse">
+              ☁️ העבר נתונים לענן
+            </button>
+          )}
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
       </div>
@@ -785,6 +808,29 @@ export default function Admin() {
                   {annualLoading ? 'מייבא...' : `יבא ${annualPreview.reduce((s,m)=>s+m.expenses.length+m.incomes.length,0)} רשומות →`}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Migrate from localStorage Dialog ── */}
+      {migrateOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
+            <div className="text-4xl mb-3">☁️</div>
+            <h2 className="text-lg font-bold mb-2">העבר נתונים מקומיים לענן</h2>
+            <p className="text-gray-500 text-sm mb-4">
+              נמצאו נתונים ישנים השמורים על המכשיר הזה.<br />
+              לחץ "העבר" כדי להעלות אותם ל-Firestore.
+            </p>
+            {migrateStatus && (
+              <p className="text-sm font-medium text-blue-700 mb-4 bg-blue-50 rounded-lg px-3 py-2">{migrateStatus}</p>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => { setMigrateOpen(false); setMigrateStatus(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={migrateLoading}>סגור</button>
+              <button onClick={runMigration} disabled={migrateLoading || migrateStatus.startsWith('✅')} className="px-5 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium disabled:opacity-60">
+                {migrateLoading ? 'מעביר…' : 'העבר לענן →'}
+              </button>
             </div>
           </div>
         </div>
