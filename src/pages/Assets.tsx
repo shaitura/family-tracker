@@ -21,17 +21,107 @@ const RISK_LEVELS: RiskLevel[] = ['סולידי', 'מנייתי', 'כללי', '�
 
 function assetIcon(type: string): string {
   if (type.includes('פנסיה') || type.includes('מנהלים')) return '🏦';
-  if (type.includes('קרן')) return '📈';
+  if (type === 'קרן השתלמות') return '📈';
+  if (type.includes('קופת גמל')) return '🏺';
+  if (type.includes('חיסכון לכל ילד')) return '👶';
   if (type.includes('ביטוח') || type.includes('בריאות') || type.includes('חיים') || type.includes('מחלות')) return '🛡️';
   if (type.includes('חיסכון')) return '💰';
   if (type.includes('משכנתא')) return '🏠';
+  if (type === 'מבנה' || type === 'תכולה' || type === 'מבנה + תכולה') return '🏡';
   if (type.includes('רכב')) return '🚗';
   if (type.includes('שיניים')) return '🦷';
+  if (type.includes('סיעוד')) return '🏥';
+  if (type.includes('ריסק') || type.includes('אובדן כושר')) return '⚕️';
   if (type === 'ניירות ערך') return '📊';
+  if (type === 'מניות RSU') return '🏢';
+  if (type === 'חשבון מסחר עצמאי') return '💹';
   if (type === 'עו"ש') return '🏧';
   if (type === 'מט"ח') return '💱';
+  if (type === 'קרקע') return '🌍';
   if (type === 'קריפטו') return '₿';
+  if (type === 'אחר') return '🗂️';
   return '📋';
+}
+
+// Map known Israeli financial providers to their website domain
+const PROVIDER_DOMAINS: Record<string, string> = {
+  'כלל': 'klal.co.il',
+  'מגדל': 'migdal.co.il',
+  'הפניקס': 'phoenix.co.il',
+  'פניקס': 'phoenix.co.il',
+  'מנורה': 'menora-mivt.co.il',
+  'הראל': 'harel-group.co.il',
+  'אלטשולר': 'as-invest.co.il',
+  'אלטשולר שחם': 'as-invest.co.il',
+  'מיטב': 'meitav.co.il',
+  'מיטב דש': 'meitav.co.il',
+  'אנליסט': 'analyst.co.il',
+  'ילין לפידות': 'yalinlapidot.co.il',
+  'ילין': 'yalinlapidot.co.il',
+  'פסגות': 'psagot.co.il',
+  'אקסלנס': 'xnes.co.il',
+  'ibi': 'ibi.co.il',
+  'IBI': 'ibi.co.il',
+  'לאומי': 'leumi.co.il',
+  'הפועלים': 'bankhapoalim.co.il',
+  'דיסקונט': 'discountbank.co.il',
+  'מזרחי': 'mizrahi-tefahot.co.il',
+  'בנק מזרחי': 'mizrahi-tefahot.co.il',
+  'עמיתים': 'amitim.co.il',
+  'מור': 'mor.co.il',
+  'הכשרה': 'hachshara.co.il',
+  'איילון': 'ayalon.co.il',
+  'הסתדרות': 'kupat-cholim.co.il',
+  'ביטוח לאומי': 'btl.gov.il',
+  'מכבי': 'maccabi.co.il',
+  'כללית': 'clalit.co.il',
+  'מאוחדת': 'meuhedet.co.il',
+  'לאומית': 'leumit.co.il',
+};
+
+function providerLogoUrl(provider: string): string | null {
+  const normalized = provider.trim().toLowerCase();
+  for (const [key, domain] of Object.entries(PROVIDER_DOMAINS)) {
+    if (normalized.includes(key.toLowerCase())) {
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    }
+  }
+  return null;
+}
+
+function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvestment: boolean }) {
+  const logoUrl = providerLogoUrl(provider);
+  const initials = provider.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('');
+  const gradient = isInvestment
+    ? 'from-emerald-500/30 to-cyan-500/30'
+    : 'from-cyan-500/30 to-purple-500/30';
+
+  if (logoUrl) {
+    return (
+      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} border border-white/10 flex items-center justify-center shrink-0 overflow-hidden`}>
+        <img
+          src={logoUrl}
+          alt={provider}
+          className="w-8 h-8 object-contain"
+          onError={(e) => {
+            const target = e.currentTarget;
+            target.style.display = 'none';
+            const fallback = target.nextElementSibling as HTMLElement | null;
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+        <span className="text-white font-bold text-sm hidden items-center justify-center w-full h-full">
+          {initials}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} border border-white/10 flex items-center justify-center shrink-0`}>
+      <span className="text-white font-bold text-sm">{initials}</span>
+    </div>
+  );
 }
 
 function emptyAsset(): Omit<Asset, 'id'> {
@@ -175,31 +265,49 @@ export default function Assets() {
           )}
 
           {investmentAssets.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-xs font-semibold text-emerald-400/80 px-1">📊 נכסים והשקעות</p>
               {investmentAssets.map((a, i) => (
                 <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                  <Card>
-                    <CardContent className="py-3 px-4">
-                      <div className="flex gap-3 items-start">
-                        <button onClick={() => openEdit(a)} className="mt-1 text-white/30 hover:text-white/70 transition-colors shrink-0">
+                  <Card className="border border-emerald-500/10">
+                    <CardContent className="py-4 px-4">
+                      <div className="flex gap-3 items-center">
+                        {/* Provider logo / initials */}
+                        <ProviderAvatar provider={a.provider} isInvestment={true} />
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0 text-right">
+                          {/* Top row: product name + balance */}
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <div className="text-left shrink-0">
+                              {a.balance != null && (
+                                <p className="text-base font-bold text-emerald-400 leading-tight">{formatCurrency(a.balance)}</p>
+                              )}
+                            </div>
+                            <p className="text-base font-semibold text-white leading-tight truncate">{a.product_name}</p>
+                          </div>
+
+                          {/* Provider name + owner */}
+                          <div className="flex items-center justify-end gap-1.5 mb-2">
+                            <span className="text-sm text-white/60 font-medium">{a.provider}</span>
+                            <span className="text-white/25">·</span>
+                            <span className="text-xs text-white/40">{OWNER_LABELS[a.owner] || a.owner}</span>
+                          </div>
+
+                          {/* Badges row */}
+                          <div className="flex gap-1.5 flex-wrap justify-end">
+                            <Badge variant="purple" className="text-xs gap-1">
+                              <span>{assetIcon(a.type)}</span>{a.type}
+                            </Badge>
+                            {a.risk_level && <Badge variant="secondary" className="text-xs">{a.risk_level}</Badge>}
+                            {a.policy_number && <Badge variant="outline" className="text-xs">#{a.policy_number}</Badge>}
+                          </div>
+                        </div>
+
+                        {/* Edit button */}
+                        <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
-                          {assetIcon(a.type)}
-                        </div>
-                        <div className="flex-1 min-w-0 text-right">
-                          <div className="flex justify-between gap-2">
-                            {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
-                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
-                          </div>
-                          <p className="text-xs text-white/50 mt-0.5">{OWNER_LABELS[a.owner] || a.owner} · {a.provider}</p>
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap justify-end">
-                            <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
-                            {a.risk_level && <Badge variant="secondary" className="text-[10px]">{a.risk_level}</Badge>}
-                            {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
-                          </div>
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -209,32 +317,49 @@ export default function Assets() {
           )}
 
           {insuranceAssets.length > 0 && (
-            <div className="space-y-2">
-              {investmentAssets.length > 0 && <p className="text-xs font-semibold text-cyan-400/80 px-1 mt-3">🛡️ ביטוחים וקרנות</p>}
+            <div className="space-y-3">
+              {investmentAssets.length > 0 && <p className="text-xs font-semibold text-cyan-400/80 px-1 mt-2">🛡️ ביטוחים וקרנות</p>}
               {insuranceAssets.map((a, i) => (
                 <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                  <Card>
-                    <CardContent className="py-3 px-4">
-                      <div className="flex gap-3 items-start">
-                        <button onClick={() => openEdit(a)} className="mt-1 text-white/30 hover:text-white/70 transition-colors shrink-0">
+                  <Card className="border border-cyan-500/10">
+                    <CardContent className="py-4 px-4">
+                      <div className="flex gap-3 items-center">
+                        {/* Provider logo / initials */}
+                        <ProviderAvatar provider={a.provider} isInvestment={false} />
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0 text-right">
+                          {/* Top row: product name + premium */}
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <div className="text-left shrink-0">
+                              {a.monthly_premium != null && (
+                                <p className="text-base font-bold text-cyan-400 leading-tight">{formatCurrency(a.monthly_premium)}<span className="text-xs font-normal text-white/40">/חודש</span></p>
+                              )}
+                            </div>
+                            <p className="text-base font-semibold text-white leading-tight truncate">{a.product_name}</p>
+                          </div>
+
+                          {/* Provider name + owner */}
+                          <div className="flex items-center justify-end gap-1.5 mb-2">
+                            <span className="text-sm text-white/60 font-medium">{a.provider}</span>
+                            <span className="text-white/25">·</span>
+                            <span className="text-xs text-white/40">{OWNER_LABELS[a.owner] || a.owner}</span>
+                          </div>
+
+                          {/* Badges row */}
+                          <div className="flex gap-1.5 flex-wrap justify-end">
+                            <Badge variant="purple" className="text-xs gap-1">
+                              <span>{assetIcon(a.type)}</span>{a.type}
+                            </Badge>
+                            {a.policy_number && <Badge variant="outline" className="text-xs">#{a.policy_number}</Badge>}
+                            {a.start_date && <Badge variant="outline" className="text-xs">{a.start_date}</Badge>}
+                          </div>
+                        </div>
+
+                        {/* Edit button */}
+                        <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
-                          {assetIcon(a.type)}
-                        </div>
-                        <div className="flex-1 min-w-0 text-right">
-                          <div className="flex justify-between gap-2">
-                            {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
-                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
-                          </div>
-                          <p className="text-xs text-white/50 mt-0.5">{OWNER_LABELS[a.owner] || a.owner} · {a.provider}</p>
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap justify-end">
-                            <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
-                            {a.monthly_premium != null && <Badge variant="secondary" className="text-[10px]">{formatCurrency(a.monthly_premium)}/חודש</Badge>}
-                            {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
-                            {a.start_date && <Badge variant="outline" className="text-[10px]">{a.start_date}</Badge>}
-                          </div>
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
