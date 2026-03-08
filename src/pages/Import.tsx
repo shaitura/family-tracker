@@ -74,7 +74,7 @@ export default function Import() {
           const amount = parseFloat(String(row['סכום'] || row['amount'] || row['Amount'] || 0));
           const date = String(row['תאריך'] || row['date'] || new Date().toISOString().split('T')[0]);
           const category = (String(row['קטגוריה'] || row['category'] || 'שונות')) as Category;
-          return { date, amount, category: CATEGORIES.includes(category) ? category : 'שונות' as Category, type: 'expense' as const, payer: 'Shi' as const, payment_method: 'אשראי' as const, expense_class: 'משתנה' as const, status: 'paid' as const, notes: String(row['הערות'] || row['notes'] || '') };
+          return { date, amount, category: category as Category, type: 'expense' as const, payer: 'Shi' as const, payment_method: 'אשראי' as const, expense_class: 'משתנה' as const, status: 'paid' as const, notes: String(row['הערות'] || row['notes'] || '') };
         }).filter((t) => t.amount && t.amount > 0);
         setPreview(txs);
         setSelected(new Set(txs.map((_, i) => i)));

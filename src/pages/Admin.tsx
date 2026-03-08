@@ -214,6 +214,9 @@ export default function Admin() {
   const [migrateOpen, setMigrateOpen]           = useState(false);
   const [migrateStatus, setMigrateStatus]       = useState('');
   const [migrateLoading, setMigrateLoading]     = useState(false);
+  const [fixCatOpen, setFixCatOpen]             = useState(false);
+  const [fixCatStatus, setFixCatStatus]         = useState('');
+  const [fixCatLoading, setFixCatLoading]       = useState(false);
   const [annualOpen, setAnnualOpen]             = useState(false);
   const [annualYear, setAnnualYear]             = useState(2025);
   const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
@@ -296,6 +299,36 @@ export default function Admin() {
       setMigrateStatus(`❌ שגיאה: ${String(e)}`);
     }
     setMigrateLoading(false);
+  }
+
+  // ── Fix categories in Firestore ─────────────────────────────────────────
+  async function runFixCategories() {
+    setFixCatLoading(true);
+    setFixCatStatus('טוען עסקאות…');
+    try {
+      const all = await base44.entities.Transaction.filter();
+      const toFix = all.filter((t) => {
+        const normalized = mapCategory(t.category);
+        return normalized !== t.category;
+      });
+      setFixCatStatus(`נמצאו ${toFix.length} עסקאות לתיקון מתוך ${all.length}`);
+      if (toFix.length === 0) { setFixCatLoading(false); return; }
+
+      let done = 0;
+      for (const t of toFix) {
+        const normalized = mapCategory(t.category);
+        await base44.entities.Transaction.update(t.id, { category: normalized });
+        done++;
+        if (done % 10 === 0 || done === toFix.length) {
+          setFixCatStatus(`מתקן… ${done}/${toFix.length}`);
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setFixCatStatus(`✅ תוקנו ${toFix.length} עסקאות`);
+    } catch (e) {
+      setFixCatStatus(`❌ שגיאה: ${String(e)}`);
+    }
+    setFixCatLoading(false);
   }
 
   // ── Annual Excel import ─────────────────────────────────────────────────
@@ -537,6 +570,7 @@ export default function Admin() {
               ☁️ העבר נתונים לענן
             </button>
           )}
+          <button onClick={() => { setFixCatStatus(''); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
       </div>
@@ -847,6 +881,29 @@ export default function Admin() {
               <button onClick={() => { setMigrateOpen(false); setMigrateStatus(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={migrateLoading}>סגור</button>
               <button onClick={runMigration} disabled={migrateLoading || migrateStatus.startsWith('✅')} className="px-5 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium disabled:opacity-60">
                 {migrateLoading ? 'מעביר…' : 'העבר לענן →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Fix Categories Dialog ── */}
+      {fixCatOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
+            <div className="text-4xl mb-3">🔧</div>
+            <h2 className="text-lg font-bold mb-2">תיקון קטגוריות בבסיס הנתונים</h2>
+            <p className="text-gray-500 text-sm mb-4">
+              הפעולה תסרוק את כל העסקאות ותנרמל קטגוריות לא-תקניות<br />
+              (לדוגמה: "דיור - שכירות" → "דיור").
+            </p>
+            {fixCatStatus && (
+              <p className="text-sm font-medium text-teal-700 mb-4 bg-teal-50 rounded-lg px-3 py-2">{fixCatStatus}</p>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => { setFixCatOpen(false); setFixCatStatus(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={fixCatLoading}>סגור</button>
+              <button onClick={runFixCategories} disabled={fixCatLoading || fixCatStatus.startsWith('✅')} className="px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium disabled:opacity-60">
+                {fixCatLoading ? 'מתקן…' : 'תקן קטגוריות →'}
               </button>
             </div>
           </div>
