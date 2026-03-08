@@ -85,8 +85,8 @@ function typeColorClass(type: string): string {
 const PROVIDER_DOMAINS: Record<string, string> = {
   'כלל': 'klal.co.il',
   'מגדל': 'migdal.co.il',
-  'הפניקס': 'phoenix.co.il',
-  'פניקס': 'phoenix.co.il',
+  'הפניקס': 'fnx.co.il',
+  'פניקס': 'fnx.co.il',
   'מנורה': 'menora-mivt.co.il',
   'הראל': 'harel-group.co.il',
   'אלטשולר': 'as-invest.co.il',
@@ -127,7 +127,7 @@ function providerLogoUrl(provider: string): { primary: string; fallback: string 
   for (const [key, domain] of Object.entries(PROVIDER_DOMAINS)) {
     if (normalized.includes(key.toLowerCase())) {
       return {
-        primary: `https://logo.clearbit.com/${domain}`,
+        primary: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
         fallback: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
       };
     }
@@ -144,7 +144,7 @@ function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvest
 
   if (logoUrls) {
     return (
-      <div className={`w-12 h-12 rounded-2xl bg-white/95 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden p-1`}>
+      <div className={`w-12 h-12 rounded-2xl bg-white/95 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden p-1.5`}>
         <img
           src={logoUrls.primary}
           alt={provider}
@@ -153,7 +153,6 @@ function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvest
             const img = e.currentTarget;
             if (img.src !== logoUrls.fallback) {
               img.src = logoUrls.fallback;
-              img.className = 'w-8 h-8 object-contain';
             } else {
               img.style.display = 'none';
               const fb = img.nextElementSibling as HTMLElement | null;
