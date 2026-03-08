@@ -56,39 +56,60 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
     <div className="space-y-3">
       {/* Distribution chart */}
       <Card>
-        <CardContent className="pt-4">
-          <p className="text-xs text-white/40 text-center mb-2">חלוקת הוצאות לפי קטגוריה</p>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="62%"
-                cy="50%"
-                outerRadius={95}
-                innerRadius={44}
-                paddingAngle={2}
-              >
-                {pieData.map((entry) => (
-                  <Cell key={entry.name} fill={categoryColor(entry.name)} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(v: number) => formatCurrency(v)}
-                contentStyle={TOOLTIP_STYLE}
-              />
-              <Legend
-                layout="vertical"
-                align="left"
-                verticalAlign="middle"
-                iconType="circle"
-                iconSize={8}
-                formatter={(value) => value}
-                wrapperStyle={{ fontSize: 11, color: '#94a3b8', lineHeight: '22px', direction: 'rtl', textAlign: 'right' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+        <CardContent className="pt-4 pb-3">
+          <p className="text-xs text-white/40 text-center mb-3">חלוקת הוצאות לפי קטגוריה</p>
+          <div className="flex items-center gap-3" dir="ltr">
+            {/* Pie */}
+            <div className="flex-1 min-w-0">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={88}
+                    innerRadius={40}
+                    paddingAngle={2}
+                    label={({ cx: pcx, cy: pcy, midAngle, outerRadius: or, percent, value }) => {
+                      if (percent < 0.06) return null;
+                      const RADIAN = Math.PI / 180;
+                      const radius = or + 18;
+                      const x = pcx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = pcy + radius * Math.sin(-midAngle * RADIAN);
+                      return (
+                        <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#cbd5e1">
+                          <tspan x={x} dy="-5">{compactNum(value)}</tspan>
+                          <tspan x={x} dy="11">{Math.round(percent * 100)}%</tspan>
+                        </text>
+                      );
+                    }}
+                    labelLine={false}
+                  >
+                    {pieData.map((entry) => (
+                      <Cell key={entry.name} fill={categoryColor(entry.name)} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend – right side */}
+            <div className="flex flex-col gap-1.5 shrink-0 w-[128px]" dir="rtl">
+              {pieData.sort((a, b) => b.value - a.value).map((entry) => {
+                const pct = totalExpense > 0 ? Math.round((entry.value / totalExpense) * 100) : 0;
+                return (
+                  <div key={entry.name} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: categoryColor(entry.name) }} />
+                    <span className="text-[10px] text-white/70 flex-1 truncate">{entry.name}</span>
+                    <span className="text-[9px] text-white/50 shrink-0">{compactNum(entry.value)}</span>
+                    <span className="text-[9px] text-white/30 w-6 text-left shrink-0">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -514,26 +535,24 @@ export default function AnnualAnalysis() {
   const queryClient = useQueryClient();
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
-    queryKey: ['transactions'],
-    queryFn: () => base44.entities.Transaction.filter(),
+    queryKey: ['transactions', year],
+    queryFn: () => base44.entities.Transaction.filter({
+      dateRange: { start: `${year}-01-01`, end: `${year}-12-31` },
+    }),
   });
 
-  // Derive available years from data, fallback to current year if empty
-  const availableYears = (() => {
-    const years = [...new Set(transactions.map((t) => t.date.slice(0, 4)))].sort();
-    return years.length > 0 ? years : [currentYear];
-  })();
+  // Generate available years: 2020 → current year
+  const availableYears = Array.from(
+    { length: Number(currentYear) - 2019 },
+    (_, i) => String(2020 + i),
+  ).reverse();
 
-  // If current year selection is not in available years, don't auto-reset
-  // (keep manual selection)
-
-  const yearTx = transactions.filter((t) => t.date.startsWith(year));
-  const expenses = yearTx.filter((t) => t.type === 'expense');
-  const incomes = yearTx.filter((t) => t.type === 'income');
+  const expenses = transactions.filter((t) => t.type === 'expense');
+  const incomes = transactions.filter((t) => t.type === 'income');
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    await queryClient.invalidateQueries({ queryKey: ['transactions', year] });
     setIsRefreshing(false);
   };
 

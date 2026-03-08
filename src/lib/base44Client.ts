@@ -1,5 +1,6 @@
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp,
+  query, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Transaction, Budget, Asset, Category } from '@/types';
@@ -9,8 +10,15 @@ import { Transaction, Budget, Asset, Category } from '@/types';
 // ────────────────────────────────────────────────────────────────────────────
 function makeEntity<T extends { id: string }>(collectionName: string) {
   return {
-    async filter(opts?: { filters?: { field: string; operator: string; value: unknown }[] }): Promise<T[]> {
-      const snap = await getDocs(collection(db, collectionName));
+    async filter(opts?: {
+      filters?: { field: string; operator: string; value: unknown }[];
+      dateRange?: { start: string; end: string };
+    }): Promise<T[]> {
+      const base = collection(db, collectionName);
+      const q = opts?.dateRange
+        ? query(base, where('date', '>=', opts.dateRange.start), where('date', '<=', opts.dateRange.end))
+        : base;
+      const snap = await getDocs(q);
       let data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
       if (opts?.filters) {
         for (const f of opts.filters) {
