@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList,
 } from 'recharts';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +13,7 @@ const MONTH_NAMES = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני
 const MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 
 function compactNum(val: number): string {
-  if (val <= 0) return '—';
+  if (val <= 0) return '';
   if (val >= 1000) return (val / 1000).toFixed(1).replace('.0', '') + 'K';
   return String(Math.round(val));
 }
@@ -47,8 +47,8 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
   return (
     <Card>
       <CardContent className="pt-4">
-        <div className="overflow-x-auto -mx-4 px-1">
-          <table className="text-[11px] min-w-[780px] w-full border-collapse">
+        <div className="overflow-x-auto -mx-4 px-1" dir="rtl">
+          <table dir="rtl" className="text-[11px] min-w-[780px] w-full border-collapse">
             <thead>
               <tr className="border-b border-white/10">
                 <th className="text-right py-2 pr-2 pl-1 text-white/50 font-medium sticky right-0 bg-slate-900 min-w-[70px]">קטגוריה</th>
@@ -75,7 +75,7 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
                       const val = expByCatMonth[cat][m] || 0;
                       return (
                         <td key={m} className={`text-center py-2 px-0.5 ${val > 0 ? 'text-white' : 'text-white/15'}`}>
-                          {compactNum(val)}
+                          {val > 0 ? compactNum(val) : '—'}
                         </td>
                       );
                     })}
@@ -107,55 +107,30 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
   );
 }
 
-// ── Fixed vs Variable Tab ─────────────────────────────────────────────────────
-function FixedVariableTab({ expenses, incomes }: { expenses: Transaction[]; incomes: Transaction[] }) {
-  const [mode, setMode] = useState<'expense' | 'income'>('expense');
-
+// ── Fixed vs Variable Tab (expenses only) ─────────────────────────────────────
+function FixedVariableTab({ expenses }: { expenses: Transaction[] }) {
   const monthData = MONTHS.map((m, i) => {
     const mExp = expenses.filter((t) => t.date.slice(5, 7) === m);
-    const mInc = incomes.filter((t) => t.date.slice(5, 7) === m);
     return {
       month: MONTH_NAMES[i],
-      expFixed: mExp.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0),
-      expVar: mExp.filter((t) => t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0),
-      incFixed: mInc.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0),
-      incVar: mInc.filter((t) => t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0),
+      fixed: mExp.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0),
+      variable: mExp.filter((t) => t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0),
     };
   });
 
-  const fixedKey = mode === 'expense' ? 'expFixed' : 'incFixed';
-  const varKey = mode === 'expense' ? 'expVar' : 'incVar';
-
-  const totalFixed = monthData.reduce((s, m) => s + m[fixedKey], 0);
-  const totalVar = monthData.reduce((s, m) => s + m[varKey], 0);
+  const totalFixed = monthData.reduce((s, m) => s + m.fixed, 0);
+  const totalVar = monthData.reduce((s, m) => s + m.variable, 0);
   const grandTotal = totalFixed + totalVar;
-  const activeMonths = monthData.filter((m) => m[fixedKey] > 0 || m[varKey] > 0).length || 1;
+  const activeMonths = monthData.filter((m) => m.fixed > 0 || m.variable > 0).length || 1;
 
   const chartData = monthData.map((m) => ({
     month: m.month,
-    קבועה: m[fixedKey],
-    משתנה: m[varKey],
+    קבועה: m.fixed,
+    משתנה: m.variable,
   }));
 
   return (
     <div className="space-y-3">
-      {/* Toggle */}
-      <div className="flex gap-2">
-        {[{ v: 'expense', l: '💸 הוצאות' }, { v: 'income', l: '💰 הכנסות' }].map(({ v, l }) => (
-          <button
-            key={v}
-            onClick={() => setMode(v as 'expense' | 'income')}
-            className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all ${
-              mode === v
-                ? 'bg-cyan-500/30 border border-cyan-500/50 text-white'
-                : 'bg-white/5 border border-white/10 text-white/50'
-            }`}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
-
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-2">
         {[
@@ -176,14 +151,18 @@ function FixedVariableTab({ expenses, incomes }: { expenses: Transaction[]; inco
       {/* Chart */}
       <Card>
         <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={chartData} barSize={14}>
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={chartData} barSize={14} barGap={2} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
               <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis hide />
               <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="קבועה" fill="#a855f7" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="משתנה" fill="#22d3ee" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="קבועה" fill="#a855f7" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="קבועה" position="top" style={{ fill: '#c084fc', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
+              <Bar dataKey="משתנה" fill="#22d3ee" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="משתנה" position="top" style={{ fill: '#67e8f9', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -192,7 +171,7 @@ function FixedVariableTab({ expenses, incomes }: { expenses: Transaction[]; inco
       {/* Monthly breakdown table */}
       <Card>
         <CardContent className="pt-4">
-          <table className="w-full text-xs">
+          <table dir="rtl" className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-white/40">
                 <th className="text-right py-1.5">חודש</th>
@@ -204,16 +183,14 @@ function FixedVariableTab({ expenses, incomes }: { expenses: Transaction[]; inco
             </thead>
             <tbody>
               {monthData.map((m, i) => {
-                const fixed = m[fixedKey];
-                const variable = m[varKey];
-                const total = fixed + variable;
-                const pct = total > 0 ? Math.round((fixed / total) * 100) : 0;
+                const total = m.fixed + m.variable;
+                const pct = total > 0 ? Math.round((m.fixed / total) * 100) : 0;
                 if (total === 0) return null;
                 return (
                   <tr key={i} className="border-b border-white/5 hover:bg-white/[0.03]">
                     <td className="py-1.5 text-white/70">{m.month}</td>
-                    <td className="text-center py-1.5 text-purple-400 font-medium">{formatCurrency(fixed)}</td>
-                    <td className="text-center py-1.5 text-cyan-400 font-medium">{formatCurrency(variable)}</td>
+                    <td className="text-center py-1.5 text-purple-400 font-medium">{formatCurrency(m.fixed)}</td>
+                    <td className="text-center py-1.5 text-cyan-400 font-medium">{formatCurrency(m.variable)}</td>
                     <td className="text-center py-1.5 text-white font-bold">{formatCurrency(total)}</td>
                     <td className="text-center py-1.5 text-white/50">{pct}%</td>
                   </tr>
@@ -290,15 +267,21 @@ function IncomeDistributionTab({ incomes }: { incomes: Transaction[] }) {
       {/* Chart */}
       <Card>
         <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={chartData} barSize={20}>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} barSize={20} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
               <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis hide />
               <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="שי" fill="#22d3ee" stackId="a" />
-              <Bar dataKey="אורטל" fill="#ec4899" stackId="a" />
-              <Bar dataKey="משותף" fill="#a855f7" radius={[4, 4, 0, 0]} stackId="a" />
+              <Bar dataKey="שי" fill="#22d3ee" stackId="a">
+                <LabelList dataKey="שי" position="inside" style={{ fill: '#fff', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
+              <Bar dataKey="אורטל" fill="#ec4899" stackId="a">
+                <LabelList dataKey="אורטל" position="inside" style={{ fill: '#fff', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
+              <Bar dataKey="משותף" fill="#a855f7" radius={[4, 4, 0, 0]} stackId="a">
+                <LabelList dataKey="משותף" position="top" style={{ fill: '#c084fc', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -307,7 +290,7 @@ function IncomeDistributionTab({ incomes }: { incomes: Transaction[] }) {
       {/* Monthly table */}
       <Card>
         <CardContent className="pt-4">
-          <table className="w-full text-xs">
+          <table dir="rtl" className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-white/40">
                 <th className="text-right py-1.5">חודש</th>
@@ -401,15 +384,21 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
       {/* Chart */}
       <Card>
         <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} barSize={12}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} barSize={12} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
               <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis hide />
               <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="income" name="הכנסות" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expense" name="הוצאות" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="net" name="רווח נקי" fill="#22d3ee" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="income" name="הכנסות" fill="#22c55e" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="income" position="top" style={{ fill: '#86efac', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
+              <Bar dataKey="expense" name="הוצאות" fill="#f43f5e" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="expense" position="top" style={{ fill: '#fda4af', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
+              <Bar dataKey="net" name="רווח נקי" fill="#22d3ee" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="net" position="top" style={{ fill: '#67e8f9', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -418,7 +407,7 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
       {/* Monthly table */}
       <Card>
         <CardContent className="pt-4">
-          <table className="w-full text-xs">
+          <table dir="rtl" className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-white/40">
                 <th className="text-right py-1.5">חודש</th>
@@ -509,7 +498,7 @@ export default function AnnualAnalysis() {
         </TabsContent>
 
         <TabsContent value="fixed">
-          <FixedVariableTab expenses={expenses} incomes={incomes} />
+          <FixedVariableTab expenses={expenses} />
         </TabsContent>
 
         <TabsContent value="income">

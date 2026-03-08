@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList } from 'recharts';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -126,15 +126,19 @@ export default function MonthlyReports() {
               <CardTitle className="text-sm">הוצאות קבועות ומשתנות</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data} barSize={20}>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={data} barSize={20} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   <Tooltip formatter={tf} contentStyle={tooltipStyle} />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-                  <Bar dataKey="fixed" name="קבועה" fill="#a855f7" radius={[4, 4, 0, 0]} stackId="a" />
-                  <Bar dataKey="variable" name="משתנה" fill="#22d3ee" radius={[4, 4, 0, 0]} stackId="a" />
+                  <Bar dataKey="fixed" name="קבועה" fill="#a855f7" radius={[4, 4, 0, 0]} stackId="a">
+                    <LabelList dataKey="fixed" position="inside" style={{ fill: '#fff', fontSize: 9 }} formatter={(v: number) => v > 500 ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'K' : String(Math.round(v))) : ''} />
+                  </Bar>
+                  <Bar dataKey="variable" name="משתנה" fill="#22d3ee" radius={[4, 4, 0, 0]} stackId="a">
+                    <LabelList dataKey="variable" position="top" style={{ fill: '#67e8f9', fontSize: 9 }} formatter={(v: number) => v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'K' : String(Math.round(v))) : ''} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
