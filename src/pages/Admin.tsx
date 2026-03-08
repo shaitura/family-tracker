@@ -363,16 +363,12 @@ export default function Admin() {
     setDeleteYearStatus(`מחפש עסקאות לשנת ${deleteYear}…`);
     try {
       const all = await base44.entities.Transaction.filter();
-      const toDelete = all.filter((t) => t.date.startsWith(`${deleteYear}-`));
-      setDeleteYearStatus(`מוחק ${toDelete.length} עסקאות…`);
-      let done = 0;
-      for (const t of toDelete) {
-        await base44.entities.Transaction.delete(t.id);
-        done++;
-        if (done % 20 === 0 || done === toDelete.length) setDeleteYearStatus(`מוחק… ${done}/${toDelete.length}`);
-      }
+      const ids = all.filter((t) => t.date.startsWith(`${deleteYear}-`)).map((t) => t.id);
+      if (ids.length === 0) { setDeleteYearStatus(`✅ אין עסקאות לשנת ${deleteYear}`); setDeleteYearLoading(false); return; }
+      setDeleteYearStatus(`מוחק ${ids.length} עסקאות…`);
+      await base44.entities.Transaction.bulkDelete(ids);
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      setDeleteYearStatus(`✅ נמחקו ${toDelete.length} עסקאות משנת ${deleteYear}`);
+      setDeleteYearStatus(`✅ נמחקו ${ids.length} עסקאות משנת ${deleteYear}`);
     } catch (e) {
       setDeleteYearStatus(`❌ שגיאה: ${String(e)}`);
     }

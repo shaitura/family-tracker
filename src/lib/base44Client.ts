@@ -70,12 +70,24 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
       await deleteDoc(doc(db, collectionName, id));
     },
 
-    // bulk-delete all documents (used by Admin "clear all data")
+    // bulk-delete by IDs — chunked batches
+    async bulkDelete(ids: string[]): Promise<void> {
+      for (let i = 0; i < ids.length; i += 400) {
+        const batch = writeBatch(db);
+        ids.slice(i, i + 400).forEach((id) => batch.delete(doc(db, collectionName, id)));
+        await batch.commit();
+      }
+    },
+
+    // bulk-delete all documents — uses chunked batches (Firestore limit: 500 per batch)
     async deleteAll(): Promise<void> {
       const snap = await getDocs(collection(db, collectionName));
-      const batch = writeBatch(db);
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      const refs = snap.docs.map((d) => d.ref);
+      for (let i = 0; i < refs.length; i += 400) {
+        const batch = writeBatch(db);
+        refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+        await batch.commit();
+      }
     },
   };
 }
