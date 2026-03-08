@@ -151,7 +151,7 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
           payer:           mapPayer(String(ws[`D${row}`]?.v ?? '')),
           amount:          expAmt,
           payment_method:  mapPaymentMethod(ws[`F${row}`]?.v),
-          category:        mapCategory(String(ws[`G${row}`]?.v ?? '')),
+          category:        (String(ws[`G${row}`]?.v ?? '').trim() || 'שונות') as Category,
           notes:           String(ws[`H${row}`]?.v ?? '').trim() || undefined,
           status:          'paid',
         });
@@ -217,6 +217,10 @@ export default function Admin() {
   const [fixCatOpen, setFixCatOpen]             = useState(false);
   const [fixCatStatus, setFixCatStatus]         = useState('');
   const [fixCatLoading, setFixCatLoading]       = useState(false);
+  const [deleteYearOpen, setDeleteYearOpen]     = useState(false);
+  const [deleteYear, setDeleteYear]             = useState(new Date().getFullYear());
+  const [deleteYearLoading, setDeleteYearLoading] = useState(false);
+  const [deleteYearStatus, setDeleteYearStatus] = useState('');
   const [annualOpen, setAnnualOpen]             = useState(false);
   const [annualYear, setAnnualYear]             = useState(2025);
   const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
@@ -302,33 +306,77 @@ export default function Admin() {
   }
 
   // ── Fix categories in Firestore ─────────────────────────────────────────
+  const [fixCatPreview, setFixCatPreview] = useState<{ from: string; to: string; count: number }[]>([]);
+
+  async function scanFixCategories() {
+    setFixCatLoading(true);
+    setFixCatPreview([]);
+    setFixCatStatus('סורק עסקאות…');
+    try {
+      const all = await base44.entities.Transaction.filter();
+      const groups: Record<string, { to: string; count: number }> = {};
+      for (const t of all) {
+        const normalized = mapCategory(t.category);
+        if (normalized !== t.category) {
+          const key = `${t.category}→${normalized}`;
+          if (!groups[key]) groups[key] = { to: normalized, count: 0 };
+          groups[key].count++;
+        }
+      }
+      const preview = Object.entries(groups).map(([key, { to, count }]) => ({
+        from: key.split('→')[0], to, count,
+      })).sort((a, b) => b.count - a.count);
+      setFixCatPreview(preview);
+      const total = preview.reduce((s, r) => s + r.count, 0);
+      setFixCatStatus(total === 0 ? `✅ כל ${all.length} הרשומות עם קטגוריה תקינה` : `נמצאו ${total} עסקאות לתיקון`);
+    } catch (e) {
+      setFixCatStatus(`❌ שגיאה: ${String(e)}`);
+    }
+    setFixCatLoading(false);
+  }
+
   async function runFixCategories() {
     setFixCatLoading(true);
     setFixCatStatus('טוען עסקאות…');
     try {
       const all = await base44.entities.Transaction.filter();
-      const toFix = all.filter((t) => {
-        const normalized = mapCategory(t.category);
-        return normalized !== t.category;
-      });
-      setFixCatStatus(`נמצאו ${toFix.length} עסקאות לתיקון מתוך ${all.length}`);
-      if (toFix.length === 0) { setFixCatLoading(false); return; }
-
+      const toFix = all.filter((t) => mapCategory(t.category) !== t.category);
+      if (toFix.length === 0) { setFixCatStatus('✅ אין מה לתקן'); setFixCatLoading(false); return; }
       let done = 0;
       for (const t of toFix) {
-        const normalized = mapCategory(t.category);
-        await base44.entities.Transaction.update(t.id, { category: normalized });
+        await base44.entities.Transaction.update(t.id, { category: mapCategory(t.category) });
         done++;
-        if (done % 10 === 0 || done === toFix.length) {
-          setFixCatStatus(`מתקן… ${done}/${toFix.length}`);
-        }
+        if (done % 20 === 0 || done === toFix.length) setFixCatStatus(`מתקן… ${done}/${toFix.length}`);
       }
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setFixCatPreview([]);
       setFixCatStatus(`✅ תוקנו ${toFix.length} עסקאות`);
     } catch (e) {
       setFixCatStatus(`❌ שגיאה: ${String(e)}`);
     }
     setFixCatLoading(false);
+  }
+
+  // ── Delete transactions by year ──────────────────────────────────────────
+  async function runDeleteYear() {
+    setDeleteYearLoading(true);
+    setDeleteYearStatus(`מחפש עסקאות לשנת ${deleteYear}…`);
+    try {
+      const all = await base44.entities.Transaction.filter();
+      const toDelete = all.filter((t) => t.date.startsWith(`${deleteYear}-`));
+      setDeleteYearStatus(`מוחק ${toDelete.length} עסקאות…`);
+      let done = 0;
+      for (const t of toDelete) {
+        await base44.entities.Transaction.delete(t.id);
+        done++;
+        if (done % 20 === 0 || done === toDelete.length) setDeleteYearStatus(`מוחק… ${done}/${toDelete.length}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setDeleteYearStatus(`✅ נמחקו ${toDelete.length} עסקאות משנת ${deleteYear}`);
+    } catch (e) {
+      setDeleteYearStatus(`❌ שגיאה: ${String(e)}`);
+    }
+    setDeleteYearLoading(false);
   }
 
   // ── Annual Excel import ─────────────────────────────────────────────────
@@ -565,7 +613,8 @@ export default function Admin() {
             </button>
           )}
           <button onClick={exportCSV}        className="bg-gray-200  text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">⬇ ייצא CSV</button>
-          <button onClick={() => { setFixCatStatus(''); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
+          <button onClick={() => { setFixCatStatus(''); setFixCatPreview([]); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
+          <button onClick={() => { setDeleteYearStatus(''); setDeleteYearOpen(true); }} className="bg-orange-100 text-orange-700 px-3 py-1.5 rounded text-sm hover:bg-orange-200 border border-orange-300">🗓 מחק שנה</button>
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
       </div>
@@ -885,20 +934,83 @@ export default function Admin() {
       {/* ── Fix Categories Dialog ── */}
       {fixCatOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
-            <div className="text-4xl mb-3">🔧</div>
-            <h2 className="text-lg font-bold mb-2">תיקון קטגוריות בבסיס הנתונים</h2>
-            <p className="text-gray-500 text-sm mb-4">
-              הפעולה תסרוק את כל העסקאות ותנרמל קטגוריות לא-תקניות<br />
-              (לדוגמה: "דיור - שכירות" → "דיור").
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" dir="rtl">
+            <div className="text-4xl mb-2 text-center">🔧</div>
+            <h2 className="text-lg font-bold mb-1 text-center">תיקון קטגוריות בבסיס הנתונים</h2>
+            <p className="text-gray-500 text-sm mb-3 text-center">
+              סורק ומנרמל קטגוריות לא-תקניות (לדוגמה: "דיור - שכירות" → "דיור").
             </p>
             {fixCatStatus && (
-              <p className="text-sm font-medium text-teal-700 mb-4 bg-teal-50 rounded-lg px-3 py-2">{fixCatStatus}</p>
+              <p className="text-sm font-medium text-teal-700 mb-3 bg-teal-50 rounded-lg px-3 py-2 text-center">{fixCatStatus}</p>
+            )}
+            {fixCatPreview.length > 0 && (
+              <div className="mb-4 max-h-48 overflow-y-auto border rounded-lg text-sm">
+                <table className="w-full">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-600">קטגוריה נוכחית</th>
+                      <th className="px-2 py-1.5 text-center text-gray-400">→</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-600">אחרי תיקון</th>
+                      <th className="px-3 py-1.5 text-center font-medium text-gray-600">כמות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fixCatPreview.map((row) => (
+                      <tr key={row.from} className="border-t">
+                        <td className="px-3 py-1.5 text-red-600">{row.from}</td>
+                        <td className="px-2 py-1.5 text-center text-gray-400">→</td>
+                        <td className="px-3 py-1.5 text-green-700 font-medium">{row.to}</td>
+                        <td className="px-3 py-1.5 text-center text-gray-500">{row.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             <div className="flex gap-3 justify-center">
-              <button onClick={() => { setFixCatOpen(false); setFixCatStatus(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={fixCatLoading}>סגור</button>
-              <button onClick={runFixCategories} disabled={fixCatLoading || fixCatStatus.startsWith('✅')} className="px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium disabled:opacity-60">
-                {fixCatLoading ? 'מתקן…' : 'תקן קטגוריות →'}
+              <button onClick={() => { setFixCatOpen(false); setFixCatStatus(''); setFixCatPreview([]); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={fixCatLoading}>סגור</button>
+              {fixCatPreview.length === 0 && !fixCatStatus.startsWith('✅') && (
+                <button onClick={scanFixCategories} disabled={fixCatLoading} className="px-5 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium disabled:opacity-60">
+                  {fixCatLoading ? 'סורק…' : 'סרוק →'}
+                </button>
+              )}
+              {fixCatPreview.length > 0 && (
+                <button onClick={runFixCategories} disabled={fixCatLoading} className="px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium disabled:opacity-60">
+                  {fixCatLoading ? 'מתקן…' : `תקן ${fixCatPreview.reduce((s,r)=>s+r.count,0)} עסקאות →`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Year Dialog ── */}
+      {deleteYearOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
+            <div className="text-4xl mb-3">🗓</div>
+            <h2 className="text-lg font-bold mb-2">מחיקת נתוני שנה</h2>
+            <p className="text-gray-500 text-sm mb-4">
+              מחיקת כל העסקאות של שנה מסוימת לפני ייבוא מחדש.
+            </p>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <label className="text-sm font-medium text-gray-700">שנה:</label>
+              <select
+                value={deleteYear}
+                onChange={(e) => setDeleteYear(Number(e.target.value))}
+                className="border rounded px-3 py-1.5 text-sm"
+                disabled={deleteYearLoading}
+              >
+                {[2021,2022,2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            {deleteYearStatus && (
+              <p className={`text-sm font-medium mb-4 rounded-lg px-3 py-2 ${deleteYearStatus.startsWith('✅') ? 'text-green-700 bg-green-50' : 'text-orange-700 bg-orange-50'}`}>{deleteYearStatus}</p>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => { setDeleteYearOpen(false); setDeleteYearStatus(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={deleteYearLoading}>סגור</button>
+              <button onClick={runDeleteYear} disabled={deleteYearLoading || deleteYearStatus.startsWith('✅')} className="px-5 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-medium disabled:opacity-60">
+                {deleteYearLoading ? 'מוחק…' : `מחק שנת ${deleteYear} →`}
               </button>
             </div>
           </div>
