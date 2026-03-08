@@ -485,17 +485,13 @@ export default function AnnualAnalysis() {
         </select>
       </div>
 
-      <Tabs defaultValue="table">
+      <Tabs defaultValue="fixed">
         <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="table" className="text-xs">טבלה</TabsTrigger>
-          <TabsTrigger value="fixed" className="text-xs">קבועות</TabsTrigger>
+          <TabsTrigger value="fixed" className="text-xs">הוצאות</TabsTrigger>
           <TabsTrigger value="income" className="text-xs">הכנסות</TabsTrigger>
           <TabsTrigger value="profit" className="text-xs">רווח</TabsTrigger>
+          <TabsTrigger value="table" className="text-xs">סיכום כולל</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="table">
-          <AnnualTableTab expenses={expenses} />
-        </TabsContent>
 
         <TabsContent value="fixed">
           <FixedVariableTab expenses={expenses} />
@@ -507,6 +503,10 @@ export default function AnnualAnalysis() {
 
         <TabsContent value="profit">
           <NetProfitTab expenses={expenses} incomes={incomes} />
+        </TabsContent>
+
+        <TabsContent value="table">
+          <AnnualTableTab expenses={expenses} />
         </TabsContent>
       </Tabs>
     </div>
