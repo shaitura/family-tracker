@@ -87,6 +87,7 @@ export default function AddTransaction() {
       setTimeout(() => { setSuccess(false); setForm(emptyForm()); }, 2000);
       toast({ title: 'העסקה נשמרה בהצלחה!', variant: 'success' });
     },
+    onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
   });
 
   const handleAiParse = async () => {

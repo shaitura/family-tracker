@@ -62,6 +62,7 @@ export default function Assets() {
   const { mutate: addAsset, isPending } = useMutation({
     mutationFn: () => base44.entities.Asset.create(form),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['assets'] }); setOpen(false); setForm(emptyAsset()); toast({ title: 'נכס נוסף בהצלחה!', variant: 'success' }); },
+    onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
   });
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));

@@ -35,7 +35,10 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
     },
 
     async create(item: Omit<T, 'id'>): Promise<T> {
-      const ref = await addDoc(collection(db, collectionName), item);
+      const clean = Object.fromEntries(
+        Object.entries(item as Record<string, unknown>).filter(([, v]) => v !== undefined),
+      );
+      const ref = await addDoc(collection(db, collectionName), clean);
       return { ...item, id: ref.id } as T;
     },
 
