@@ -122,42 +122,47 @@ const PROVIDER_DOMAINS: Record<string, string> = {
   'ליברה': 'lbr.co.il',
 };
 
-function providerLogoUrl(provider: string): { primary: string; fallback: string } | null {
+function providerLogoUrls(provider: string): string[] | null {
   const normalized = provider.trim().toLowerCase();
   for (const [key, domain] of Object.entries(PROVIDER_DOMAINS)) {
     if (normalized.includes(key.toLowerCase())) {
-      return {
-        primary: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-        fallback: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
-      };
+      return [
+        `https://www.${domain}/apple-touch-icon.png`,
+        `https://${domain}/apple-touch-icon.png`,
+        `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+      ];
     }
   }
   return null;
 }
 
 function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvestment: boolean }) {
-  const logoUrls = providerLogoUrl(provider);
+  const urls = providerLogoUrls(provider);
   const initials = provider.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('');
   const gradient = isInvestment
     ? 'from-emerald-500/30 to-cyan-500/30'
     : 'from-cyan-500/30 to-purple-500/30';
 
-  if (logoUrls) {
+  if (urls) {
+    const tryNext = (img: HTMLImageElement, idx: number) => {
+      if (idx < urls.length) {
+        img.src = urls[idx];
+      } else {
+        img.style.display = 'none';
+        const fb = img.nextElementSibling as HTMLElement | null;
+        if (fb) fb.style.display = 'flex';
+      }
+    };
     return (
       <div className={`w-12 h-12 rounded-2xl bg-white/95 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden p-1.5`}>
         <img
-          src={logoUrls.primary}
+          src={urls[0]}
           alt={provider}
           className="w-full h-full object-contain"
           onError={(e) => {
             const img = e.currentTarget;
-            if (img.src !== logoUrls.fallback) {
-              img.src = logoUrls.fallback;
-            } else {
-              img.style.display = 'none';
-              const fb = img.nextElementSibling as HTMLElement | null;
-              if (fb) fb.style.display = 'flex';
-            }
+            const cur = urls.indexOf(img.src);
+            tryNext(img, cur + 1);
           }}
         />
         <span className={`text-white font-bold text-sm hidden items-center justify-center w-full h-full bg-gradient-to-br ${gradient} rounded-2xl`}>
