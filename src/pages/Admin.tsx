@@ -726,7 +726,7 @@ export default function Admin() {
                     onChange={(e) => { setAnnualYear(Number(e.target.value)); setAnnualPreview([]); }}
                     className="border rounded px-3 py-1.5 text-sm text-gray-900"
                   >
-                    {[2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+                    {[2021,2022,2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
