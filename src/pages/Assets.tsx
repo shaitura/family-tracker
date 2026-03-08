@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Shield, TrendingUp, Wallet, Loader2 } from 'lucide-react';
+import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil } from 'lucide-react';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -55,15 +55,43 @@ export default function Assets() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<Asset, 'id'>>(emptyAsset());
 
   const { data: assets = [] } = useQuery<Asset[]>({ queryKey: ['assets'], queryFn: () => base44.entities.Asset.filter() });
 
-  const { mutate: addAsset, isPending } = useMutation({
+  const { mutate: addAsset, isPending: isAdding } = useMutation({
     mutationFn: () => base44.entities.Asset.create(form),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assets'] }); setOpen(false); setForm(emptyAsset()); toast({ title: 'נכס נוסף בהצלחה!', variant: 'success' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assets'] }); closeDialog(); toast({ title: 'נכס נוסף בהצלחה!', variant: 'success' }); },
     onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
   });
+
+  const { mutate: updateAsset, isPending: isUpdating } = useMutation({
+    mutationFn: () => base44.entities.Asset.update(editId!, form),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assets'] }); closeDialog(); toast({ title: 'נכס עודכן בהצלחה!', variant: 'success' }); },
+    onError: (e) => toast({ title: 'שגיאה בעדכון', description: String(e), variant: 'destructive' }),
+  });
+
+  const isPending = isAdding || isUpdating;
+
+  function openAdd() {
+    setEditId(null);
+    setForm(emptyAsset());
+    setOpen(true);
+  }
+
+  function openEdit(a: Asset) {
+    setEditId(a.id);
+    const { id, ...rest } = a;
+    setForm(rest);
+    setOpen(true);
+  }
+
+  function closeDialog() {
+    setOpen(false);
+    setEditId(null);
+    setForm(emptyAsset());
+  }
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -73,7 +101,6 @@ export default function Assets() {
       ...f,
       asset_class: cls,
       type: defaultType as AssetType,
-      // clear irrelevant fields
       monthly_premium: undefined,
       annual_premium: undefined,
       balance: undefined,
@@ -83,7 +110,6 @@ export default function Assets() {
     }));
   }
 
-  // Auto-calc annual when monthly changes
   function setMonthlyPremium(val: number | undefined) {
     setForm((f) => ({
       ...f,
@@ -95,36 +121,39 @@ export default function Assets() {
   const isInsurance = form.asset_class !== 'נכס/השקעה';
   const typeList = isInsurance ? ASSET_INSURANCE_TYPES : ASSET_INVESTMENT_TYPES;
 
-  // Summary calculations
   const insuranceAssets = assets.filter((a) => a.asset_class !== 'נכס/השקעה');
   const investmentAssets = assets.filter((a) => a.asset_class === 'נכס/השקעה');
 
-  const totalBalance = assets.reduce((s, a) => s + (a.balance ?? 0), 0);
-  const totalMonthlyPremium = assets.reduce((s, a) => s + (a.monthly_premium ?? 0), 0);
+  // Investment summary
   const totalInvestmentBalance = investmentAssets.reduce((s, a) => s + (a.balance ?? 0), 0);
-
-  const byOwner: Record<string, { balance: number; monthly: number; count: number }> = {};
-  assets.forEach((a) => {
-    if (!byOwner[a.owner]) byOwner[a.owner] = { balance: 0, monthly: 0, count: 0 };
-    byOwner[a.owner].balance += a.balance ?? 0;
-    byOwner[a.owner].monthly += a.monthly_premium ?? 0;
-    byOwner[a.owner].count++;
+  const byInvOwner: Record<string, { balance: number; count: number }> = {};
+  investmentAssets.forEach((a) => {
+    if (!byInvOwner[a.owner]) byInvOwner[a.owner] = { balance: 0, count: 0 };
+    byInvOwner[a.owner].balance += a.balance ?? 0;
+    byInvOwner[a.owner].count++;
   });
-
-  const byInsType: Record<string, number> = {};
-  insuranceAssets.forEach((a) => { byInsType[a.type] = (byInsType[a.type] ?? 0) + (a.monthly_premium ?? 0); });
-
   const byRisk: Record<string, number> = {};
   investmentAssets.forEach((a) => {
     const k = a.risk_level ?? 'לא מוגדר';
     byRisk[k] = (byRisk[k] ?? 0) + (a.balance ?? 0);
   });
 
+  // Insurance summary
+  const totalMonthlyPremium = insuranceAssets.reduce((s, a) => s + (a.monthly_premium ?? 0), 0);
+  const byInsOwner: Record<string, { monthly: number; count: number }> = {};
+  insuranceAssets.forEach((a) => {
+    if (!byInsOwner[a.owner]) byInsOwner[a.owner] = { monthly: 0, count: 0 };
+    byInsOwner[a.owner].monthly += a.monthly_premium ?? 0;
+    byInsOwner[a.owner].count++;
+  });
+  const byInsType: Record<string, number> = {};
+  insuranceAssets.forEach((a) => { byInsType[a.type] = (byInsType[a.type] ?? 0) + (a.monthly_premium ?? 0); });
+
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-white">נכסים וביטוחים</h1>
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={openAdd}>
           <Plus className="w-4 h-4 ml-1" /> הוסף
         </Button>
       </div>
@@ -144,7 +173,6 @@ export default function Assets() {
             </div>
           )}
 
-          {/* Investment assets section */}
           {investmentAssets.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-emerald-400/80 px-1">📊 נכסים והשקעות</p>
@@ -153,6 +181,9 @@ export default function Assets() {
                   <Card>
                     <CardContent className="py-3 px-4">
                       <div className="flex gap-3 items-start">
+                        <button onClick={() => openEdit(a)} className="mt-1 text-white/30 hover:text-white/70 transition-colors shrink-0">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
                           {assetIcon(a.type)}
                         </div>
@@ -176,7 +207,6 @@ export default function Assets() {
             </div>
           )}
 
-          {/* Insurance/fund assets section */}
           {insuranceAssets.length > 0 && (
             <div className="space-y-2">
               {investmentAssets.length > 0 && <p className="text-xs font-semibold text-cyan-400/80 px-1 mt-3">🛡️ ביטוחים וקרנות</p>}
@@ -185,6 +215,9 @@ export default function Assets() {
                   <Card>
                     <CardContent className="py-3 px-4">
                       <div className="flex gap-3 items-start">
+                        <button onClick={() => openEdit(a)} className="mt-1 text-white/30 hover:text-white/70 transition-colors shrink-0">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
                           {assetIcon(a.type)}
                         </div>
@@ -211,79 +244,115 @@ export default function Assets() {
         </TabsContent>
 
         {/* Summary tab */}
-        <TabsContent value="summary" className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { icon: TrendingUp, label: 'סה"כ יתרות', value: formatCurrency(totalBalance), color: 'text-emerald-400' },
-              { icon: Shield,     label: 'פרמיה חודשית', value: formatCurrency(totalMonthlyPremium), color: 'text-cyan-400' },
-              { icon: Wallet,     label: 'השקעות', value: formatCurrency(totalInvestmentBalance), color: 'text-purple-400' },
-            ].map(({ icon: Icon, label, value, color }) => (
-              <Card key={label}>
-                <CardContent className="pt-3 pb-3 text-center">
-                  <Icon className={`w-5 h-5 mx-auto mb-1 ${color}`} />
-                  <p className={`text-sm font-bold ${color}`}>{value}</p>
-                  <p className="text-[10px] text-white/40 mt-0.5">{label}</p>
+        <TabsContent value="summary">
+          <Tabs defaultValue="investments">
+            <TabsList className="w-full">
+              <TabsTrigger value="investments" className="flex-1">📊 השקעות</TabsTrigger>
+              <TabsTrigger value="insurance" className="flex-1">🛡️ ביטוחים</TabsTrigger>
+            </TabsList>
+
+            {/* Investments sub-tab */}
+            <TabsContent value="investments" className="space-y-4 mt-3">
+              <Card>
+                <CardContent className="pt-4 pb-4 text-center">
+                  <TrendingUp className="w-6 h-6 mx-auto mb-1 text-emerald-400" />
+                  <p className="text-lg font-bold text-emerald-400">{formatCurrency(totalInvestmentBalance)}</p>
+                  <p className="text-[11px] text-white/40 mt-0.5">סה"כ יתרות השקעה</p>
                 </CardContent>
               </Card>
-            ))}
-          </div>
 
-          {/* By owner */}
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {Object.entries(byOwner).map(([owner, { balance, monthly, count }]) => (
-                <div key={owner} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                  <div>
-                    <p className="text-sm text-white font-medium">{OWNER_LABELS[owner] || owner}</p>
-                    <p className="text-xs text-white/40">{count} נכסים</p>
-                  </div>
-                  <div className="text-left">
-                    {balance > 0 && <p className="text-sm font-bold text-emerald-400">{formatCurrency(balance)}</p>}
-                    {monthly > 0 && <p className="text-xs text-cyan-400">{formatCurrency(monthly)}/חודש</p>}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+              {Object.keys(byInvOwner).length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(byInvOwner).map(([owner, { balance, count }]) => (
+                      <div key={owner} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                        <p className="text-sm font-bold text-emerald-400">{formatCurrency(balance)}</p>
+                        <div className="text-right">
+                          <p className="text-sm text-white font-medium">{OWNER_LABELS[owner] || owner}</p>
+                          <p className="text-xs text-white/40">{count} נכסים</p>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
-          {/* Investments by risk */}
-          {Object.keys(byRisk).length > 0 && (
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">📊 השקעות לפי רמת סיכון</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(byRisk).map(([risk, balance]) => (
-                  <div key={risk} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                    <span className="text-sm text-white">{risk}</span>
-                    <span className="text-sm font-medium text-emerald-400">{formatCurrency(balance)}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+              {Object.keys(byRisk).length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי רמת סיכון</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(byRisk).map(([risk, balance]) => (
+                      <div key={risk} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
+                        <span className="text-sm font-medium text-emerald-400">{formatCurrency(balance)}</span>
+                        <span className="text-sm text-white">{risk}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
-          {/* Insurance by type */}
-          {Object.keys(byInsType).length > 0 && (
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">🛡️ ביטוחים לפי סוג</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(byInsType).map(([type, monthly]) => (
-                  <div key={type} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                    <span className="text-sm text-white">{type}</span>
-                    <span className="text-sm font-medium text-cyan-400">{formatCurrency(monthly)}/חודש</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+              {investmentAssets.length === 0 && (
+                <p className="text-center text-white/30 py-8 text-sm">אין נכסים/השקעות</p>
+              )}
+            </TabsContent>
+
+            {/* Insurance sub-tab */}
+            <TabsContent value="insurance" className="space-y-4 mt-3">
+              <Card>
+                <CardContent className="pt-4 pb-4 text-center">
+                  <Shield className="w-6 h-6 mx-auto mb-1 text-cyan-400" />
+                  <p className="text-lg font-bold text-cyan-400">{formatCurrency(totalMonthlyPremium)}/חודש</p>
+                  <p className="text-[11px] text-white/40 mt-0.5">סה"כ פרמיה חודשית</p>
+                </CardContent>
+              </Card>
+
+              {Object.keys(byInsOwner).length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(byInsOwner).map(([owner, { monthly, count }]) => (
+                      <div key={owner} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                        <div className="text-left">
+                          {monthly > 0 && <p className="text-sm font-bold text-cyan-400">{formatCurrency(monthly)}/חודש</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-white font-medium">{OWNER_LABELS[owner] || owner}</p>
+                          <p className="text-xs text-white/40">{count} פוליסות</p>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {Object.keys(byInsType).length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי סוג ביטוח</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(byInsType).map(([type, monthly]) => (
+                      <div key={type} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
+                        <span className="text-sm font-medium text-cyan-400">{formatCurrency(monthly)}/חודש</span>
+                        <span className="text-sm text-white">{type}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {insuranceAssets.length === 0 && (
+                <p className="text-center text-white/30 py-8 text-sm">אין ביטוחים/קרנות</p>
+              )}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
 
-      {/* Add dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Add / Edit dialog */}
+      <Dialog open={open} onOpenChange={(v) => { if (!v) closeDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>הוסף נכס / ביטוח</DialogTitle>
+            <DialogTitle>{editId ? 'עריכת נכס / ביטוח' : 'הוסף נכס / ביטוח'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
 
@@ -404,8 +473,8 @@ export default function Assets() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>ביטול</Button>
-            <Button onClick={() => addAsset()} disabled={isPending || !form.product_name || !form.provider}>
+            <Button variant="outline" onClick={closeDialog}>ביטול</Button>
+            <Button onClick={() => editId ? updateAsset() : addAsset()} disabled={isPending || !form.product_name || !form.provider}>
               {isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> שומר...</> : 'שמור'}
             </Button>
           </DialogFooter>
