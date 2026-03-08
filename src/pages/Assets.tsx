@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -174,6 +175,39 @@ function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvest
   );
 }
 
+// Hex colors for charts
+function typeChartColor(type: string): string {
+  if (type === 'ניירות ערך' || type === 'מניות RSU' || type === 'חשבון מסחר עצמאי' || type === 'משכנתא') return '#10b981';
+  if (type === 'קרן השתלמות') return '#a855f7';
+  if (type.includes('קופת גמל') || type.includes('חיסכון לכל ילד')) return '#ec4899';
+  if (type === 'עו"ש') return '#06b6d4';
+  if (type === 'מט"ח') return '#f59e0b';
+  if (type === 'קרקע' || type === 'נדל"ן') return '#f97316';
+  if (type === 'קריפטו') return '#eab308';
+  if (type.includes('פנסיה') || type.includes('מנהלים')) return '#6366f1';
+  if (type.includes('ריסק') || type.includes('אובדן כושר') || type.includes('מחלות')) return '#ef4444';
+  if (type.includes('חיים')) return '#f43f5e';
+  if (type.includes('בריאות') || type.includes('שיניים') || type.includes('סיעוד') || type.includes('קופת חולים') || type.includes('אסותא')) return '#14b8a6';
+  if (type.includes('רכב')) return '#94a3b8';
+  if (type.includes('מבנה') || type.includes('תכולה')) return '#f59e0b';
+  return '#6b7280';
+}
+
+const OWNER_CHART_COLORS: Record<string, string> = {
+  Shi: '#06b6d4', Ortal: '#ec4899', Yuval: '#a855f7', Aviv: '#10b981',
+  Ziv: '#f59e0b', Joint: '#6366f1', Car_Private: '#94a3b8', Apt_Rent: '#f97316', Apt_Own: '#f97316',
+};
+
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-800 border border-white/15 rounded-lg px-3 py-2 text-xs" dir="rtl">
+      <p className="text-white font-medium mb-0.5">{payload[0].name}</p>
+      <p className="text-emerald-400 font-bold">{payload[0].value.toLocaleString('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })}</p>
+    </div>
+  );
+}
+
 function emptyAsset(): Omit<Asset, 'id'> {
   return {
     owner: 'Shi',
@@ -289,6 +323,36 @@ export default function Assets() {
   });
   const byInsType: Record<string, number> = {};
   insuranceAssets.forEach((a) => { byInsType[a.type] = (byInsType[a.type] ?? 0) + (a.monthly_premium ?? 0); });
+
+  // Chart data
+  const byInvType: Record<string, number> = {};
+  investmentAssets.forEach((a) => { byInvType[a.type] = (byInvType[a.type] ?? 0) + (a.balance ?? 0); });
+
+  const invTypeChartData = Object.entries(byInvType)
+    .filter(([, v]) => v > 0)
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, value]) => ({ name, value, color: typeChartColor(name) }));
+
+  const invOwnerChartData = Object.entries(byInvOwner)
+    .filter(([, { balance }]) => balance > 0)
+    .sort(([, a], [, b]) => b.balance - a.balance)
+    .map(([owner, { balance, count }]) => ({
+      name: OWNER_LABELS[owner] || owner, value: balance, count,
+      color: OWNER_CHART_COLORS[owner] || '#6b7280',
+    }));
+
+  const insTypeChartData = Object.entries(byInsType)
+    .filter(([, v]) => v > 0)
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, value]) => ({ name, value, color: typeChartColor(name) }));
+
+  const insOwnerChartData = Object.entries(byInsOwner)
+    .filter(([, { monthly }]) => monthly > 0)
+    .sort(([, a], [, b]) => b.monthly - a.monthly)
+    .map(([owner, { monthly, count }]) => ({
+      name: OWNER_LABELS[owner] || owner, value: monthly, count,
+      color: OWNER_CHART_COLORS[owner] || '#6b7280',
+    }));
 
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
@@ -437,33 +501,78 @@ export default function Assets() {
                 </CardContent>
               </Card>
 
-              {Object.keys(byInvOwner).length > 0 && (
+              {invTypeChartData.length > 0 && (
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
-                  <CardContent className="space-y-2">
-                    {Object.entries(byInvOwner).map(([owner, { balance, count }]) => (
-                      <div key={owner} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                        <p className="text-sm font-bold text-emerald-400">{formatCurrency(balance)}</p>
-                        <div className="text-right">
-                          <p className="text-sm text-white font-medium">{OWNER_LABELS[owner] || owner}</p>
-                          <p className="text-xs text-white/40">{count} נכסים</p>
+                  <CardHeader className="pb-1"><CardTitle className="text-sm">חלוקה לפי סוג</CardTitle></CardHeader>
+                  <CardContent className="pt-0">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <PieChart>
+                        <Pie data={invTypeChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" nameKey="name" strokeWidth={0}>
+                          {invTypeChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-1.5 mt-1" dir="rtl">
+                      {invTypeChartData.map((entry) => {
+                        const pct = totalInvestmentBalance > 0 ? (entry.value / totalInvestmentBalance) * 100 : 0;
+                        return (
+                          <div key={entry.name} className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
+                            <span className="text-xs text-white/80 flex-1">{entry.name}</span>
+                            <div className="w-16 bg-white/5 rounded-full h-1.5 shrink-0">
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
+                            </div>
+                            <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>
+                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{formatCurrency(entry.value)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {invOwnerChartData.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-1"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
+                  <CardContent className="space-y-2 pt-0" dir="rtl">
+                    {invOwnerChartData.map((entry) => {
+                      const pct = totalInvestmentBalance > 0 ? (entry.value / totalInvestmentBalance) * 100 : 0;
+                      return (
+                        <div key={entry.name}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="font-bold" style={{ color: entry.color }}>{formatCurrency(entry.value)}</span>
+                            <span className="text-white/70">{entry.name} · {entry.count} נכסים</span>
+                          </div>
+                          <div className="w-full bg-white/5 rounded-full h-2">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: entry.color }} />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </CardContent>
                 </Card>
               )}
 
               {Object.keys(byRisk).length > 0 && (
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי רמת סיכון</CardTitle></CardHeader>
-                  <CardContent className="space-y-2">
-                    {Object.entries(byRisk).map(([risk, balance]) => (
-                      <div key={risk} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                        <span className="text-sm font-medium text-emerald-400">{formatCurrency(balance)}</span>
-                        <span className="text-sm text-white">{risk}</span>
-                      </div>
-                    ))}
+                  <CardHeader className="pb-1"><CardTitle className="text-sm">לפי רמת סיכון</CardTitle></CardHeader>
+                  <CardContent className="space-y-1.5 pt-0" dir="rtl">
+                    {Object.entries(byRisk).map(([risk, balance]) => {
+                      const pct = totalInvestmentBalance > 0 ? (balance / totalInvestmentBalance) * 100 : 0;
+                      return (
+                        <div key={risk}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="font-bold text-emerald-400">{formatCurrency(balance)}</span>
+                            <span className="text-white/70">{risk}</span>
+                          </div>
+                          <div className="w-full bg-white/5 rounded-full h-1.5">
+                            <div className="h-full rounded-full bg-emerald-500/70 transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               )}
@@ -483,35 +592,56 @@ export default function Assets() {
                 </CardContent>
               </Card>
 
-              {Object.keys(byInsOwner).length > 0 && (
+              {insTypeChartData.length > 0 && (
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
-                  <CardContent className="space-y-2">
-                    {Object.entries(byInsOwner).map(([owner, { monthly, count }]) => (
-                      <div key={owner} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                        <div className="text-left">
-                          {monthly > 0 && <p className="text-sm font-bold text-cyan-400">{formatCurrency(monthly)}/חודש</p>}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-white font-medium">{OWNER_LABELS[owner] || owner}</p>
-                          <p className="text-xs text-white/40">{count} פוליסות</p>
-                        </div>
-                      </div>
-                    ))}
+                  <CardHeader className="pb-1"><CardTitle className="text-sm">חלוקה לפי סוג ביטוח</CardTitle></CardHeader>
+                  <CardContent className="pt-0">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <PieChart>
+                        <Pie data={insTypeChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" nameKey="name" strokeWidth={0}>
+                          {insTypeChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-1.5 mt-1" dir="rtl">
+                      {insTypeChartData.map((entry) => {
+                        const pct = totalMonthlyPremium > 0 ? (entry.value / totalMonthlyPremium) * 100 : 0;
+                        return (
+                          <div key={entry.name} className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
+                            <span className="text-xs text-white/80 flex-1">{entry.name}</span>
+                            <div className="w-16 bg-white/5 rounded-full h-1.5 shrink-0">
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
+                            </div>
+                            <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>
+                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{formatCurrency(entry.value)}/חודש</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </CardContent>
                 </Card>
               )}
 
-              {Object.keys(byInsType).length > 0 && (
+              {insOwnerChartData.length > 0 && (
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">לפי סוג ביטוח</CardTitle></CardHeader>
-                  <CardContent className="space-y-2">
-                    {Object.entries(byInsType).map(([type, monthly]) => (
-                      <div key={type} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                        <span className="text-sm font-medium text-cyan-400">{formatCurrency(monthly)}/חודש</span>
-                        <span className="text-sm text-white">{type}</span>
-                      </div>
-                    ))}
+                  <CardHeader className="pb-1"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
+                  <CardContent className="space-y-2 pt-0" dir="rtl">
+                    {insOwnerChartData.map((entry) => {
+                      const pct = totalMonthlyPremium > 0 ? (entry.value / totalMonthlyPremium) * 100 : 0;
+                      return (
+                        <div key={entry.name}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="font-bold" style={{ color: entry.color }}>{formatCurrency(entry.value)}/חודש</span>
+                            <span className="text-white/70">{entry.name} · {entry.count} פוליסות</span>
+                          </div>
+                          <div className="w-full bg-white/5 rounded-full h-2">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: entry.color }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               )}

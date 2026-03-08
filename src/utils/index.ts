@@ -90,5 +90,5 @@ export const OWNER_LABELS: Record<string, string> = {
   Joint: 'משותף',
   Car_Private: 'רכב פרטי',
   Apt_Rent: 'דירה שכורה',
-  Apt_Own: 'דירה בבעלות',
+  Apt_Own: 'נדל"ן',
 };
