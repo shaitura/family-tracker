@@ -49,5 +49,10 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function({ addVariant }) {
+      // Mobile landscape: short screens rotated sideways (max-height 500px filters out desktop)
+      addVariant('ls', '@media (orientation: landscape) and (max-height: 500px)');
+    },
+  ],
 }
