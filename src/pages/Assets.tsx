@@ -156,13 +156,13 @@ export default function Assets() {
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
                           {assetIcon(a.type)}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 text-right">
                           <div className="flex justify-between gap-2">
-                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
                             {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
+                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
                           </div>
-                          <p className="text-xs text-white/50 mt-0.5">{a.provider} · {OWNER_LABELS[a.owner] || a.owner}</p>
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          <p className="text-xs text-white/50 mt-0.5">{OWNER_LABELS[a.owner] || a.owner} · {a.provider}</p>
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap justify-end">
                             <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
                             {a.risk_level && <Badge variant="secondary" className="text-[10px]">{a.risk_level}</Badge>}
                             {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
@@ -188,13 +188,13 @@ export default function Assets() {
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
                           {assetIcon(a.type)}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 text-right">
                           <div className="flex justify-between gap-2">
-                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
                             {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
+                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
                           </div>
-                          <p className="text-xs text-white/50 mt-0.5">{a.provider} · {OWNER_LABELS[a.owner] || a.owner}</p>
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          <p className="text-xs text-white/50 mt-0.5">{OWNER_LABELS[a.owner] || a.owner} · {a.provider}</p>
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap justify-end">
                             <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
                             {a.monthly_premium != null && <Badge variant="secondary" className="text-[10px]">{formatCurrency(a.monthly_premium)}/חודש</Badge>}
                             {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
