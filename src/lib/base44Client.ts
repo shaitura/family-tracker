@@ -1,5 +1,5 @@
 import {
-  collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch,
+  collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Transaction, Budget, Asset, Category } from '@/types';
@@ -29,6 +29,20 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
     async create(item: Omit<T, 'id'>): Promise<T> {
       const ref = await addDoc(collection(db, collectionName), item);
       return { ...item, id: ref.id } as T;
+    },
+
+    // bulk-create up to thousands of items using Firestore batches (max 500 per batch)
+    async bulkCreate(items: Omit<T, 'id'>[]): Promise<void> {
+      const CHUNK = 500;
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        const chunk = items.slice(i, i + CHUNK);
+        chunk.forEach((item) => {
+          const ref = doc(collection(db, collectionName));
+          batch.set(ref, item as Record<string, unknown>);
+        });
+        await batch.commit();
+      }
     },
 
     async update(id: string, updates: Partial<T>): Promise<T> {

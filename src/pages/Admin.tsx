@@ -331,11 +331,8 @@ export default function Admin() {
 
   async function importAnnualData() {
     setAnnualLoading(true);
-    for (const m of annualPreview) {
-      for (const row of [...m.expenses, ...m.incomes]) {
-        await base44.entities.Transaction.create(row as Omit<Transaction, 'id'>);
-      }
-    }
+    const allRows = annualPreview.flatMap((m) => [...m.expenses, ...m.incomes]) as Omit<Transaction, 'id'>[];
+    await base44.entities.Transaction.bulkCreate(allRows);
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setAnnualLoading(false);
     setAnnualOpen(false);
