@@ -218,6 +218,7 @@ export default function Admin() {
   const [annualYear, setAnnualYear]             = useState(2025);
   const [annualPreview, setAnnualPreview]       = useState<MonthPreview[]>([]);
   const [annualLoading, setAnnualLoading]       = useState(false);
+  const [annualProgress, setAnnualProgress]     = useState({ done: 0, total: 0 });
   const [annualSheetNames, setAnnualSheetNames] = useState<string[]>([]);
   const [annualDiag, setAnnualDiag]             = useState<string[][]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -332,11 +333,15 @@ export default function Admin() {
   async function importAnnualData() {
     setAnnualLoading(true);
     const allRows = annualPreview.flatMap((m) => [...m.expenses, ...m.incomes]) as Omit<Transaction, 'id'>[];
-    await base44.entities.Transaction.bulkCreate(allRows);
+    setAnnualProgress({ done: 0, total: allRows.length });
+    await base44.entities.Transaction.bulkCreate(allRows, (done, total) => {
+      setAnnualProgress({ done, total });
+    });
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setAnnualLoading(false);
     setAnnualOpen(false);
     setAnnualPreview([]);
+    setAnnualProgress({ done: 0, total: 0 });
   }
 
   async function importPasteRows() {
@@ -802,7 +807,11 @@ export default function Admin() {
                   disabled={annualLoading}
                   className="px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm font-medium disabled:opacity-60"
                 >
-                  {annualLoading ? 'מייבא...' : `יבא ${annualPreview.reduce((s,m)=>s+m.expenses.length+m.incomes.length,0)} רשומות →`}
+                  {annualLoading
+                    ? annualProgress.total > 0
+                      ? `מייבא... ${annualProgress.done}/${annualProgress.total}`
+                      : 'מייבא...'
+                    : `יבא ${annualPreview.reduce((s,m)=>s+m.expenses.length+m.incomes.length,0)} רשומות →`}
                 </button>
               )}
             </div>

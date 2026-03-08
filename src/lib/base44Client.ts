@@ -31,18 +31,27 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
       return { ...item, id: ref.id } as T;
     },
 
-    // bulk-create up to thousands of items using Firestore batches (max 500 per batch)
-    async bulkCreate(items: Omit<T, 'id'>[]): Promise<void> {
+    // bulk-create using parallel Firestore batch commits (max 500 ops each)
+    async bulkCreate(items: Omit<T, 'id'>[], onProgress?: (done: number, total: number) => void): Promise<void> {
       const CHUNK = 500;
-      for (let i = 0; i < items.length; i += CHUNK) {
+      const total = items.length;
+      let done = 0;
+      const commits: Promise<void>[] = [];
+      for (let i = 0; i < total; i += CHUNK) {
         const batch = writeBatch(db);
         const chunk = items.slice(i, i + CHUNK);
         chunk.forEach((item) => {
           const ref = doc(collection(db, collectionName));
           batch.set(ref, item as Record<string, unknown>);
         });
-        await batch.commit();
+        commits.push(
+          batch.commit().then(() => {
+            done += chunk.length;
+            onProgress?.(done, total);
+          }),
+        );
       }
+      await Promise.all(commits);
     },
 
     async update(id: string, updates: Partial<T>): Promise<T> {
