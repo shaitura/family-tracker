@@ -565,11 +565,6 @@ export default function Admin() {
             </button>
           )}
           <button onClick={exportCSV}        className="bg-gray-200  text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">⬇ ייצא CSV</button>
-          {hasLocalData() && (
-            <button onClick={() => setMigrateOpen(true)} className="bg-amber-500 text-white px-3 py-1.5 rounded text-sm hover:bg-amber-600 border border-amber-600 animate-pulse">
-              ☁️ העבר נתונים לענן
-            </button>
-          )}
           <button onClick={() => { setFixCatStatus(''); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
