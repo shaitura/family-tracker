@@ -16,13 +16,22 @@ export const PAYMENT_METHODS: PaymentMethod[] = ['אשראי', 'מזומן', 'ה
 export const ASSET_OWNERS = ['Shi', 'Ortal', 'Yuval', 'Aviv', 'Ziv', 'Joint', 'Car_Private', 'Apt_Rent', 'Apt_Own'] as const;
 export type AssetOwner = typeof ASSET_OWNERS[number];
 
-export const ASSET_TYPES = [
+export const ASSET_INSURANCE_TYPES = [
   'פנסיה', 'ביטוח נכות', 'קרן השתלמות', 'קופת גמל', 'קרן להשקעה',
-  'חיסכון ילדים', 'מנהלים', 'בריאות', 'חיים', 'מחלות קשות', 'משכנתא',
+  'חיסכון ילדים', 'מנהלים', 'בריאות', 'חיים', 'מחלות קשות',
   'שיניים', 'סיעוד', 'מבנה', 'תכולה', 'מבנה+תכולה',
-  'רכב חובה', 'רכב מקיף', "צד ג'", 'אסותא', 'כללית',
+  'רכב חובה', 'רכב מקיף', "צד ג'", 'אסותא', 'כללית', 'משכנתא',
 ] as const;
+
+export const ASSET_INVESTMENT_TYPES = [
+  'ניירות ערך', 'עו"ש', 'מט"ח',
+] as const;
+
+export const ASSET_TYPES = [...ASSET_INSURANCE_TYPES, ...ASSET_INVESTMENT_TYPES] as const;
 export type AssetType = typeof ASSET_TYPES[number];
+
+export type AssetClass = 'ביטוח/קרן' | 'נכס/השקעה';
+export type RiskLevel = 'סולידי' | 'מנייתי' | 'כללי' | 'נדל"ן';
 
 export interface Transaction {
   id: string;
@@ -50,6 +59,7 @@ export interface Budget {
 export interface Asset {
   id: string;
   owner: AssetOwner;
+  asset_class?: AssetClass;
   type: AssetType;
   provider: string;
   product_name: string;
@@ -60,4 +70,5 @@ export interface Asset {
   num_payments?: number;
   annual_premium?: number;
   balance?: number;
+  risk_level?: RiskLevel;
 }

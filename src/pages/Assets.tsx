@@ -11,8 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toaster';
-import { Asset, ASSET_OWNERS, ASSET_TYPES, AssetOwner, AssetType } from '@/types';
+import {
+  Asset, ASSET_OWNERS, ASSET_INSURANCE_TYPES, ASSET_INVESTMENT_TYPES,
+  AssetOwner, AssetType, AssetClass, RiskLevel,
+} from '@/types';
 import { formatCurrency, OWNER_LABELS } from '@/utils';
+
+const RISK_LEVELS: RiskLevel[] = ['סולידי', 'מנייתי', 'כללי', 'נדל"ן'];
 
 function assetIcon(type: string): string {
   if (type.includes('פנסיה') || type.includes('מנהלים')) return '🏦';
@@ -22,11 +27,28 @@ function assetIcon(type: string): string {
   if (type.includes('משכנתא')) return '🏠';
   if (type.includes('רכב')) return '🚗';
   if (type.includes('שיניים')) return '🦷';
+  if (type === 'ניירות ערך') return '📊';
+  if (type === 'עו"ש') return '🏧';
+  if (type === 'מט"ח') return '💱';
   return '📋';
 }
 
 function emptyAsset(): Omit<Asset, 'id'> {
-  return { owner: 'Shi', type: 'פנסיה', provider: '', product_name: '', policy_number: '', start_date: '', end_date: '', monthly_premium: undefined, num_payments: undefined, annual_premium: undefined, balance: undefined };
+  return {
+    owner: 'Shi',
+    asset_class: 'ביטוח/קרן',
+    type: 'פנסיה',
+    provider: '',
+    product_name: '',
+    policy_number: '',
+    start_date: '',
+    end_date: '',
+    monthly_premium: undefined,
+    num_payments: undefined,
+    annual_premium: undefined,
+    balance: undefined,
+    risk_level: undefined,
+  };
 }
 
 export default function Assets() {
@@ -44,10 +66,41 @@ export default function Assets() {
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
+  function switchClass(cls: AssetClass) {
+    const defaultType = cls === 'ביטוח/קרן' ? 'פנסיה' : 'ניירות ערך';
+    setForm((f) => ({
+      ...f,
+      asset_class: cls,
+      type: defaultType as AssetType,
+      // clear irrelevant fields
+      monthly_premium: undefined,
+      annual_premium: undefined,
+      balance: undefined,
+      risk_level: undefined,
+      start_date: '',
+      end_date: '',
+    }));
+  }
+
+  // Auto-calc annual when monthly changes
+  function setMonthlyPremium(val: number | undefined) {
+    setForm((f) => ({
+      ...f,
+      monthly_premium: val,
+      annual_premium: val != null ? Math.round(val * 12) : undefined,
+    }));
+  }
+
+  const isInsurance = form.asset_class !== 'נכס/השקעה';
+  const typeList = isInsurance ? ASSET_INSURANCE_TYPES : ASSET_INVESTMENT_TYPES;
+
   // Summary calculations
+  const insuranceAssets = assets.filter((a) => a.asset_class !== 'נכס/השקעה');
+  const investmentAssets = assets.filter((a) => a.asset_class === 'נכס/השקעה');
+
   const totalBalance = assets.reduce((s, a) => s + (a.balance ?? 0), 0);
   const totalMonthlyPremium = assets.reduce((s, a) => s + (a.monthly_premium ?? 0), 0);
-  const totalAnnualPremium = assets.reduce((s, a) => s + (a.annual_premium ?? 0), 0);
+  const totalInvestmentBalance = investmentAssets.reduce((s, a) => s + (a.balance ?? 0), 0);
 
   const byOwner: Record<string, { balance: number; monthly: number; count: number }> = {};
   assets.forEach((a) => {
@@ -57,10 +110,13 @@ export default function Assets() {
     byOwner[a.owner].count++;
   });
 
-  const insuranceTypes = ['ביטוח חיים', 'בריאות', 'רכב חובה', 'רכב מקיף', "צד ג'", 'מחלות קשות', 'שיניים', 'סיעוד', 'מבנה', 'תכולה', 'מבנה+תכולה', 'אסותא', 'כללית'];
-  const byType: Record<string, number> = {};
-  assets.filter((a) => insuranceTypes.includes(a.type)).forEach((a) => {
-    byType[a.type] = (byType[a.type] ?? 0) + (a.monthly_premium ?? 0);
+  const byInsType: Record<string, number> = {};
+  insuranceAssets.forEach((a) => { byInsType[a.type] = (byInsType[a.type] ?? 0) + (a.monthly_premium ?? 0); });
+
+  const byRisk: Record<string, number> = {};
+  investmentAssets.forEach((a) => {
+    const k = a.risk_level ?? 'לא מוגדר';
+    byRisk[k] = (byRisk[k] ?? 0) + (a.balance ?? 0);
   });
 
   return (
@@ -86,41 +142,80 @@ export default function Assets() {
               <p>אין נכסים עדיין</p>
             </div>
           )}
-          {assets.map((a, i) => (
-            <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-              <Card>
-                <CardContent className="py-3 px-4">
-                  <div className="flex gap-3 items-start">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
-                      {assetIcon(a.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between gap-2">
-                        <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
-                        {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
+
+          {/* Investment assets section */}
+          {investmentAssets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-emerald-400/80 px-1">📊 נכסים והשקעות</p>
+              {investmentAssets.map((a, i) => (
+                <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                  <Card>
+                    <CardContent className="py-3 px-4">
+                      <div className="flex gap-3 items-start">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
+                          {assetIcon(a.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between gap-2">
+                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
+                            {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
+                          </div>
+                          <p className="text-xs text-white/50 mt-0.5">{a.provider} · {OWNER_LABELS[a.owner] || a.owner}</p>
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                            <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
+                            {a.risk_level && <Badge variant="secondary" className="text-[10px]">{a.risk_level}</Badge>}
+                            {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-white/50 mt-0.5">{a.provider} · {OWNER_LABELS[a.owner] || a.owner}</p>
-                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                        <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
-                        {a.monthly_premium && <Badge variant="secondary" className="text-[10px]">{formatCurrency(a.monthly_premium)}/חודש</Badge>}
-                        {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {/* Insurance/fund assets section */}
+          {insuranceAssets.length > 0 && (
+            <div className="space-y-2">
+              {investmentAssets.length > 0 && <p className="text-xs font-semibold text-cyan-400/80 px-1 mt-3">🛡️ ביטוחים וקרנות</p>}
+              {insuranceAssets.map((a, i) => (
+                <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                  <Card>
+                    <CardContent className="py-3 px-4">
+                      <div className="flex gap-3 items-start">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-xl shrink-0">
+                          {assetIcon(a.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between gap-2">
+                            <p className="text-sm font-semibold text-white truncate">{a.product_name}</p>
+                            {a.balance != null && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(a.balance)}</p>}
+                          </div>
+                          <p className="text-xs text-white/50 mt-0.5">{a.provider} · {OWNER_LABELS[a.owner] || a.owner}</p>
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                            <Badge variant="purple" className="text-[10px]">{a.type}</Badge>
+                            {a.monthly_premium != null && <Badge variant="secondary" className="text-[10px]">{formatCurrency(a.monthly_premium)}/חודש</Badge>}
+                            {a.policy_number && <Badge variant="outline" className="text-[10px]">#{a.policy_number}</Badge>}
+                            {a.start_date && <Badge variant="outline" className="text-[10px]">{a.start_date}</Badge>}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* Summary tab */}
         <TabsContent value="summary" className="space-y-4">
-          {/* Totals */}
           <div className="grid grid-cols-3 gap-2">
             {[
-              { icon: TrendingUp, label: 'יתרות', value: formatCurrency(totalBalance), color: 'text-emerald-400' },
-              { icon: Shield, label: 'פרמיה חודשית', value: formatCurrency(totalMonthlyPremium), color: 'text-cyan-400' },
-              { icon: Wallet, label: 'פרמיה שנתית', value: formatCurrency(totalAnnualPremium), color: 'text-purple-400' },
+              { icon: TrendingUp, label: 'סה"כ יתרות', value: formatCurrency(totalBalance), color: 'text-emerald-400' },
+              { icon: Shield,     label: 'פרמיה חודשית', value: formatCurrency(totalMonthlyPremium), color: 'text-cyan-400' },
+              { icon: Wallet,     label: 'השקעות', value: formatCurrency(totalInvestmentBalance), color: 'text-purple-400' },
             ].map(({ icon: Icon, label, value, color }) => (
               <Card key={label}>
                 <CardContent className="pt-3 pb-3 text-center">
@@ -151,12 +246,27 @@ export default function Assets() {
             </CardContent>
           </Card>
 
-          {/* Insurance by type */}
-          {Object.keys(byType).length > 0 && (
+          {/* Investments by risk */}
+          {Object.keys(byRisk).length > 0 && (
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">ביטוחים לפי סוג</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">📊 השקעות לפי רמת סיכון</CardTitle></CardHeader>
               <CardContent className="space-y-2">
-                {Object.entries(byType).map(([type, monthly]) => (
+                {Object.entries(byRisk).map(([risk, balance]) => (
+                  <div key={risk} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
+                    <span className="text-sm text-white">{risk}</span>
+                    <span className="text-sm font-medium text-emerald-400">{formatCurrency(balance)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Insurance by type */}
+          {Object.keys(byInsType).length > 0 && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">🛡️ ביטוחים לפי סוג</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {Object.entries(byInsType).map(([type, monthly]) => (
                   <div key={type} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
                     <span className="text-sm text-white">{type}</span>
                     <span className="text-sm font-medium text-cyan-400">{formatCurrency(monthly)}/חודש</span>
@@ -175,6 +285,27 @@ export default function Assets() {
             <DialogTitle>הוסף נכס / ביטוח</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
+
+            {/* Class toggle */}
+            <div className="flex rounded-xl overflow-hidden border border-white/15">
+              {(['ביטוח/קרן', 'נכס/השקעה'] as AssetClass[]).map((cls) => (
+                <button
+                  key={cls}
+                  onClick={() => switchClass(cls)}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    form.asset_class === cls
+                      ? cls === 'נכס/השקעה'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-cyan-600 text-white'
+                      : 'bg-white/5 text-white/50 hover:bg-white/10'
+                  }`}
+                >
+                  {cls === 'ביטוח/קרן' ? '🛡️ ביטוח / קרן' : '📊 נכס / השקעה'}
+                </button>
+              ))}
+            </div>
+
+            {/* Owner + Type */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1 block">בעלים</Label>
@@ -185,13 +316,15 @@ export default function Assets() {
               <div>
                 <Label className="mb-1 block">סוג</Label>
                 <select value={form.type} onChange={(e) => set('type', e.target.value as AssetType)} className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl">
-                  {ASSET_TYPES.map((t) => <option key={t} value={t} className="bg-slate-800">{t}</option>)}
+                  {typeList.map((t) => <option key={t} value={t} className="bg-slate-800">{t}</option>)}
                 </select>
               </div>
             </div>
+
+            {/* Product name + provider */}
             <div>
               <Label className="mb-1 block">שם מוצר</Label>
-              <Input value={form.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="שם המוצר/פוליסה" dir="rtl" />
+              <Input value={form.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="שם המוצר / פוליסה" dir="rtl" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -203,27 +336,72 @@ export default function Assets() {
                 <Input value={form.policy_number ?? ''} onChange={(e) => set('policy_number', e.target.value)} placeholder="000000" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1 block">פרמיה חודשית (₪)</Label>
-                <Input type="number" value={form.monthly_premium ?? ''} onChange={(e) => set('monthly_premium', e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="0" />
+
+            {/* ── ביטוח/קרן fields ── */}
+            {isInsurance && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="mb-1 block">פרמיה חודשית (₪)</Label>
+                    <Input
+                      type="number"
+                      value={form.monthly_premium ?? ''}
+                      onChange={(e) => setMonthlyPremium(e.target.value ? parseFloat(e.target.value) : undefined)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block">פרמיה שנתית (₪)</Label>
+                    <Input
+                      type="number"
+                      value={form.annual_premium ?? ''}
+                      onChange={(e) => set('annual_premium', e.target.value ? parseFloat(e.target.value) : undefined)}
+                      placeholder="מחושב אוטומטית ×12"
+                      className="bg-white/3 text-white/60"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="mb-1 block">תאריך התחלה</Label>
+                    <Input type="date" value={form.start_date ?? ''} onChange={(e) => set('start_date', e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block">תאריך סיום</Label>
+                    <Input type="date" value={form.end_date ?? ''} onChange={(e) => set('end_date', e.target.value)} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── נכס/השקעה fields ── */}
+            {!isInsurance && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1 block">יתרה נוכחית (₪)</Label>
+                  <Input
+                    type="number"
+                    value={form.balance ?? ''}
+                    onChange={(e) => set('balance', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1 block">רמת סיכון</Label>
+                  <select
+                    value={form.risk_level ?? ''}
+                    onChange={(e) => set('risk_level', (e.target.value as RiskLevel) || undefined)}
+                    className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none"
+                    dir="rtl"
+                  >
+                    <option value="" className="bg-slate-800">— בחר —</option>
+                    {RISK_LEVELS.map((r) => <option key={r} value={r} className="bg-slate-800">{r}</option>)}
+                  </select>
+                </div>
               </div>
-              <div>
-                <Label className="mb-1 block">יתרה (₪)</Label>
-                <Input type="number" value={form.balance ?? ''} onChange={(e) => set('balance', e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="0" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1 block">תאריך התחלה</Label>
-                <Input type="date" value={form.start_date ?? ''} onChange={(e) => set('start_date', e.target.value)} />
-              </div>
-              <div>
-                <Label className="mb-1 block">תאריך סיום</Label>
-                <Input type="date" value={form.end_date ?? ''} onChange={(e) => set('end_date', e.target.value)} />
-              </div>
-            </div>
+            )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>ביטול</Button>
             <Button onClick={() => addAsset()} disabled={isPending || !form.product_name || !form.provider}>
