@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList,
+  PieChart, Pie, Cell,
 } from 'recharts';
+import { RefreshCw } from 'lucide-react';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -25,7 +27,7 @@ const TOOLTIP_STYLE = {
   color: '#fff',
 };
 
-// ── Annual Table Tab ──────────────────────────────────────────────────────────
+// ── Annual Table Tab (סיכום כולל) ─────────────────────────────────────────────
 function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
   const expByCatMonth: Record<string, Record<string, number>> = {};
   CATEGORIES.forEach((cat) => { expByCatMonth[cat] = {}; });
@@ -44,66 +46,106 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
 
   const totalExpense = expenses.reduce((s, t) => s + t.amount, 0);
 
+  // Pie chart data – category totals
+  const pieData = activeCategories.map((cat) => ({
+    name: cat,
+    value: MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0),
+  })).filter((d) => d.value > 0);
+
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <div className="overflow-x-auto -mx-4 px-1" dir="rtl">
-          <table dir="rtl" className="text-[11px] min-w-[780px] w-full border-collapse">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-right py-2 pr-2 pl-1 text-white/50 font-medium sticky right-0 bg-slate-900 min-w-[70px]">קטגוריה</th>
-                {MONTH_NAMES.map((m) => (
-                  <th key={m} className="text-center py-2 px-0.5 text-white/40 font-medium w-12">{m}</th>
+    <div className="space-y-3">
+      {/* Distribution chart */}
+      <Card>
+        <CardContent className="pt-4">
+          <p className="text-xs text-white/40 text-center mb-2">חלוקת הוצאות לפי קטגוריה</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={85}
+                innerRadius={40}
+                paddingAngle={2}
+                label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
+                labelLine={false}
+              >
+                {pieData.map((entry) => (
+                  <Cell key={entry.name} fill={categoryColor(entry.name)} />
                 ))}
-                <th className="text-center py-2 px-1 text-cyan-400/80 font-bold w-16">סה"כ</th>
-                <th className="text-center py-2 px-1 text-white/40 font-medium w-16">ממוצע</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeCategories.map((cat) => {
-                const rowTotal = MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0);
-                const rowAvg = rowTotal / 12;
-                return (
-                  <tr key={cat} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
-                    <td
-                      className="py-2 pr-2 pl-1 font-medium sticky right-0 bg-slate-900"
-                      style={{ color: categoryColor(cat) }}
-                    >
-                      {cat}
+              </Pie>
+              <Tooltip
+                formatter={(v: number) => formatCurrency(v)}
+                contentStyle={TOOLTIP_STYLE}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="overflow-x-auto -mx-4 px-1" dir="rtl">
+            <table dir="rtl" className="text-[11px] min-w-[780px] w-full border-collapse">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-right py-2 pr-2 pl-1 text-white/50 font-medium sticky right-0 bg-slate-900 min-w-[70px]">קטגוריה</th>
+                  {MONTH_NAMES.map((m) => (
+                    <th key={m} className="text-center py-2 px-0.5 text-white/40 font-medium w-12">{m}</th>
+                  ))}
+                  <th className="text-center py-2 px-1 text-cyan-400/80 font-bold w-16">סה"כ</th>
+                  <th className="text-center py-2 px-1 text-white/40 font-medium w-16">ממוצע</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeCategories.map((cat) => {
+                  const rowTotal = MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0);
+                  const rowAvg = rowTotal / 12;
+                  return (
+                    <tr key={cat} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
+                      <td
+                        className="py-2 pr-2 pl-1 font-medium sticky right-0 bg-slate-900"
+                        style={{ color: categoryColor(cat) }}
+                      >
+                        {cat}
+                      </td>
+                      {MONTHS.map((m) => {
+                        const val = expByCatMonth[cat][m] || 0;
+                        return (
+                          <td key={m} className={`text-center py-2 px-0.5 ${val > 0 ? 'text-white' : 'text-white/15'}`}>
+                            {val > 0 ? compactNum(val) : '—'}
+                          </td>
+                        );
+                      })}
+                      <td className="text-center py-2 px-1 text-white font-bold">
+                        {rowTotal > 0 ? formatCurrency(rowTotal) : '—'}
+                      </td>
+                      <td className="text-center py-2 px-1 text-white/50">
+                        {rowTotal > 0 ? formatCurrency(rowAvg) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {/* Totals row */}
+                <tr className="border-t-2 border-white/20">
+                  <td className="py-2 pr-2 pl-1 text-white font-bold sticky right-0 bg-slate-900">סה"כ</td>
+                  {monthlyTotals.map((total, i) => (
+                    <td key={i} className={`text-center py-2 px-0.5 font-bold ${total > 0 ? 'text-cyan-400' : 'text-white/15'}`}>
+                      {compactNum(total)}
                     </td>
-                    {MONTHS.map((m) => {
-                      const val = expByCatMonth[cat][m] || 0;
-                      return (
-                        <td key={m} className={`text-center py-2 px-0.5 ${val > 0 ? 'text-white' : 'text-white/15'}`}>
-                          {val > 0 ? compactNum(val) : '—'}
-                        </td>
-                      );
-                    })}
-                    <td className="text-center py-2 px-1 text-white font-bold">
-                      {rowTotal > 0 ? formatCurrency(rowTotal) : '—'}
-                    </td>
-                    <td className="text-center py-2 px-1 text-white/50">
-                      {rowTotal > 0 ? formatCurrency(rowAvg) : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-              {/* Totals row */}
-              <tr className="border-t-2 border-white/20">
-                <td className="py-2 pr-2 pl-1 text-white font-bold sticky right-0 bg-slate-900">סה"כ</td>
-                {monthlyTotals.map((total, i) => (
-                  <td key={i} className={`text-center py-2 px-0.5 font-bold ${total > 0 ? 'text-cyan-400' : 'text-white/15'}`}>
-                    {compactNum(total)}
-                  </td>
-                ))}
-                <td className="text-center py-2 px-1 text-cyan-400 font-black">{formatCurrency(totalExpense)}</td>
-                <td className="text-center py-2 px-1 text-cyan-300 font-bold">{formatCurrency(totalExpense / 12)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+                  ))}
+                  <td className="text-center py-2 px-1 text-cyan-400 font-black">{formatCurrency(totalExpense)}</td>
+                  <td className="text-center py-2 px-1 text-cyan-300 font-bold">{formatCurrency(totalExpense / 12)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -457,36 +499,63 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function AnnualAnalysis() {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(String(currentYear));
+  const currentYear = String(new Date().getFullYear());
+  const [year, setYear] = useState(currentYear);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.filter(),
   });
 
+  // Derive available years from data, fallback to current year if empty
+  const availableYears = (() => {
+    const years = [...new Set(transactions.map((t) => t.date.slice(0, 4)))].sort();
+    return years.length > 0 ? years : [currentYear];
+  })();
+
+  // If current year selection is not in available years, don't auto-reset
+  // (keep manual selection)
+
   const yearTx = transactions.filter((t) => t.date.startsWith(year));
   const expenses = yearTx.filter((t) => t.type === 'expense');
   const incomes = yearTx.filter((t) => t.type === 'income');
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    setIsRefreshing(false);
+  };
 
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-white">ניתוח שנתי</h1>
-        <select
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-          className="h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none"
-        >
-          {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
-            <option key={y} value={y} className="bg-slate-800">{y}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="text-xs">רענן</span>
+          </button>
+          <select
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            className="h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none"
+          >
+            {availableYears.map((y) => (
+              <option key={y} value={y} className="bg-slate-800">{y}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <Tabs defaultValue="fixed">
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-4 w-full" dir="rtl">
           <TabsTrigger value="fixed" className="text-xs">הוצאות</TabsTrigger>
           <TabsTrigger value="income" className="text-xs">הכנסות</TabsTrigger>
           <TabsTrigger value="profit" className="text-xs">רווח</TabsTrigger>
