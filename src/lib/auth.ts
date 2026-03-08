@@ -2,8 +2,8 @@ import { User } from 'firebase/auth';
 
 // ─── הכנס כאן את כתובות ה-Gmail המורשות ─────────────────────────────────────
 export const ALLOWED_EMAILS = [
-  'YOUR_EMAIL@gmail.com',     // ← החלף במייל שלך
-  'WIFE_EMAIL@gmail.com',     // ← החלף במייל של אשתך
+  'shaitura@gmail.com',
+  'ortalas@gmail.com',
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
