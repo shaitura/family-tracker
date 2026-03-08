@@ -169,7 +169,7 @@ function FixedVariableTab({ expenses }: { expenses: Transaction[] }) {
     month: m.month,
     קבועה: m.fixed,
     משתנה: m.variable,
-  }));
+  })).reverse(); // RTL: Jan on right → Dec on left
 
   return (
     <div className="space-y-3">
@@ -283,7 +283,8 @@ function IncomeDistributionTab({ incomes }: { incomes: Transaction[] }) {
     שי: m.shi,
     אורטל: m.ortal,
     משותף: m.joint,
-  }));
+    total: m.total, // for the total label at top of stacked bar
+  })).reverse(); // RTL: Jan on right → Dec on left
 
   return (
     <div className="space-y-3">
@@ -322,7 +323,8 @@ function IncomeDistributionTab({ incomes }: { incomes: Transaction[] }) {
                 <LabelList dataKey="אורטל" position="inside" style={{ fill: '#fff', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
               </Bar>
               <Bar dataKey="משותף" fill="#a855f7" radius={[4, 4, 0, 0]} stackId="a">
-                <LabelList dataKey="משותף" position="top" style={{ fill: '#c084fc', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+                <LabelList dataKey="משותף" position="inside" style={{ fill: '#fff', fontSize: 8 }} formatter={(v: number) => compactNum(v)} />
+                <LabelList dataKey="total" position="top" style={{ fill: '#e2e8f0', fontSize: 9, fontWeight: 'bold' }} formatter={(v: number) => compactNum(v)} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -393,7 +395,7 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
   const avgIncome = totalIncome / activeMonths;
   const avgExpense = totalExpense / activeMonths;
 
-  const chartData = monthData.filter((m) => m.income > 0 || m.expense > 0);
+  const chartData = monthData.filter((m) => m.income > 0 || m.expense > 0).reverse(); // RTL
 
   return (
     <div className="space-y-3">

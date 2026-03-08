@@ -26,7 +26,7 @@ function buildMonthlyData(transactions: Transaction[]) {
     const variable = txs.filter((t) => t.type === 'expense' && t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0);
     const shi = txs.filter((t) => t.type === 'expense' && t.payer === 'Shi').reduce((s, t) => s + t.amount, 0);
     const ortal = txs.filter((t) => t.type === 'expense' && t.payer === 'Ortal').reduce((s, t) => s + t.amount, 0);
-    return { label, income, expenses, fixed, variable, שי: shi, אורטל: ortal };
+    return { label, income, expenses, fixed, variable, שי: shi, אורטל: ortal, total: fixed + variable };
   });
 }
 
@@ -80,7 +80,7 @@ export default function MonthlyReports() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data}>
+                <AreaChart data={[...data].reverse()}>
                   <defs>
                     <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -127,7 +127,7 @@ export default function MonthlyReports() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={data} barSize={20} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
+                <BarChart data={[...data].reverse()} barSize={20} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
@@ -137,7 +137,8 @@ export default function MonthlyReports() {
                     <LabelList dataKey="fixed" position="inside" style={{ fill: '#fff', fontSize: 9 }} formatter={(v: number) => v > 500 ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'K' : String(Math.round(v))) : ''} />
                   </Bar>
                   <Bar dataKey="variable" name="משתנה" fill="#22d3ee" radius={[4, 4, 0, 0]} stackId="a">
-                    <LabelList dataKey="variable" position="top" style={{ fill: '#67e8f9', fontSize: 9 }} formatter={(v: number) => v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'K' : String(Math.round(v))) : ''} />
+                    <LabelList dataKey="variable" position="inside" style={{ fill: '#fff', fontSize: 9 }} formatter={(v: number) => v > 500 ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'K' : String(Math.round(v))) : ''} />
+                    <LabelList dataKey="total" position="top" style={{ fill: '#e2e8f0', fontSize: 9, fontWeight: 'bold' }} formatter={(v: number) => v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + 'K' : String(Math.round(v))) : ''} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -168,7 +169,7 @@ export default function MonthlyReports() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={data}>
+                <LineChart data={[...data].reverse()}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
