@@ -30,6 +30,7 @@ function assetIcon(type: string): string {
   if (type === 'ניירות ערך') return '📊';
   if (type === 'עו"ש') return '🏧';
   if (type === 'מט"ח') return '💱';
+  if (type === 'קריפטו') return '₿';
   return '📋';
 }
 

@@ -27,7 +27,7 @@ export const ASSET_INSURANCE_TYPES = [
 export const ASSET_INVESTMENT_TYPES = [
   'ניירות ערך', 'עו"ש', 'מט"ח', 'קרקע',
   'קרן השתלמות', 'קופת גמל להשקעה', 'קופת גמל להשקעה - ילדים',
-  'חיסכון לכל ילד', 'מניות RSU',
+  'חיסכון לכל ילד', 'מניות RSU', 'קריפטו', 'אחר',
 ] as const;
 
 export const ASSET_TYPES = [...ASSET_INSURANCE_TYPES, ...ASSET_INVESTMENT_TYPES] as const;
