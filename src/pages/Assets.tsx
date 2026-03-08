@@ -106,7 +106,7 @@ const PROVIDER_DOMAINS: Record<string, string> = {
   'מזרחי': 'mizrahi-tefahot.co.il',
   'בנק מזרחי': 'mizrahi-tefahot.co.il',
   'עמיתים': 'amitim.co.il',
-  'מור': 'mor.co.il',
+  'מור': 'moreinvest.co.il',
   'הכשרה': 'hachshara.co.il',
   'איילון': 'ayalon.co.il',
   'הסתדרות': 'kupat-cholim.co.il',
