@@ -330,18 +330,26 @@ export default function Admin() {
     e.target.value = '';
   }
 
+  const [annualError, setAnnualError] = useState('');
+
   async function importAnnualData() {
     setAnnualLoading(true);
+    setAnnualError('');
     const allRows = annualPreview.flatMap((m) => [...m.expenses, ...m.incomes]) as Omit<Transaction, 'id'>[];
     setAnnualProgress({ done: 0, total: allRows.length });
-    await base44.entities.Transaction.bulkCreate(allRows, (done, total) => {
-      setAnnualProgress({ done, total });
-    });
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    setAnnualLoading(false);
-    setAnnualOpen(false);
-    setAnnualPreview([]);
-    setAnnualProgress({ done: 0, total: 0 });
+    try {
+      await base44.entities.Transaction.bulkCreate(allRows, (done, total) => {
+        setAnnualProgress({ done, total });
+      });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setAnnualOpen(false);
+      setAnnualPreview([]);
+    } catch (e) {
+      setAnnualError(`שגיאה: ${String(e)}`);
+    } finally {
+      setAnnualLoading(false);
+      setAnnualProgress({ done: 0, total: 0 });
+    }
   }
 
   async function importPasteRows() {
@@ -799,8 +807,11 @@ export default function Admin() {
               )}
             </div>
 
+            {annualError && (
+              <div className="mx-5 mb-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{annualError}</div>
+            )}
             <div className="flex gap-3 justify-end p-4 border-t">
-              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); setAnnualSheetNames([]); }} className="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ביטול</button>
+              <button onClick={() => { setAnnualOpen(false); setAnnualPreview([]); setAnnualSheetNames([]); setAnnualError(''); }} className="px-4 py-2 border rounded hover:bg-gray-50 text-sm">ביטול</button>
               {annualPreview.length > 0 && (
                 <button
                   onClick={importAnnualData}
