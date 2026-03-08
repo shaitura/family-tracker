@@ -114,40 +114,53 @@ const PROVIDER_DOMAINS: Record<string, string> = {
   'כללית': 'clalit.co.il',
   'מאוחדת': 'meuhedet.co.il',
   'לאומית': 'leumit.co.il',
+  'UBS': 'ubs.com',
+  'ubs': 'ubs.com',
+  'ביטוח ישיר': '555.co.il',
+  'ישיר': '555.co.il',
+  'ליברה': 'lbr.co.il',
 };
 
-function providerLogoUrl(provider: string): string | null {
+function providerLogoUrl(provider: string): { primary: string; fallback: string } | null {
   const normalized = provider.trim().toLowerCase();
   for (const [key, domain] of Object.entries(PROVIDER_DOMAINS)) {
     if (normalized.includes(key.toLowerCase())) {
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+      return {
+        primary: `https://logo.clearbit.com/${domain}`,
+        fallback: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+      };
     }
   }
   return null;
 }
 
 function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvestment: boolean }) {
-  const logoUrl = providerLogoUrl(provider);
+  const logoUrls = providerLogoUrl(provider);
   const initials = provider.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('');
   const gradient = isInvestment
     ? 'from-emerald-500/30 to-cyan-500/30'
     : 'from-cyan-500/30 to-purple-500/30';
 
-  if (logoUrl) {
+  if (logoUrls) {
     return (
-      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} border border-white/10 flex items-center justify-center shrink-0 overflow-hidden`}>
+      <div className={`w-12 h-12 rounded-2xl bg-white/95 border border-white/20 flex items-center justify-center shrink-0 overflow-hidden p-1`}>
         <img
-          src={logoUrl}
+          src={logoUrls.primary}
           alt={provider}
-          className="w-8 h-8 object-contain"
+          className="w-full h-full object-contain"
           onError={(e) => {
-            const target = e.currentTarget;
-            target.style.display = 'none';
-            const fallback = target.nextElementSibling as HTMLElement | null;
-            if (fallback) fallback.style.display = 'flex';
+            const img = e.currentTarget;
+            if (img.src !== logoUrls.fallback) {
+              img.src = logoUrls.fallback;
+              img.className = 'w-8 h-8 object-contain';
+            } else {
+              img.style.display = 'none';
+              const fb = img.nextElementSibling as HTMLElement | null;
+              if (fb) fb.style.display = 'flex';
+            }
           }}
         />
-        <span className="text-white font-bold text-sm hidden items-center justify-center w-full h-full">
+        <span className={`text-white font-bold text-sm hidden items-center justify-center w-full h-full bg-gradient-to-br ${gradient} rounded-2xl`}>
           {initials}
         </span>
       </div>
