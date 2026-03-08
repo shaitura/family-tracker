@@ -58,19 +58,17 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
       <Card>
         <CardContent className="pt-4">
           <p className="text-xs text-white/40 text-center mb-2">חלוקת הוצאות לפי קטגוריה</p>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie
                 data={pieData}
                 dataKey="value"
                 nameKey="name"
-                cx="50%"
+                cx="62%"
                 cy="50%"
-                outerRadius={85}
-                innerRadius={40}
+                outerRadius={95}
+                innerRadius={44}
                 paddingAngle={2}
-                label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
-                labelLine={false}
               >
                 {pieData.map((entry) => (
                   <Cell key={entry.name} fill={categoryColor(entry.name)} />
@@ -79,6 +77,15 @@ function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
               <Tooltip
                 formatter={(v: number) => formatCurrency(v)}
                 contentStyle={TOOLTIP_STYLE}
+              />
+              <Legend
+                layout="vertical"
+                align="left"
+                verticalAlign="middle"
+                iconType="circle"
+                iconSize={8}
+                formatter={(value) => value}
+                wrapperStyle={{ fontSize: 11, color: '#94a3b8', lineHeight: '22px', direction: 'rtl', textAlign: 'right' }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -173,8 +180,8 @@ function FixedVariableTab({ expenses }: { expenses: Transaction[] }) {
 
   return (
     <div className="space-y-3">
-      {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Summary cards — right→left: קבועות | משתנות | שנתי */}
+      <div className="grid grid-cols-3 gap-2" dir="rtl">
         {[
           { label: 'קבועות', val: totalFixed, pct: grandTotal ? Math.round((totalFixed / grandTotal) * 100) : 0, color: 'text-purple-400' },
           { label: 'משתנות', val: totalVar, pct: grandTotal ? Math.round((totalVar / grandTotal) * 100) : 0, color: 'text-cyan-400' },
@@ -288,8 +295,8 @@ function IncomeDistributionTab({ incomes }: { incomes: Transaction[] }) {
 
   return (
     <div className="space-y-3">
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Summary — right→left: שי | אורטל | משותף */}
+      <div className="grid grid-cols-3 gap-2" dir="rtl">
         {[
           { label: 'שי', val: totalShi, color: 'text-cyan-400' },
           { label: 'אורטל', val: totalOrtal, color: 'text-pink-400' },
@@ -399,8 +406,8 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
 
   return (
     <div className="space-y-3">
-      {/* KPI cards */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* KPI cards — right→left: הכנסות | הוצאות | רווח נקי */}
+      <div className="grid grid-cols-3 gap-2" dir="rtl">
         {[
           { label: 'הכנסות שנתיות', val: totalIncome, color: 'text-green-400' },
           { label: 'הוצאות שנתיות', val: totalExpense, color: 'text-red-400' },
