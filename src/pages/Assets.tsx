@@ -43,6 +43,43 @@ function assetIcon(type: string): string {
   return '📋';
 }
 
+// Color per asset type — returns Tailwind classes for bg + text + border
+function typeColorClass(type: string): string {
+  // Investment types
+  if (type === 'ניירות ערך' || type === 'מניות RSU' || type === 'חשבון מסחר עצמאי')
+    return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+  if (type === 'קרן השתלמות')
+    return 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
+  if (type.includes('קופת גמל') || type.includes('חיסכון לכל ילד'))
+    return 'bg-pink-500/20 text-pink-300 border border-pink-500/30';
+  if (type === 'עו"ש')
+    return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+  if (type === 'מט"ח')
+    return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+  if (type === 'קרקע')
+    return 'bg-orange-500/20 text-orange-300 border border-orange-500/30';
+  if (type === 'קריפטו')
+    return 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30';
+
+  // Insurance types
+  if (type.includes('פנסיה') || type.includes('מנהלים'))
+    return 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+  if (type.includes('ריסק') || type.includes('אובדן כושר') || type.includes('מחלות'))
+    return 'bg-red-500/20 text-red-300 border border-red-500/30';
+  if (type.includes('חיים'))
+    return 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+  if (type.includes('בריאות') || type.includes('שיניים') || type.includes('סיעוד') || type.includes('קופת חולים') || type.includes('אסותא'))
+    return 'bg-teal-500/20 text-teal-300 border border-teal-500/30';
+  if (type.includes('רכב'))
+    return 'bg-slate-400/20 text-slate-300 border border-slate-400/30';
+  if (type.includes('מבנה') || type.includes('תכולה'))
+    return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+  if (type === 'משכנתא')
+    return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+
+  return 'bg-white/10 text-white/70 border border-white/15';
+}
+
 // Map known Israeli financial providers to their website domain
 const PROVIDER_DOMAINS: Record<string, string> = {
   'כלל': 'klal.co.il',
@@ -296,7 +333,7 @@ export default function Assets() {
 
                           {/* Badges row */}
                           <div className="flex gap-1.5 flex-wrap justify-end">
-                            <Badge variant="purple" className="text-xs gap-1">
+                            <Badge className={`text-xs gap-1 ${typeColorClass(a.type)}`}>
                               <span>{assetIcon(a.type)}</span>{a.type}
                             </Badge>
                             {a.risk_level && <Badge variant="secondary" className="text-xs">{a.risk_level}</Badge>}
@@ -348,7 +385,7 @@ export default function Assets() {
 
                           {/* Badges row */}
                           <div className="flex gap-1.5 flex-wrap justify-end">
-                            <Badge variant="purple" className="text-xs gap-1">
+                            <Badge className={`text-xs gap-1 ${typeColorClass(a.type)}`}>
                               <span>{assetIcon(a.type)}</span>{a.type}
                             </Badge>
                             {a.policy_number && <Badge variant="outline" className="text-xs">#{a.policy_number}</Badge>}
