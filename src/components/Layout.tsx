@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, List, PlusCircle, BarChart2, Shield, Settings, Database, LogOut } from 'lucide-react';
+import { Home, List, PlusCircle, BarChart2, Shield, Settings, Database, LogOut, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createPageUrl } from '@/utils';
 import { UserInfo } from '@/lib/auth';
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'עסקאות', icon: List, href: createPageUrl('Transactions') },
   { label: 'הוסף', icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
   { label: 'דוחות', icon: BarChart2, href: createPageUrl('Reports') },
+  { label: 'שנתי', icon: TrendingUp, href: '/annual-analysis' },
   { label: 'נכסים', icon: Shield, href: createPageUrl('Assets') },
   { label: 'Admin', icon: Database, href: '/admin', desktopOnly: true },
   { label: 'הגדרות', icon: Settings, href: createPageUrl('Settings') },
