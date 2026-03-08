@@ -62,8 +62,17 @@ const CAT_COLORS: Record<Category, string> = {
   שונות:    '#94a3b8',
 };
 
+const EXTRA_COLORS = [
+  '#fb923c', '#34d399', '#60a5fa', '#f472b6', '#a3e635',
+  '#38bdf8', '#c084fc', '#fbbf24', '#4ade80', '#f87171',
+];
+
 export function categoryColor(cat: string): string {
-  return CAT_COLORS[cat as Category] ?? '#94a3b8';
+  if (CAT_COLORS[cat as Category]) return CAT_COLORS[cat as Category];
+  // Deterministic color for unknown categories based on string hash
+  let hash = 0;
+  for (let i = 0; i < cat.length; i++) hash = (hash * 31 + cat.charCodeAt(i)) & 0xffff;
+  return EXTRA_COLORS[hash % EXTRA_COLORS.length];
 }
 
 export const PAYER_LABELS: Record<string, string> = {

@@ -8,7 +8,7 @@ import { RefreshCw } from 'lucide-react';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Transaction, CATEGORIES } from '@/types';
+import { Transaction } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
 
 const MONTH_NAMES = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יולי', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
@@ -29,14 +29,15 @@ const TOOLTIP_STYLE = {
 
 // ── Annual Table Tab (סיכום כולל) ─────────────────────────────────────────────
 function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
+  // Build dynamically from actual data so unknown/extra categories are never dropped
   const expByCatMonth: Record<string, Record<string, number>> = {};
-  CATEGORIES.forEach((cat) => { expByCatMonth[cat] = {}; });
   expenses.forEach((t) => {
+    if (!expByCatMonth[t.category]) expByCatMonth[t.category] = {};
     const m = t.date.slice(5, 7);
     expByCatMonth[t.category][m] = (expByCatMonth[t.category][m] || 0) + t.amount;
   });
 
-  const activeCategories = CATEGORIES.filter((cat) =>
+  const activeCategories = Object.keys(expByCatMonth).filter((cat) =>
     MONTHS.some((m) => (expByCatMonth[cat][m] || 0) > 0),
   );
 
