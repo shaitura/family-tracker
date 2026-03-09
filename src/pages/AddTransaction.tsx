@@ -282,25 +282,24 @@ export default function AddTransaction() {
             </select>
           </div>
 
-          {/* Expense class */}
-          {form.type === 'expense' && (
-            <div>
-              <Label className="mb-2 block">סוג הוצאה</Label>
-              <div className="flex gap-2">
-                {CLASSES.map(({ val, label }) => (
-                  <button
-                    key={val}
-                    onClick={() => { set('expense_class', val); if (val !== 'קבועה') setSelectedMonths([]); }}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
-                      form.expense_class === val ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+          {/* Expense / Income class */}
+          <div>
+            <Label className="mb-2 block">{form.type === 'income' ? 'סוג הכנסה' : 'סוג הוצאה'}</Label>
+            <div className="flex gap-2">
+              {CLASSES.map(({ val, label }) => (
+                <button
+                  key={val}
+                  onClick={() => { set('expense_class', val); if (val !== 'קבועה') setSelectedMonths([]); }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+                    form.expense_class === val ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-              {/* Month selector for fixed expenses */}
+              {/* Month selector for fixed expense or income */}
               <AnimatePresence>
                 {form.expense_class === 'קבועה' && (
                   <motion.div
@@ -311,7 +310,9 @@ export default function AddTransaction() {
                   >
                     <div className="mt-3 rounded-xl bg-purple-500/10 border border-purple-500/20 p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-purple-300 font-medium">באילו חודשים ההוצאה חוזרת?</span>
+                        <span className="text-xs text-purple-300 font-medium">
+                          {form.type === 'income' ? 'באילו חודשים ההכנסה חוזרת?' : 'באילו חודשים ההוצאה חוזרת?'}
+                        </span>
                         <div className="flex gap-2">
                           <button
                             onClick={() => setSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1))}
@@ -344,7 +345,7 @@ export default function AddTransaction() {
                       </div>
                       {selectedMonths.length > 0 && (
                         <p className="mt-2 text-[10px] text-purple-300/70 text-center">
-                          ההוצאה תתווסף ל-{selectedMonths.length} חודשים בשנת {new Date(form.date).getFullYear()}
+                          {form.type === 'income' ? 'ההכנסה' : 'ההוצאה'} תתווסף ל-{selectedMonths.length} חודשים בשנת {new Date(form.date).getFullYear()}
                         </p>
                       )}
                     </div>
@@ -352,7 +353,6 @@ export default function AddTransaction() {
                 )}
               </AnimatePresence>
             </div>
-          )}
 
           {/* Installments */}
           <div className="grid grid-cols-2 gap-3">

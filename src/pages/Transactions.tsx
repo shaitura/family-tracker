@@ -166,8 +166,11 @@ export default function Transactions() {
         if (filterPaymentMethod && t.payment_method !== filterPaymentMethod) return false;
         if (filterExpenseClass && t.expense_class !== filterExpenseClass) return false;
         if (filterStatus && t.status !== filterStatus) return false;
-        if (filterYear && !t.date.startsWith(filterYear)) return false;
-        if (filterMonth && t.date.slice(5, 7) !== filterMonth) return false;
+        // Year/month filters are bypassed when a text search is active
+        if (!search) {
+          if (filterYear && !t.date.startsWith(filterYear)) return false;
+          if (filterMonth && t.date.slice(5, 7) !== filterMonth) return false;
+        }
         if (search && !matchesSearch(t, search)) return false;
         return true;
       })
