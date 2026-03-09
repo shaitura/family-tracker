@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Home, List, PlusCircle, BarChart2, Shield, Settings,
-  Database, LogOut, TrendingUp, Maximize2, Minimize2,
+  Database, LogOut, TrendingUp, Maximize2, Minimize2, Camera, X, Mail, Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createPageUrl } from '@/utils';
@@ -31,6 +31,60 @@ export default function Layout({
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [wideView, setWideView] = useState(true);
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
+
+  const takeScreenshot = async () => {
+    setScreenshotLoading(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(document.body, {
+        useCORS: true,
+        allowTaint: true,
+        scale: window.devicePixelRatio || 1,
+        scrollY: 0,
+        windowHeight: document.body.scrollHeight,
+        height: document.body.scrollHeight,
+      });
+      setScreenshotDataUrl(canvas.toDataURL('image/png'));
+    } catch (e) {
+      console.error(e);
+    }
+    setScreenshotLoading(false);
+  };
+
+  const shareViaEmail = () => {
+    if (!screenshotDataUrl) return;
+    const subject = encodeURIComponent('צילום מסך - Family Tracker');
+    const body = encodeURIComponent('מצורף צילום מסך מ-Family Tracker.');
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+  };
+
+  const shareViaWhatsApp = () => {
+    if (!screenshotDataUrl) return;
+    window.open(`https://wa.me/?text=${encodeURIComponent('צילום מסך מ-Family Tracker')}`);
+  };
+
+  const saveToDevice = () => {
+    if (!screenshotDataUrl) return;
+    const a = document.createElement('a');
+    a.href = screenshotDataUrl;
+    a.download = `family-tracker-${new Date().toISOString().slice(0, 10)}.png`;
+    a.click();
+  };
+
+  const shareNative = async () => {
+    if (!screenshotDataUrl) return;
+    try {
+      const blob = await (await fetch(screenshotDataUrl)).blob();
+      const file = new File([blob], 'family-tracker.png', { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Family Tracker' });
+        return true;
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  };
 
   const isAdmin = location.pathname === '/admin';
 
@@ -55,6 +109,18 @@ export default function Layout({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Screenshot button */}
+          <button
+            onClick={takeScreenshot}
+            disabled={screenshotLoading}
+            className="flex items-center gap-1.5 h-8 rounded-xl border border-white/15 bg-white/5 px-3 text-white/70 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+            title="צלם מסך"
+          >
+            {screenshotLoading
+              ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              : <Camera size={14} />}
+          </button>
+
           {/* Wide / Compact toggle — visible on tablet+ */}
           <button
             onClick={() => setWideView((v) => !v)}
@@ -148,6 +214,59 @@ export default function Layout({
           {children}
         </div>
       </main>
+
+      {/* ── Screenshot share modal ──────────────────────────────────────── */}
+      {screenshotDataUrl && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setScreenshotDataUrl(null)}>
+          <div className="w-full max-w-sm bg-slate-900 border border-white/15 rounded-2xl shadow-2xl overflow-hidden" dir="rtl" onClick={(e) => e.stopPropagation()}>
+            {/* Preview */}
+            <div className="relative">
+              <img src={screenshotDataUrl} alt="צילום מסך" className="w-full max-h-52 object-cover object-top" />
+              <button onClick={() => setScreenshotDataUrl(null)} className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80">
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 space-y-2">
+              <p className="text-xs text-white/50 text-center mb-3">שתף את צילום המסך</p>
+
+              {'share' in navigator && (
+                <button
+                  onClick={async () => { const ok = await shareNative(); if (!ok) saveToDevice(); }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white text-sm font-semibold"
+                >
+                  <Camera size={16} /> שתף
+                </button>
+              )}
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={shareViaWhatsApp}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-medium hover:bg-green-500/30 transition-colors"
+                >
+                  <span className="text-lg">💬</span>
+                  WhatsApp
+                </button>
+                <button
+                  onClick={shareViaEmail}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 text-xs font-medium hover:bg-blue-500/30 transition-colors"
+                >
+                  <Mail size={18} />
+                  מייל
+                </button>
+                <button
+                  onClick={saveToDevice}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white/70 text-xs font-medium hover:bg-white/15 transition-colors"
+                >
+                  <Download size={18} />
+                  שמור
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom nav — mobile only ────────────────────────────────────── */}
       <nav className="fixed bottom-0 inset-x-0 z-40 h-16 ls:h-11 glass-dark border-t border-white/10 md:hidden">
