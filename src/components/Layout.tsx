@@ -53,16 +53,31 @@ export default function Layout({
     setScreenshotLoading(false);
   };
 
-  const shareViaEmail = () => {
-    if (!screenshotDataUrl) return;
-    const subject = encodeURIComponent('צילום מסך - Family Tracker');
-    const body = encodeURIComponent('מצורף צילום מסך מ-Family Tracker.');
-    window.open(`mailto:?subject=${subject}&body=${body}`);
+  const copyImageToClipboard = async (): Promise<boolean> => {
+    try {
+      const blob = await (await fetch(screenshotDataUrl!)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      return true;
+    } catch { return false; }
   };
 
-  const shareViaWhatsApp = () => {
+  const shareViaEmail = async () => {
     if (!screenshotDataUrl) return;
-    window.open(`https://wa.me/?text=${encodeURIComponent('צילום מסך מ-Family Tracker')}`);
+    const shared = await shareNative();
+    if (!shared) {
+      await copyImageToClipboard();
+      window.open(`mailto:?subject=${encodeURIComponent('צילום מסך - Family Tracker')}&body=${encodeURIComponent('התמונה הועתקה ללוח — הדבק אותה כקובץ מצורף.')}`);
+    }
+  };
+
+  const shareViaWhatsApp = async () => {
+    if (!screenshotDataUrl) return;
+    const shared = await shareNative();
+    if (!shared) {
+      const copied = await copyImageToClipboard();
+      window.open(`https://web.whatsapp.com/`);
+      if (copied) alert('התמונה הועתקה ללוח — פתח שיחה ב-WhatsApp Web והדבק (Ctrl+V / ⌘V).');
+    }
   };
 
   const saveToDevice = () => {
@@ -242,14 +257,14 @@ export default function Layout({
 
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={shareViaWhatsApp}
+                  onClick={() => shareViaWhatsApp()}
                   className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-medium hover:bg-green-500/30 transition-colors"
                 >
                   <span className="text-lg">💬</span>
                   WhatsApp
                 </button>
                 <button
-                  onClick={shareViaEmail}
+                  onClick={() => shareViaEmail()}
                   className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 text-xs font-medium hover:bg-blue-500/30 transition-colors"
                 >
                   <Mail size={18} />
