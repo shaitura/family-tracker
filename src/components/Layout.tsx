@@ -11,7 +11,7 @@ import { UserInfo } from '@/lib/auth';
 const NAV_ITEMS = [
   { label: 'בית',     icon: Home,       href: createPageUrl('Home') },
   { label: 'עסקאות', icon: List,       href: createPageUrl('Transactions') },
-  { label: 'הוסף',   icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
+  { label: 'הוצאה',  icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
   { label: 'דוחות',  icon: BarChart2,  href: createPageUrl('Reports') },
   { label: 'שנתי',   icon: TrendingUp, href: '/annual-analysis' },
   { label: 'נכסים',  icon: Shield,     href: createPageUrl('Assets') },

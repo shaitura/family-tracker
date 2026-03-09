@@ -42,6 +42,8 @@ function emptyForm() {
   };
 }
 
+const MONTH_LABELS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
 export default function AddTransaction() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -51,11 +53,16 @@ export default function AddTransaction() {
   const [aiText, setAiText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
+  const toggleMonth = (m: number) =>
+    setSelectedMonths((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
+
   const { mutate: save, isPending } = useMutation({
     mutationFn: async () => {
+      const year = new Date(form.date).getFullYear();
       const base: Omit<Transaction, 'id'> = {
         date: form.date,
         type: form.type,
@@ -69,6 +76,17 @@ export default function AddTransaction() {
         installments: parseInt(form.installments) || 1,
         status: form.status,
       };
+
+      // Fixed expense with month selection — create one entry per selected month
+      if (form.expense_class === 'קבועה' && selectedMonths.length > 0) {
+        const tasks = selectedMonths.map((m) => {
+          const mm = String(m).padStart(2, '0');
+          return base44.entities.Transaction.create({ ...base, date: `${year}-${mm}-01` });
+        });
+        await Promise.all(tasks);
+        return;
+      }
+
       const inst = parseInt(form.installments) || 1;
       if (inst > 1) {
         const tasks = Array.from({ length: inst }, (_, i) => {
@@ -84,6 +102,7 @@ export default function AddTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       setSuccess(true);
+      setSelectedMonths([]);
       setTimeout(() => { setSuccess(false); setForm(emptyForm()); }, 2000);
       toast({ title: 'העסקה נשמרה בהצלחה!', variant: 'success' });
     },
@@ -246,7 +265,7 @@ export default function AddTransaction() {
                 {CLASSES.map(({ val, label }) => (
                   <button
                     key={val}
-                    onClick={() => set('expense_class', val)}
+                    onClick={() => { set('expense_class', val); if (val !== 'קבועה') setSelectedMonths([]); }}
                     className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
                       form.expense_class === val ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
                     }`}
@@ -255,6 +274,58 @@ export default function AddTransaction() {
                   </button>
                 ))}
               </div>
+
+              {/* Month selector for fixed expenses */}
+              <AnimatePresence>
+                {form.expense_class === 'קבועה' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 rounded-xl bg-purple-500/10 border border-purple-500/20 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-purple-300 font-medium">באילו חודשים ההוצאה חוזרת?</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1))}
+                            className="text-[10px] text-purple-400 hover:text-purple-300 underline"
+                          >הכל</button>
+                          <button
+                            onClick={() => setSelectedMonths([])}
+                            className="text-[10px] text-white/40 hover:text-white/60 underline"
+                          >נקה</button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {MONTH_LABELS.map((name, i) => {
+                          const m = i + 1;
+                          const active = selectedMonths.includes(m);
+                          return (
+                            <button
+                              key={m}
+                              onClick={() => toggleMonth(m)}
+                              className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                active
+                                  ? 'bg-purple-500/50 border border-purple-400/60 text-white'
+                                  : 'bg-white/5 border border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70'
+                              }`}
+                            >
+                              {name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedMonths.length > 0 && (
+                        <p className="mt-2 text-[10px] text-purple-300/70 text-center">
+                          ההוצאה תתווסף ל-{selectedMonths.length} חודשים בשנת {new Date(form.date).getFullYear()}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
