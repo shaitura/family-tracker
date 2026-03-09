@@ -142,7 +142,7 @@ export default function Reports() {
       </div>
 
       <Tabs defaultValue={fullYear ? 'monthly' : 'category'} key={fullYear ? 'year' : 'month'}>
-        <TabsList>
+        <TabsList dir="rtl">
           {fullYear && <TabsTrigger value="monthly">לפי חודש</TabsTrigger>}
           <TabsTrigger value="category">לפי קטגוריה</TabsTrigger>
           <TabsTrigger value="payer">לפי משלם</TabsTrigger>
