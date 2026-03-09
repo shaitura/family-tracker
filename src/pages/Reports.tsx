@@ -41,6 +41,27 @@ export default function Reports() {
   filtered.forEach((t) => { byPayer[t.payer] = (byPayer[t.payer] || 0) + t.amount; });
   const payerData = Object.entries(byPayer).map(([payer, amount]) => ({ name: PAYER_LABELS[payer] || payer, amount }));
 
+  // Fixed vs variable (ignores expClass filter so split is always meaningful)
+  const filteredForSplit = transactions.filter((t) => {
+    const prefix = fullYear ? `${year}-` : `${year}-${month}`;
+    if (!t.date.startsWith(prefix)) return false;
+    if (t.type !== txType) return false;
+    return true;
+  });
+  const fixedTotal = filteredForSplit.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0);
+  const varTotal   = filteredForSplit.filter((t) => t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0);
+  const splitTotal = fixedTotal + varTotal;
+
+  // Categories within each class
+  const fixedByCat: Record<string, number> = {};
+  const varByCat:   Record<string, number> = {};
+  filteredForSplit.forEach((t) => {
+    if (t.expense_class === 'קבועה') fixedByCat[t.category] = (fixedByCat[t.category] || 0) + t.amount;
+    if (t.expense_class === 'משתנה') varByCat[t.category]   = (varByCat[t.category]   || 0) + t.amount;
+  });
+  const fixedCats = Object.entries(fixedByCat).sort((a, b) => b[1] - a[1]);
+  const varCats   = Object.entries(varByCat).sort((a, b) => b[1] - a[1]);
+
   // By month (only used in full-year mode)
   const months = Array.from({ length: 12 }, (_, i) => ({ val: String(i + 1).padStart(2, '0'), label: new Date(2000, i).toLocaleString('he', { month: 'short' }) }));
   const byMonth = months.map(({ val, label }) => {
@@ -125,6 +146,7 @@ export default function Reports() {
           {fullYear && <TabsTrigger value="monthly">לפי חודש</TabsTrigger>}
           <TabsTrigger value="category">לפי קטגוריה</TabsTrigger>
           <TabsTrigger value="payer">לפי משלם</TabsTrigger>
+          <TabsTrigger value="split">קבועה / משתנה</TabsTrigger>
         </TabsList>
 
         {/* Monthly breakdown — full year only */}
@@ -196,6 +218,96 @@ export default function Reports() {
           ) : (
             <EmptyState />
           )}
+        </TabsContent>
+
+        {/* Fixed vs Variable tab */}
+        <TabsContent value="split">
+          {splitTotal > 0 ? (
+            <div className="space-y-4">
+              {/* Segmented bar */}
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  <div className="flex rounded-full overflow-hidden h-5">
+                    {fixedTotal > 0 && (
+                      <div
+                        className="bg-cyan-500 transition-all"
+                        style={{ width: `${(fixedTotal / splitTotal) * 100}%` }}
+                        title={`קבועה ${Math.round(fixedTotal / splitTotal * 100)}%`}
+                      />
+                    )}
+                    {varTotal > 0 && (
+                      <div
+                        className="bg-purple-500 transition-all"
+                        style={{ width: `${(varTotal / splitTotal) * 100}%` }}
+                        title={`משתנה ${Math.round(varTotal / splitTotal * 100)}%`}
+                      />
+                    )}
+                  </div>
+
+                  {/* Two big numbers */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-cyan-500/10 border border-cyan-500/25 p-3 text-center">
+                      <p className="text-[10px] text-cyan-400 mb-1">קבועה</p>
+                      <p className="text-lg font-black text-white">{formatCurrency(fixedTotal)}</p>
+                      <p className="text-xs text-white/40">{splitTotal ? Math.round(fixedTotal / splitTotal * 100) : 0}%</p>
+                    </div>
+                    <div className="rounded-2xl bg-purple-500/10 border border-purple-500/25 p-3 text-center">
+                      <p className="text-[10px] text-purple-400 mb-1">משתנה</p>
+                      <p className="text-lg font-black text-white">{formatCurrency(varTotal)}</p>
+                      <p className="text-xs text-white/40">{splitTotal ? Math.round(varTotal / splitTotal * 100) : 0}%</p>
+                    </div>
+                  </div>
+
+                  {/* Donut */}
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'קבועה', value: fixedTotal },
+                          { name: 'משתנה', value: varTotal },
+                        ]}
+                        cx="50%" cy="50%"
+                        innerRadius={50} outerRadius={80}
+                        dataKey="value" nameKey="name" paddingAngle={3}
+                      >
+                        <Cell fill="#22d3ee" />
+                        <Cell fill="#a855f7" />
+                      </Pie>
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                      <Legend formatter={(v) => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{v}</span>} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Category breakdown per class */}
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  { label: 'קבועה', cats: fixedCats, color: 'text-cyan-400', bg: 'bg-cyan-500/15', total: fixedTotal },
+                  { label: 'משתנה', cats: varCats, color: 'text-purple-400', bg: 'bg-purple-500/15', total: varTotal },
+                ].map(({ label, cats, color, bg, total: classTotal }) => cats.length > 0 && (
+                  <Card key={label}>
+                    <CardContent className="pt-3 pb-3">
+                      <p className={`text-xs font-semibold ${color} mb-2`}>{label} — {formatCurrency(classTotal)}</p>
+                      <div className="space-y-1.5">
+                        {cats.map(([name, value]) => (
+                          <div key={name} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: categoryColor(name) }} />
+                            <span className="text-xs text-white flex-1">{name}</span>
+                            <span className="text-xs font-bold text-white">{formatCurrency(value)}</span>
+                            <div className={`h-1.5 rounded-full ${bg} overflow-hidden`} style={{ width: 60 }}>
+                              <div className="h-full rounded-full bg-current" style={{ width: `${classTotal ? (value / classTotal) * 100 : 0}%`, backgroundColor: categoryColor(name) || undefined }} />
+                            </div>
+                            <span className="text-[10px] text-white/40 w-7 text-left">{classTotal ? Math.round(value / classTotal * 100) : 0}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ) : <EmptyState />}
         </TabsContent>
 
         <TabsContent value="payer">
