@@ -19,7 +19,7 @@ import Admin from '@/pages/Admin';
 import AnnualAnalysis from '@/pages/AnnualAnalysis';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 1000 * 30, retry: false } },
+  defaultOptions: { queries: { staleTime: 1000 * 60 * 5, gcTime: 1000 * 60 * 15, retry: false } },
 });
 
 export default function App() {
