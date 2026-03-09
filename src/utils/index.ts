@@ -58,6 +58,7 @@ const CAT_COLORS: Record<Category, string> = {
   פנאי:     '#f43f5e',
   ביטוחים:  '#64748b',
   תקשורת:   '#0ea5e9',
+  חשבונות:  '#fb923c',
   מתנות:    '#d946ef',
   שונות:    '#94a3b8',
 };

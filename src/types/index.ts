@@ -6,7 +6,7 @@ export type TransactionStatus = 'paid' | 'pending' | 'future';
 
 export const CATEGORIES = [
   'מזון', 'סופר', 'מסעדות', 'דיור', 'רכב', 'דלק', 'ילדים',
-  'ביגוד', 'בריאות', 'פנאי', 'ביטוחים', 'תקשורת', 'מתנות', 'שונות',
+  'ביגוד', 'בריאות', 'פנאי', 'ביטוחים', 'תקשורת', 'חשבונות', 'מתנות', 'שונות',
 ] as const;
 
 export type Category = typeof CATEGORIES[number];
