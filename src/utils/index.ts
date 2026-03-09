@@ -60,6 +60,7 @@ const CAT_COLORS: Record<Category, string> = {
   תקשורת:   '#0ea5e9',
   חשבונות:  '#fb923c',
   מתנות:    '#d946ef',
+  השקעה:    '#34d399',
   שונות:    '#94a3b8',
 };
 
