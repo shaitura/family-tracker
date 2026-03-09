@@ -67,15 +67,34 @@ export default function Transactions() {
   // inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Transaction>>({});
+  const [applyToAll, setApplyToAll] = useState(false);
   const setE = <K extends keyof Transaction>(k: K, v: Transaction[K]) => setEditForm((f) => ({ ...f, [k]: v }));
 
   const { mutate: update, isPending: updatePending } = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Transaction> }) =>
-      base44.entities.Transaction.update(id, data),
-    onSuccess: () => {
+    mutationFn: async ({ id, data, allMonths }: { id: string; data: Partial<Transaction>; allMonths: boolean }) => {
+      if (allMonths && data.expense_class === 'קבועה') {
+        // Find all sibling fixed transactions in the same year
+        const origTx = transactions.find((t) => t.id === id);
+        const year = (origTx?.date ?? data.date ?? '').slice(0, 4);
+        const siblings = transactions.filter((t) =>
+          t.expense_class === 'קבועה' &&
+          t.category === origTx?.category &&
+          t.payer === origTx?.payer &&
+          (t.sub_category ?? '') === (origTx?.sub_category ?? '') &&
+          t.date.startsWith(year)
+        );
+        const updateData = { ...data };
+        delete (updateData as Partial<Transaction> & { date?: string }).date; // keep each sibling's own date
+        await Promise.all(siblings.map((t) => base44.entities.Transaction.update(t.id, updateData)));
+      } else {
+        await base44.entities.Transaction.update(id, data);
+      }
+    },
+    onSuccess: (_, { allMonths }) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       setEditingId(null);
-      toast({ title: 'עסקה עודכנה', variant: 'success' });
+      setApplyToAll(false);
+      toast({ title: allMonths ? 'כל ההעתקים עודכנו' : 'עסקה עודכנה', variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בעדכון', description: String(e), variant: 'destructive' }),
   });
@@ -83,6 +102,7 @@ export default function Transactions() {
   function startEdit(tx: Transaction) {
     setEditingId(tx.id);
     setEditForm({ ...tx });
+    setApplyToAll(false);
   }
 
   // bulk edit
@@ -524,7 +544,7 @@ export default function Transactions() {
                                 <Label className="text-[10px] mb-1 block">סוג הוצאה</Label>
                                 <div className="flex gap-1">
                                   {(['קבועה','משתנה'] as ExpenseClass[]).map((v) => (
-                                    <button key={v} onClick={() => setE('expense_class', v)}
+                                    <button key={v} onClick={() => { setE('expense_class', v); if (v !== 'קבועה') setApplyToAll(false); }}
                                       className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${editForm.expense_class === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                                       {v}
                                     </button>
@@ -548,10 +568,23 @@ export default function Transactions() {
                               <Input value={editForm.notes ?? ''} onChange={(e) => setE('notes', e.target.value)} placeholder="הערה חופשית..." className="h-8 text-xs" dir="rtl" />
                             </div>
 
+                            {/* Apply to all months toggle — only for fixed */}
+                            {editForm.expense_class === 'קבועה' && (
+                              <button
+                                onClick={() => setApplyToAll((v) => !v)}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${applyToAll ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300' : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/60'}`}
+                              >
+                                <span>החל על כל ההעתקים באותה שנה</span>
+                                <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${applyToAll ? 'bg-purple-500 border-purple-400' : 'border-white/30'}`}>
+                                  {applyToAll && <span className="w-2 h-2 rounded-full bg-white" />}
+                                </span>
+                              </button>
+                            )}
+
                             {/* Buttons */}
                             <div className="flex gap-2 pt-1">
                               <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="flex-1 text-xs h-8">ביטול</Button>
-                              <Button size="sm" onClick={() => update({ id: tx.id, data: editForm })} disabled={updatePending}
+                              <Button size="sm" onClick={() => update({ id: tx.id, data: editForm, allMonths: applyToAll })} disabled={updatePending}
                                 className="flex-1 text-xs h-8 bg-cyan-500/80 hover:bg-cyan-500 text-white border-0">
                                 {updatePending ? '...' : <><Save className="w-3 h-3 ml-1" />שמור</>}
                               </Button>

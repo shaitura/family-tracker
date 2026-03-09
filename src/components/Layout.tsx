@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { label: 'שנתי',   icon: TrendingUp, href: '/annual-analysis' },
   { label: 'נכסים',  icon: Shield,     href: createPageUrl('Assets') },
   { label: 'Admin',  icon: Database,   href: '/admin', adminOnly: true },
-  { label: 'הגדרות', icon: Settings,   href: createPageUrl('Settings') },
+  { label: 'הגדרות', icon: Settings,   href: createPageUrl('Settings'), headerOnly: true },
 ];
 
 export default function Layout({
@@ -124,6 +124,15 @@ export default function Layout({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Settings button */}
+          <Link
+            to={createPageUrl('Settings')}
+            className="flex items-center gap-1.5 h-8 rounded-xl border border-white/15 bg-white/5 px-3 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            title="הגדרות"
+          >
+            <Settings size={14} />
+          </Link>
+
           {/* Screenshot button */}
           <button
             onClick={takeScreenshot}
@@ -286,8 +295,8 @@ export default function Layout({
       {/* ── Bottom nav — mobile only ────────────────────────────────────── */}
       <nav className="fixed bottom-0 inset-x-0 z-40 h-16 ls:h-11 glass-dark border-t border-white/10 md:hidden">
         <div className="h-full flex items-center justify-around px-2">
-          {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly }) => {
-            if (adminOnly) return null;
+          {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly, headerOnly }) => {
+            if (adminOnly || headerOnly) return null;
             const active = location.pathname === href;
             return (
               <Link
