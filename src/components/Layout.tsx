@@ -10,7 +10,7 @@ import { UserInfo } from '@/lib/auth';
 
 const NAV_ITEMS = [
   { label: 'בית',     icon: Home,       href: createPageUrl('Home') },
-  { label: 'עסקאות', icon: List,       href: createPageUrl('Transactions') },
+  { label: 'הוצאות', icon: List,       href: createPageUrl('Transactions') },
   { label: 'הוצאה',  icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
   { label: 'דוחות',  icon: BarChart2,  href: createPageUrl('Reports') },
   { label: 'שנתי',   icon: TrendingUp, href: '/annual-analysis' },
@@ -293,8 +293,8 @@ export default function Layout({
       )}
 
       {/* ── Bottom nav — mobile only ────────────────────────────────────── */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 h-16 ls:h-11 glass-dark border-t border-white/10 md:hidden">
-        <div className="h-full flex items-center justify-around px-2">
+      <nav className="fixed bottom-0 inset-x-0 z-40 h-[4.5rem] ls:h-11 glass-dark border-t border-white/10 md:hidden">
+        <div className="h-full flex items-center justify-around px-1">
           {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly, headerOnly }) => {
             if (adminOnly || headerOnly) return null;
             const active = location.pathname === href;
@@ -303,16 +303,16 @@ export default function Layout({
                 key={href}
                 to={href}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 w-14 h-12 rounded-2xl transition-all duration-200',
+                  'flex flex-col items-center justify-center gap-1 flex-1 h-14 rounded-2xl transition-all duration-200',
                   accent
-                    ? 'bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/30 scale-110 -mt-4'
+                    ? 'bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/30 scale-110 -mt-5 mx-1'
                     : active
                     ? 'text-cyan-400'
                     : 'text-white/40 hover:text-white/70',
                 )}
               >
                 <Icon
-                  className={cn('w-5 h-5 ls:w-4 ls:h-4', accent && 'text-white')}
+                  className={cn('w-6 h-6 ls:w-4 ls:h-4', accent && 'text-white')}
                   strokeWidth={accent || active ? 2.5 : 1.8}
                 />
                 <span

@@ -55,14 +55,43 @@ export default function Transactions() {
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
+
+  // applied filters (what actually filters the list)
   const [filterCat, setFilterCat] = useState('');
   const [filterPayer, setFilterPayer] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
   const [filterExpenseClass, setFilterExpenseClass] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
+
+  // staged (draft) filters — committed on "החל"
+  const [draftCat, setDraftCat] = useState('');
+  const [draftPayer, setDraftPayer] = useState('');
+  const [draftType, setDraftType] = useState('');
+  const [draftPaymentMethod, setDraftPaymentMethod] = useState('');
+  const [draftExpenseClass, setDraftExpenseClass] = useState('');
+  const [draftStatus, setDraftStatus] = useState('');
+  const [draftYear, setDraftYear] = useState('');
+  const [draftMonth, setDraftMonth] = useState('');
+
   const [showFilters, setShowFilters] = useState(false);
+
+  function openFilters() {
+    // Sync draft from applied
+    setDraftCat(filterCat); setDraftPayer(filterPayer); setDraftType(filterType);
+    setDraftPaymentMethod(filterPaymentMethod); setDraftExpenseClass(filterExpenseClass);
+    setDraftStatus(filterStatus); setDraftYear(filterYear); setDraftMonth(filterMonth);
+    setShowFilters(true);
+  }
+
+  function applyFilters() {
+    setFilterCat(draftCat); setFilterPayer(draftPayer); setFilterType(draftType);
+    setFilterPaymentMethod(draftPaymentMethod); setFilterExpenseClass(draftExpenseClass);
+    setFilterStatus(draftStatus); setFilterYear(draftYear); setFilterMonth(draftMonth);
+    setShowFilters(false);
+  }
 
   // inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -121,10 +150,12 @@ export default function Transactions() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); toast({ title: 'עסקה נמחקה', variant: 'default' }); },
   });
 
-  const availableMonths = useMemo(() => {
-    const months = new Set(transactions.map((t) => t.date.slice(0, 7)));
-    return Array.from(months).sort().reverse();
+  const availableYears = useMemo(() => {
+    const years = new Set(transactions.map((t) => t.date.slice(0, 4)));
+    return Array.from(years).sort().reverse();
   }, [transactions]);
+
+  const MONTH_NAMES = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
 
   const filtered = useMemo(() =>
     transactions
@@ -135,19 +166,24 @@ export default function Transactions() {
         if (filterPaymentMethod && t.payment_method !== filterPaymentMethod) return false;
         if (filterExpenseClass && t.expense_class !== filterExpenseClass) return false;
         if (filterStatus && t.status !== filterStatus) return false;
-        if (filterMonth && !t.date.startsWith(filterMonth)) return false;
+        if (filterYear && !t.date.startsWith(filterYear)) return false;
+        if (filterMonth && t.date.slice(5, 7) !== filterMonth) return false;
         if (search && !matchesSearch(t, search)) return false;
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterMonth, search]
+    [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, search]
   );
 
-  const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterMonth].filter(Boolean).length;
+  const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
 
   function clearFilters() {
     setFilterCat(''); setFilterPayer(''); setFilterType('');
-    setFilterPaymentMethod(''); setFilterExpenseClass(''); setFilterStatus(''); setFilterMonth('');
+    setFilterPaymentMethod(''); setFilterExpenseClass(''); setFilterStatus('');
+    setFilterYear(''); setFilterMonth('');
+    setDraftCat(''); setDraftPayer(''); setDraftType('');
+    setDraftPaymentMethod(''); setDraftExpenseClass(''); setDraftStatus('');
+    setDraftYear(''); setDraftMonth('');
   }
 
   async function applyBulkEdit() {
@@ -240,7 +276,7 @@ export default function Transactions() {
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
           <Input placeholder="חיפוש בכל השדות..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" dir="rtl" />
         </div>
-        <Button variant="outline" size="icon" onClick={() => setShowFilters(!showFilters)} className="relative shrink-0">
+        <Button variant="outline" size="icon" onClick={() => showFilters ? setShowFilters(false) : openFilters()} className="relative shrink-0">
           <Filter className="w-4 h-4" />
           {activeFilters > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-cyan-500 text-white text-[9px] flex items-center justify-center font-bold">
@@ -261,11 +297,11 @@ export default function Transactions() {
                 <div>
                   <p className="text-xs text-white/50 mb-2">קטגוריה</p>
                   <div className="flex flex-wrap gap-1.5">
-                    <button onClick={() => setFilterCat('')} className={`px-2.5 py-1 rounded-full text-xs transition-all ${!filterCat ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>הכל</button>
+                    <button onClick={() => setDraftCat('')} className={`px-2.5 py-1 rounded-full text-xs transition-all ${!draftCat ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>הכל</button>
                     {CATEGORIES.map((c) => (
-                      <button key={c} onClick={() => setFilterCat(filterCat === c ? '' : c)}
-                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${filterCat === c ? 'border text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}
-                        style={filterCat === c ? { backgroundColor: categoryColor(c) + '30', borderColor: categoryColor(c) + '60', color: categoryColor(c) } : {}}>
+                      <button key={c} onClick={() => setDraftCat(draftCat === c ? '' : c)}
+                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${draftCat === c ? 'border text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}
+                        style={draftCat === c ? { backgroundColor: categoryColor(c) + '30', borderColor: categoryColor(c) + '60', color: categoryColor(c) } : {}}>
                         {c}
                       </button>
                     ))}
@@ -277,8 +313,8 @@ export default function Transactions() {
                   <p className="text-xs text-white/50 mb-2">משלם</p>
                   <div className="flex gap-1.5">
                     {PAYER_OPTIONS.map(({ v, l }) => (
-                      <button key={v} onClick={() => setFilterPayer(v)}
-                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${filterPayer === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                      <button key={v} onClick={() => setDraftPayer(v)}
+                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${draftPayer === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                         {l}
                       </button>
                     ))}
@@ -290,8 +326,8 @@ export default function Transactions() {
                   <p className="text-xs text-white/50 mb-2">סוג עסקה</p>
                   <div className="flex gap-1.5">
                     {[{ v: '', l: 'הכל' }, { v: 'expense', l: '💸 הוצאות' }, { v: 'income', l: '💰 הכנסות' }].map(({ v, l }) => (
-                      <button key={v} onClick={() => setFilterType(v)}
-                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${filterType === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                      <button key={v} onClick={() => setDraftType(v)}
+                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${draftType === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                         {l}
                       </button>
                     ))}
@@ -302,13 +338,11 @@ export default function Transactions() {
                 <div>
                   <p className="text-xs text-white/50 mb-2">שיטת תשלום</p>
                   <div className="flex flex-wrap gap-1.5">
-                    <button onClick={() => setFilterPaymentMethod('')}
-                      className={`px-2.5 py-1 rounded-full text-xs transition-all ${!filterPaymentMethod ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
-                      הכל
-                    </button>
+                    <button onClick={() => setDraftPaymentMethod('')}
+                      className={`px-2.5 py-1 rounded-full text-xs transition-all ${!draftPaymentMethod ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>הכל</button>
                     {PAYMENT_METHODS.map((m) => (
-                      <button key={m} onClick={() => setFilterPaymentMethod(filterPaymentMethod === m ? '' : m)}
-                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${filterPaymentMethod === m ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                      <button key={m} onClick={() => setDraftPaymentMethod(draftPaymentMethod === m ? '' : m)}
+                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${draftPaymentMethod === m ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                         {m}
                       </button>
                     ))}
@@ -320,8 +354,8 @@ export default function Transactions() {
                   <p className="text-xs text-white/50 mb-2">סוג הוצאה</p>
                   <div className="flex gap-1.5">
                     {[{ v: '', l: 'הכל' }, { v: 'קבועה', l: 'קבועה' }, { v: 'משתנה', l: 'משתנה' }].map(({ v, l }) => (
-                      <button key={v} onClick={() => setFilterExpenseClass(v)}
-                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${filterExpenseClass === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                      <button key={v} onClick={() => setDraftExpenseClass(v)}
+                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${draftExpenseClass === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                         {l}
                       </button>
                     ))}
@@ -333,42 +367,56 @@ export default function Transactions() {
                   <p className="text-xs text-white/50 mb-2">סטטוס</p>
                   <div className="flex gap-1.5">
                     {STATUS_OPTIONS.map(({ v, l }) => (
-                      <button key={v} onClick={() => setFilterStatus(v)}
-                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${filterStatus === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                      <button key={v} onClick={() => setDraftStatus(v)}
+                        className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${draftStatus === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                         {l}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* חודש */}
-                {availableMonths.length > 0 && (
+                {/* שנה */}
+                {availableYears.length > 0 && (
                   <div>
-                    <p className="text-xs text-white/50 mb-2">חודש</p>
+                    <p className="text-xs text-white/50 mb-2">שנה</p>
                     <div className="flex flex-wrap gap-1.5">
-                      <button onClick={() => setFilterMonth('')}
-                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${!filterMonth ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
-                        הכל
-                      </button>
-                      {availableMonths.map((m) => {
-                        const [y, mo] = m.split('-');
-                        const label = new Date(Number(y), Number(mo) - 1).toLocaleDateString('he-IL', { month: 'short', year: '2-digit' });
-                        return (
-                          <button key={m} onClick={() => setFilterMonth(filterMonth === m ? '' : m)}
-                            className={`px-2.5 py-1 rounded-full text-xs transition-all ${filterMonth === m ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
-                            {label}
-                          </button>
-                        );
-                      })}
+                      <button onClick={() => setDraftYear('')}
+                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${!draftYear ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>הכל</button>
+                      {availableYears.map((y) => (
+                        <button key={y} onClick={() => setDraftYear(draftYear === y ? '' : y)}
+                          className={`px-2.5 py-1 rounded-full text-xs transition-all ${draftYear === y ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                          {y}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {activeFilters > 0 && (
-                  <button onClick={clearFilters} className="text-xs text-rose-400 flex items-center gap-1">
-                    <X className="w-3 h-3" /> נקה פילטרים
+                {/* חודש */}
+                <div>
+                  <p className="text-xs text-white/50 mb-2">חודש</p>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {MONTH_NAMES.map((name, i) => {
+                      const mm = String(i + 1).padStart(2, '0');
+                      return (
+                        <button key={mm} onClick={() => setDraftMonth(draftMonth === mm ? '' : mm)}
+                          className={`py-1 rounded-lg text-xs transition-all ${draftMonth === mm ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1 border-t border-white/10">
+                  <button onClick={clearFilters} className="text-xs text-rose-400 flex items-center gap-1 px-2">
+                    <X className="w-3 h-3" /> נקה
                   </button>
-                )}
+                  <Button size="sm" onClick={applyFilters} className="flex-1 bg-cyan-500/80 hover:bg-cyan-500 text-white border-0 text-xs h-8">
+                    החל פילטרים
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
