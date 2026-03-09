@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Loader2, CheckCircle, ArrowRight } from 'lucide-react';
-import { base44 } from '@/lib/base44Client';
+import { Sparkles, Loader2, CheckCircle, ArrowRight, Brain } from 'lucide-react';
+import { base44, buildMerchantMap } from '@/lib/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +54,20 @@ export default function AddTransaction() {
   const [aiLoading, setAiLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+
+  // Load all historical transactions for the merchant map (uses React Query cache)
+  const { data: allTransactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => base44.entities.Transaction.filter(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const merchantMap = useMemo(
+    () => buildMerchantMap(allTransactions),
+    [allTransactions],
+  );
+
+  const trainedCount = allTransactions.length;
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -113,7 +127,10 @@ export default function AddTransaction() {
     if (!aiText.trim()) return;
     setAiLoading(true);
     try {
-      const res = await base44.integrations.Core.InvokeLLM({ prompt: aiText });
+      const res = await base44.integrations.Core.InvokeLLM({
+        prompt: aiText,
+        merchantMap: Object.keys(merchantMap).length > 0 ? merchantMap : undefined,
+      });
       const tx = res.transactions?.[0];
       if (tx) {
         if (tx.date) set('date', tx.date);
@@ -155,9 +172,17 @@ export default function AddTransaction() {
       {/* AI Quick Parse */}
       <Card>
         <CardContent className="pt-4 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-4 h-4 text-purple-400" />
-            <span className="text-sm font-medium text-white/80">פענוח מהיר עם AI</span>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span className="text-sm font-medium text-white/80">פענוח מהיר עם AI</span>
+            </div>
+            {trainedCount > 0 && (
+              <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+                <Brain className="w-3 h-3 text-emerald-400" />
+                <span className="text-[10px] text-emerald-400 font-medium">מאומן על {trainedCount.toLocaleString()} עסקאות</span>
+              </div>
+            )}
           </div>
           <Textarea
             value={aiText}

@@ -144,7 +144,67 @@ export function hasLocalData(): boolean {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Mock AI Integration  (unchanged)
+// Historical-context AI  (replaces static mock)
+// ────────────────────────────────────────────────────────────────────────────
+
+// Common Hebrew stopwords that carry no merchant signal
+const HE_STOPWORDS = new Set([
+  'של','עם','את','על','אל','לא','כן','רק','כל','יש','אין','כי','אם',
+  'גם','כך','כבר','הם','הן','אנו','אני','הוא','היא','אנחנו','שהם',
+  'ידי','בין','עוד','עצם','כמה','שם','אז','או','כן',
+]);
+
+/** Split text into lowercase tokens; filter stopwords and very-short tokens */
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[0-9₪"'.,;:!?()\[\]{}\-\/]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !HE_STOPWORDS.has(t) && !/^\d+$/.test(t));
+}
+
+/** Map: token → { category → occurrenceCount } */
+export type MerchantMap = Record<string, Record<string, number>>;
+
+/**
+ * Build a statistical merchant→category map from historical transactions.
+ * Uses both `notes` (merchant description) and `sub_category` as signal sources.
+ * Called once in AddTransaction and cached with useMemo.
+ */
+export function buildMerchantMap(transactions: Transaction[]): MerchantMap {
+  const map: MerchantMap = {};
+  for (const tx of transactions) {
+    const text = [tx.notes, tx.sub_category].filter(Boolean).join(' ');
+    if (!text || !tx.category) continue;
+    for (const token of tokenize(text)) {
+      if (!map[token]) map[token] = {};
+      map[token][tx.category] = (map[token][tx.category] ?? 0) + 1;
+    }
+  }
+  return map;
+}
+
+/**
+ * Given free-form input text and the historical map, return the most likely
+ * category by summing occurrence scores for all matching tokens.
+ * Falls back to null if no tokens match.
+ */
+function guessCategoryFromMap(text: string, map: MerchantMap): Category | null {
+  const scores: Record<string, number> = {};
+  for (const token of tokenize(text)) {
+    const catCounts = map[token];
+    if (!catCounts) continue;
+    for (const [cat, count] of Object.entries(catCounts)) {
+      scores[cat] = (scores[cat] ?? 0) + count;
+    }
+  }
+  const entries = Object.entries(scores);
+  if (!entries.length) return null;
+  return entries.sort((a, b) => b[1] - a[1])[0][0] as Category;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Static keyword fallback  (unchanged, used when history gives no match)
 // ────────────────────────────────────────────────────────────────────────────
 const CATEGORY_KEYWORDS: [Category, string[]][] = [
   ['סופר',      ['סופר', 'רמי לוי', 'שופרסל', 'מגה', 'ויקטורי', 'carrefour', 'יינות ביתן']],
@@ -169,7 +229,7 @@ function guessCategory(text: string): Category {
   return 'שונות';
 }
 
-function parseTransactionText(text: string): Partial<Transaction>[] {
+function parseTransactionText(text: string, merchantMap?: MerchantMap): Partial<Transaction>[] {
   const lines = text.split('\n').filter((l) => l.trim().length > 5);
   const results: Partial<Transaction>[] = [];
   for (const line of lines) {
@@ -186,8 +246,19 @@ function parseTransactionText(text: string): Partial<Transaction>[] {
       const yr = yearRaw ? (yearRaw.length === 2 ? '20' + yearRaw : yearRaw) : new Date().getFullYear();
       date = `${yr}-${mon}-${day}`;
     }
-    const description = line.replace(amountMatch[0], '').replace(/\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?/, '').replace(/[₪"']/g, '').trim();
-    results.push({ date, amount, category: guessCategory(description || line), type: 'expense', payer: 'Shi', payment_method: 'אשראי', expense_class: 'משתנה', status: 'paid', notes: description });
+    const description = line
+      .replace(amountMatch[0], '')
+      .replace(/\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?/, '')
+      .replace(/[₪"']/g, '')
+      .trim();
+
+    // Category: historical map first, then static keywords
+    const descForCat = description || line;
+    const category =
+      (merchantMap ? guessCategoryFromMap(descForCat, merchantMap) : null)
+      ?? guessCategory(descForCat);
+
+    results.push({ date, amount, category, type: 'expense', payer: 'Shi', payment_method: 'אשראי', expense_class: 'משתנה', status: 'paid', notes: description });
   }
   return results;
 }
@@ -203,9 +274,9 @@ export const base44 = {
   },
   integrations: {
     Core: {
-      async InvokeLLM({ prompt }: { prompt: string; response_json_schema?: unknown }): Promise<{ transactions?: Partial<Transaction>[] }> {
-        await new Promise((r) => setTimeout(r, 800));
-        return { transactions: parseTransactionText(prompt) };
+      async InvokeLLM({ prompt, merchantMap }: { prompt: string; merchantMap?: MerchantMap; response_json_schema?: unknown }): Promise<{ transactions?: Partial<Transaction>[] }> {
+        await new Promise((r) => setTimeout(r, 500));
+        return { transactions: parseTransactionText(prompt, merchantMap) };
       },
       async ExtractDataFromUploadedFile({ file_url, prompt: _prompt }: { file_url: string; prompt: string }): Promise<{ data: Partial<Transaction>[] }> {
         await new Promise((r) => setTimeout(r, 1000));
