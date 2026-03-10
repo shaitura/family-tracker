@@ -2,17 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-// ─── הכנס כאן את ה-config שקיבלת מ-Firebase Console ─────────────────────────
-// Firebase Console → Project settings → Your apps → Web app → firebaseConfig
 const firebaseConfig = {
-  apiKey:            'AIzaSyChNRltCmX4-gHUZNcQslR8IAnYQqHtgZ0',
-  authDomain:        'family-tracker-dfccd.firebaseapp.com',
-  projectId:         'family-tracker-dfccd',
-  storageBucket:     'family-tracker-dfccd.firebasestorage.app',
-  messagingSenderId: '79082333004',
-  appId:             '1:79082333004:web:cc30677d6e5baf992f25e9',
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 export const app      = initializeApp(firebaseConfig);
 export const db       = getFirestore(app);
