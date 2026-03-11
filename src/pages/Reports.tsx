@@ -161,6 +161,7 @@ export default function Reports() {
   const exportPDF = () => {
     const period = fullYear ? `${year} — שנה מלאה` : `${year}-${month}`;
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
+    const C = ['#22d3ee','#a855f7','#ec4899','#f97316','#eab308','#84cc16','#10b981','#f43f5e','#06b6d4','#8b5cf6'];
 
     const computeStats = (type: string) => {
       const txs = transactions.filter((t) => t.date.startsWith(prefix) && t.type === type);
@@ -170,7 +171,7 @@ export default function Reports() {
       const catRows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
       const byPayer: Record<string, number> = {};
       txs.forEach((t) => { byPayer[t.payer] = (byPayer[t.payer] || 0) + t.amount; });
-      const payerRows = Object.entries(byPayer).map(([p, a]) => [PAYER_LABELS[p] || p, a] as [string, number]);
+      const payerRows = Object.entries(byPayer).map(([p, a]) => [PAYER_LABELS[p] || p, a] as [string, number]).sort((a, b) => b[1] - a[1]);
       const monthRows = months.map(({ val, label }) => ({
         label, amount: txs.filter((t) => t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
       }));
@@ -182,10 +183,50 @@ export default function Reports() {
     const fmtILS = (n: number) => `₪${Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 })}`;
     const fmtPct = (n: number, tot: number) => (tot > 0 ? `${(n / tot * 100).toFixed(1)}%` : '—');
 
-    const tbl = (headers: string[], rows: (string | number)[][]) =>
-      `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
-        rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')
-      }</tbody></table>`;
+    // SVG donut chart
+    const svgDonut = (segs: [string, number][], tot: number, colors: string[]): string => {
+      if (tot === 0 || segs.length === 0) return '';
+      const cx = 80, cy = 80, R = 65, r = 38;
+      if (segs.length === 1) {
+        return `<svg width="160" height="160" viewBox="0 0 160 160"><circle cx="${cx}" cy="${cy}" r="${R}" fill="${colors[0]}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="white"/></svg>`;
+      }
+      let angle = -Math.PI / 2;
+      const paths = segs.map(([, val], i) => {
+        const a = Math.min((val / tot) * 2 * Math.PI, 2 * Math.PI - 0.001);
+        const end = angle + a;
+        const p = (rad: number, radius: number) => [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+        const [x1,y1] = p(angle, R); const [x2,y2] = p(end, R);
+        const [ix1,iy1] = p(angle, r); const [ix2,iy2] = p(end, r);
+        const large = a > Math.PI ? 1 : 0;
+        const d = `M${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large} 1 ${x2.toFixed(1)},${y2.toFixed(1)} L${ix2.toFixed(1)},${iy2.toFixed(1)} A${r},${r} 0 ${large} 0 ${ix1.toFixed(1)},${iy1.toFixed(1)}Z`;
+        angle = end;
+        return `<path d="${d}" fill="${colors[i % colors.length]}" stroke="white" stroke-width="1.5"/>`;
+      });
+      return `<svg width="160" height="160" viewBox="0 0 160 160">${paths.join('')}</svg>`;
+    };
+
+    // SVG bar chart
+    const svgBars = (items: {label: string; value: number}[], colors: string[]): string => {
+      if (!items.length) return '';
+      const max = Math.max(...items.map((i) => i.value), 1);
+      const W = 34, GAP = 5, MAXH = 80, TH = 18;
+      const totalW = items.length * (W + GAP) + 4;
+      const bars = items.map((item, i) => {
+        const h = Math.max(item.value > 0 ? Math.round((item.value / max) * MAXH) : 0, item.value > 0 ? 3 : 0);
+        const x = 2 + i * (W + GAP);
+        return `<rect x="${x}" y="${MAXH - h}" width="${W}" height="${h}" rx="3" fill="${colors[i % colors.length]}"/>
+          <text x="${x + W / 2}" y="${MAXH + 13}" text-anchor="middle" font-size="9" fill="#64748b">${item.label}</text>`;
+      });
+      return `<svg width="${totalW}" height="${MAXH + TH}" viewBox="0 0 ${totalW} ${MAXH + TH}" style="width:100%;max-height:110px">${bars.join('')}</svg>`;
+    };
+
+    // Legend row
+    const row = (color: string, label: string, amount: string, pct: string) =>
+      `<div class="lrow"><span class="dot" style="background:${color}"></span><span class="lname">${label}</span><span class="lamt">${amount}</span><span class="lpct">${pct}</span></div>`;
+
+    // Chart+legend block
+    const chartBlock = (chart: string, rows: string) =>
+      `<div class="cblock"><div class="chart">${chart}</div><div class="legend">${rows}</div></div>`;
 
     const section = (label: string, type: string) => {
       const { tot, catRows, payerRows, monthRows, fixedTot, varTot } = computeStats(type);
@@ -193,55 +234,67 @@ export default function Reports() {
       const splitTot = fixedTot + varTot;
       const activeMonths = monthRows.filter((m) => m.amount > 0);
 
-      return `
-        <div class="section">
-          <h2>${label} &nbsp;<span class="total">${fmtILS(tot)}</span></h2>
+      const catSvg = svgDonut(catRows, tot, C);
+      const catLegend = catRows.map(([name, val], i) => row(C[i % C.length], name, fmtILS(val), fmtPct(val, tot))).join('');
 
-          <h3>לפי קטגוריה</h3>
-          ${tbl(['קטגוריה', 'סכום', 'אחוז'],
-            catRows.map(([name, val]) => [name, fmtILS(val), fmtPct(val, tot)]))}
+      const monthSvg = svgBars(activeMonths.map((m) => ({ label: m.label, value: m.amount })), C);
+      const monthLegend = [...activeMonths].sort((a, b) => b.amount - a.amount).map((m, i) => row(C[i % C.length], m.label, fmtILS(m.amount), fmtPct(m.amount, tot))).join('');
 
-          ${fullYear && activeMonths.length > 0 ? `
-          <h3>לפי חודש</h3>
-          ${tbl(['חודש', 'סכום', 'אחוז'],
-            activeMonths.map((m) => [m.label, fmtILS(m.amount), fmtPct(m.amount, tot)]))}
-          ` : ''}
+      const payerSvg = svgBars(payerRows.map(([name, val]) => ({ label: name, value: val })), C);
+      const payerLegend = payerRows.map(([name, val], i) => row(C[i % C.length], name, fmtILS(val), fmtPct(val, tot))).join('');
 
-          ${payerRows.length > 0 ? `
-          <h3>לפי משלם</h3>
-          ${tbl(['משלם', 'סכום', 'אחוז'],
-            payerRows.map(([name, val]) => [name, fmtILS(val), fmtPct(val, tot)]))}
-          ` : ''}
+      const splitSvg = svgDonut([['קבועה', fixedTot], ['משתנה', varTot]], splitTot, ['#22d3ee', '#a855f7']);
+      const splitLegend = [
+        row('#22d3ee', 'קבועה', fmtILS(fixedTot), fmtPct(fixedTot, splitTot)),
+        row('#a855f7', 'משתנה', fmtILS(varTot),   fmtPct(varTot,   splitTot)),
+      ].join('');
 
-          ${type === 'expense' && splitTot > 0 ? `
-          <h3>קבועה מול משתנה</h3>
-          ${tbl(['סוג', 'סכום', 'אחוז'], [
-            ['קבועה', fmtILS(fixedTot), fmtPct(fixedTot, splitTot)],
-            ['משתנה', fmtILS(varTot),   fmtPct(varTot,   splitTot)],
-          ])}
-          ` : ''}
-        </div>`;
+      return `<div class="section">
+        <h2>${label}<span>${fmtILS(tot)}</span></h2>
+
+        <h3>לפי קטגוריה</h3>
+        ${chartBlock(catSvg, catLegend)}
+
+        ${fullYear && activeMonths.length > 0 ? `
+        <h3>לפי חודש</h3>
+        <div class="bar-wrap">${monthSvg}</div>
+        <div class="legend">${monthLegend}</div>
+        ` : ''}
+
+        ${payerRows.length > 0 ? `
+        <h3>לפי משלם</h3>
+        ${chartBlock(payerSvg, payerLegend)}
+        ` : ''}
+
+        ${type === 'expense' && splitTot > 0 ? `
+        <h3>קבועה מול משתנה</h3>
+        ${chartBlock(splitSvg, splitLegend)}
+        ` : ''}
+      </div>`;
     };
 
     const html = `<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head>
+<html dir="rtl" lang="he"><head>
   <meta charset="utf-8">
   <title>דוח משפחתי — ${period}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:Arial,sans-serif;padding:28px 32px;color:#1e293b;direction:rtl;font-size:13px}
-    h1{font-size:20px;font-weight:700;margin-bottom:2px}
-    .period{color:#64748b;margin-bottom:24px}
-    .section{margin-bottom:28px}
-    h2{font-size:15px;font-weight:700;background:#f1f5f9;padding:7px 12px;border-radius:6px;margin-bottom:10px;display:flex;justify-content:space-between}
-    .total{font-weight:700;color:#0f172a}
-    h3{font-size:12px;font-weight:600;color:#475569;margin:14px 0 5px}
-    table{width:100%;border-collapse:collapse}
-    th{background:#e2e8f0;text-align:right;padding:5px 9px;font-weight:600;font-size:12px}
-    td{padding:4px 9px;border-bottom:1px solid #f1f5f9;font-size:12px}
-    tr:last-child td{border-bottom:none}
-    @page{margin:15mm}
+    body{font-family:Arial,sans-serif;padding:24px 28px;color:#1e293b;direction:rtl;background:#fff}
+    h1{font-size:20px;font-weight:800;margin-bottom:3px}
+    .period{color:#64748b;font-size:13px;margin-bottom:22px}
+    .section{margin-bottom:30px}
+    h2{font-size:15px;font-weight:700;background:#1e293b;color:#fff;padding:8px 14px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+    h3{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+    .cblock{display:flex;gap:16px;align-items:flex-start;margin-bottom:4px}
+    .chart{flex-shrink:0;width:160px}
+    .bar-wrap{margin-bottom:8px}
+    .legend{flex:1;min-width:0}
+    .lrow{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid #f8fafc}
+    .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .lname{flex:1;font-size:12px}
+    .lamt{font-weight:600;font-size:12px}
+    .lpct{color:#64748b;font-size:11px;min-width:38px;text-align:left}
+    @page{margin:12mm}
     @media print{body{padding:0}.section{page-break-inside:avoid}}
   </style>
 </head>
@@ -250,8 +303,7 @@ export default function Reports() {
   <p class="period">${period}</p>
   ${section('הוצאות', 'expense')}
   ${section('הכנסות', 'income')}
-</body>
-</html>`;
+</body></html>`;
 
     const w = window.open('', '_blank');
     if (w) {
