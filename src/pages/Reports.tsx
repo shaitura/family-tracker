@@ -75,6 +75,26 @@ export default function Reports() {
     const { utils, writeFile } = await import('xlsx');
     const wb = utils.book_new();
 
+    // Helper: apply formats to cells in specific columns (skipping header row)
+    const applyFormats = (ws: ReturnType<typeof utils.json_to_sheet>, colFormats: { col: number; fmt: string }[]) => {
+      const range = utils.decode_range(ws['!ref'] || 'A1');
+      colFormats.forEach(({ col, fmt }) => {
+        for (let row = range.s.r + 1; row <= range.e.r; row++) {
+          const addr = utils.encode_cell({ r: row, c: col });
+          if (ws[addr]) ws[addr].z = fmt;
+        }
+      });
+    };
+
+    // Helper: mark sheet as RTL
+    const rtl = (ws: ReturnType<typeof utils.json_to_sheet>) => {
+      ws['!views'] = [{ rightToLeft: true }];
+      return ws;
+    };
+
+    const ILS = '"₪"#,##0';
+    const PCT = '0.0"%"';
+
     // Sheet 1: raw transactions
     const txRows = filtered.map((t) => ({
       תאריך: t.date,
@@ -85,8 +105,9 @@ export default function Reports() {
       סוג: t.expense_class,
       הערות: t.notes || '',
     }));
-    const txSheet = utils.json_to_sheet(txRows);
-    txSheet['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 24 }];
+    const txSheet = rtl(utils.json_to_sheet(txRows));
+    txSheet['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 24 }];
+    applyFormats(txSheet, [{ col: 2, fmt: ILS }]);
     utils.book_append_sheet(wb, txSheet, 'עסקאות');
 
     // Sheet 2: by category
@@ -96,18 +117,20 @@ export default function Reports() {
       אחוז: total > 0 ? +(value / total * 100).toFixed(1) : 0,
     }));
     catRows.push({ קטגוריה: 'סה"כ', סכום: total, אחוז: 100 });
-    const catSheet = utils.json_to_sheet(catRows);
+    const catSheet = rtl(utils.json_to_sheet(catRows));
     catSheet['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 10 }];
+    applyFormats(catSheet, [{ col: 1, fmt: ILS }, { col: 2, fmt: PCT }]);
     utils.book_append_sheet(wb, catSheet, 'לפי קטגוריה');
 
-    // Sheet 3: by month (always export, even for single-month view)
+    // Sheet 3: by month
     const monthRows = byMonth.map(({ name, amount }) => ({
       חודש: name,
       סכום: amount,
       אחוז: total > 0 ? +(amount / total * 100).toFixed(1) : 0,
     }));
-    const monthSheet = utils.json_to_sheet(monthRows);
+    const monthSheet = rtl(utils.json_to_sheet(monthRows));
     monthSheet['!cols'] = [{ wch: 10 }, { wch: 14 }, { wch: 10 }];
+    applyFormats(monthSheet, [{ col: 1, fmt: ILS }, { col: 2, fmt: PCT }]);
     utils.book_append_sheet(wb, monthSheet, 'לפי חודש');
 
     // Sheet 4: by payer
@@ -116,8 +139,9 @@ export default function Reports() {
       סכום: amount,
       אחוז: total > 0 ? +(amount / total * 100).toFixed(1) : 0,
     }));
-    const payerSheet = utils.json_to_sheet(payerRows);
+    const payerSheet = rtl(utils.json_to_sheet(payerRows));
     payerSheet['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }];
+    applyFormats(payerSheet, [{ col: 1, fmt: ILS }, { col: 2, fmt: PCT }]);
     utils.book_append_sheet(wb, payerSheet, 'לפי משלם');
 
     // Sheet 5: fixed vs variable
@@ -126,21 +150,44 @@ export default function Reports() {
       { סוג: 'משתנה', סכום: varTotal, אחוז: splitTotal > 0 ? +(varTotal / splitTotal * 100).toFixed(1) : 0 },
       { סוג: 'סה"כ', סכום: splitTotal, אחוז: 100 },
     ];
-    const splitSheet = utils.json_to_sheet(splitRows);
+    const splitSheet = rtl(utils.json_to_sheet(splitRows));
     splitSheet['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 10 }];
+    applyFormats(splitSheet, [{ col: 1, fmt: ILS }, { col: 2, fmt: PCT }]);
     utils.book_append_sheet(wb, splitSheet, 'קבועה vs משתנה');
 
     writeFile(wb, `family-report-${year}-${fullYear ? 'full' : month}.xlsx`);
+  };
+
+  const exportPDF = async () => {
+    const el = document.getElementById('reports-content');
+    if (!el) return;
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL('image/png');
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(`<!DOCTYPE html><html dir="rtl"><head><title>דוח משפחתי ${year}-${fullYear ? 'שנה מלאה' : month}</title><style>*{margin:0;padding:0}body{background:#000}img{width:100%;display:block}@media print{img{width:100vw}}</style></head><body><img src="${imgData}"/></body></html>`);
+      w.document.close();
+      w.addEventListener('load', () => { w.focus(); w.print(); });
+    }
   };
 
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-white">דוחות</h1>
-        <Button variant="outline" size="sm" onClick={exportExcel}>
-          <Download className="w-4 h-4 ml-1" /> Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportExcel}>
+            <Download className="w-4 h-4 ml-1" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportPDF}>
+            <Download className="w-4 h-4 ml-1" /> PDF
+          </Button>
+        </div>
       </div>
+
+      {/* Exportable content */}
+      <div id="reports-content">
 
       {/* Filters */}
       <Card>
@@ -393,6 +440,7 @@ export default function Reports() {
           )}
         </TabsContent>
       </Tabs>
+      </div>{/* end reports-content */}
     </div>
   );
 }
