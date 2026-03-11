@@ -162,7 +162,17 @@ export default function Reports() {
     const el = document.getElementById('reports-content');
     if (!el) return;
     const { default: html2canvas } = await import('html2canvas');
-    const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
+    const canvas = await html2canvas(el, {
+      backgroundColor: '#0f172a',
+      scale: 2,
+      useCORS: true,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: el.scrollWidth,
+      windowHeight: el.scrollHeight,
+      width: el.scrollWidth,
+      height: el.scrollHeight,
+    });
     const imgData = canvas.toDataURL('image/png');
     const w = window.open('', '_blank');
     if (w) {
