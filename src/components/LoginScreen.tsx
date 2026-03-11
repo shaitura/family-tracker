@@ -8,7 +8,7 @@ export default function LoginScreen() {
       const result = await signInWithPopup(auth, googleProvider);
       if (!isAllowedEmail(result.user.email ?? '')) {
         await auth.signOut();
-        alert(`הכתובת ${result.user.email} אינה מורשית לגשת לאפליקציה.`);
+        alert('חשבון זה אינו מורשה לגשת לאפליקציה.');
       }
       // onAuthStateChanged ב-App.tsx מטפל בהמשך
     } catch (e: unknown) {
