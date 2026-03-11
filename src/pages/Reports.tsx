@@ -394,24 +394,24 @@ export default function Reports() {
               <Card>
                 <CardContent className="pt-4">
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={byMonth} barSize={28}>
+                    <BarChart data={[...byMonth].reverse()} barSize={28}>
                       <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis hide />
                       <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
-                        {byMonth.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        {[...byMonth].reverse().map((_, i) => <Cell key={i} fill={COLORS[(11 - i) % COLORS.length]} />)}
                         <LabelList dataKey="amount" position="top" style={{ fill: '#e2e8f0', fontSize: 10, fontWeight: 'bold' }} formatter={(v: number) => v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v > 0 ? String(Math.round(v)) : ''} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
 
                   <div className="mt-3 space-y-1.5">
-                    {byMonth.filter((m) => m.amount > 0).sort((a, b) => b.amount - a.amount).map(({ name, amount }) => (
+                    {byMonth.filter((m) => m.amount > 0).map(({ name, amount }, i) => (
                       <div key={name} className="flex justify-between items-center py-1 border-b border-white/5">
                         <span className="text-sm text-white">{name}</span>
-                        <div className="text-left">
-                          <span className="text-sm font-bold text-white">{formatCurrency(amount)}</span>
-                          <span className="text-xs text-white/40 mr-2">{total ? Math.round(amount / total * 100) : 0}%</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-white/40">{total ? Math.round(amount / total * 100) : 0}%</span>
+                          <span className="text-sm font-bold text-white w-28 text-left">{formatCurrency(amount)}</span>
                         </div>
                       </div>
                     ))}
