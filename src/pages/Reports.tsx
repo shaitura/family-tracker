@@ -73,13 +73,63 @@ export default function Reports() {
 
   const exportExcel = async () => {
     const { utils, writeFile } = await import('xlsx');
-    const rows = filtered.map((t) => ({
-      תאריך: t.date, קטגוריה: t.category, סכום: t.amount,
-      משלם: PAYER_LABELS[t.payer], אמצעי_תשלום: t.payment_method,
-      סוג: t.expense_class, הערות: t.notes || '',
-    }));
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, utils.json_to_sheet(rows), 'דוח');
+
+    // Sheet 1: raw transactions
+    const txRows = filtered.map((t) => ({
+      תאריך: t.date,
+      קטגוריה: t.category,
+      סכום: t.amount,
+      משלם: PAYER_LABELS[t.payer] || t.payer,
+      אמצעי_תשלום: t.payment_method,
+      סוג: t.expense_class,
+      הערות: t.notes || '',
+    }));
+    const txSheet = utils.json_to_sheet(txRows);
+    txSheet['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 24 }];
+    utils.book_append_sheet(wb, txSheet, 'עסקאות');
+
+    // Sheet 2: by category
+    const catRows = catData.map(({ name, value }) => ({
+      קטגוריה: name,
+      סכום: value,
+      אחוז: total > 0 ? +(value / total * 100).toFixed(1) : 0,
+    }));
+    catRows.push({ קטגוריה: 'סה"כ', סכום: total, אחוז: 100 });
+    const catSheet = utils.json_to_sheet(catRows);
+    catSheet['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 10 }];
+    utils.book_append_sheet(wb, catSheet, 'לפי קטגוריה');
+
+    // Sheet 3: by month (always export, even for single-month view)
+    const monthRows = byMonth.map(({ name, amount }) => ({
+      חודש: name,
+      סכום: amount,
+      אחוז: total > 0 ? +(amount / total * 100).toFixed(1) : 0,
+    }));
+    const monthSheet = utils.json_to_sheet(monthRows);
+    monthSheet['!cols'] = [{ wch: 10 }, { wch: 14 }, { wch: 10 }];
+    utils.book_append_sheet(wb, monthSheet, 'לפי חודש');
+
+    // Sheet 4: by payer
+    const payerRows = payerData.map(({ name, amount }) => ({
+      משלם: name,
+      סכום: amount,
+      אחוז: total > 0 ? +(amount / total * 100).toFixed(1) : 0,
+    }));
+    const payerSheet = utils.json_to_sheet(payerRows);
+    payerSheet['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }];
+    utils.book_append_sheet(wb, payerSheet, 'לפי משלם');
+
+    // Sheet 5: fixed vs variable
+    const splitRows = [
+      { סוג: 'קבועה', סכום: fixedTotal, אחוז: splitTotal > 0 ? +(fixedTotal / splitTotal * 100).toFixed(1) : 0 },
+      { סוג: 'משתנה', סכום: varTotal, אחוז: splitTotal > 0 ? +(varTotal / splitTotal * 100).toFixed(1) : 0 },
+      { סוג: 'סה"כ', סכום: splitTotal, אחוז: 100 },
+    ];
+    const splitSheet = utils.json_to_sheet(splitRows);
+    splitSheet['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 10 }];
+    utils.book_append_sheet(wb, splitSheet, 'קבועה vs משתנה');
+
     writeFile(wb, `family-report-${year}-${fullYear ? 'full' : month}.xlsx`);
   };
 
