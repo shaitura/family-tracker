@@ -295,7 +295,7 @@ export default function Reports() {
     .lamt{font-weight:600;font-size:12px}
     .lpct{color:#64748b;font-size:11px;min-width:38px;text-align:left}
     @page{margin:12mm}
-    @media print{body{padding:0}.section{page-break-inside:avoid}}
+    @media print{body{padding:0}.subsection{page-break-inside:avoid}}
   </style>
 </head>
 <body>
