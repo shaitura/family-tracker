@@ -406,15 +406,24 @@ export default function Reports() {
                   </ResponsiveContainer>
 
                   <div className="mt-3 space-y-1.5">
-                    {byMonth.filter((m) => m.amount > 0).map(({ name, amount }, i) => (
-                      <div key={name} className="flex justify-between items-center py-1 border-b border-white/5">
-                        <span className="text-sm text-white">{name}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-white/40">{total ? Math.round(amount / total * 100) : 0}%</span>
-                          <span className="text-sm font-bold text-white w-28 text-left">{formatCurrency(amount)}</span>
+                    {byMonth.filter((m) => m.amount > 0).map(({ name, amount }, i) => {
+                      const pct = total ? amount / total * 100 : 0;
+                      return (
+                        <div key={name} className="flex items-center gap-3 py-1 border-b border-white/5">
+                          {/* left: amount + pct */}
+                          <div className="flex items-center gap-2 w-44 shrink-0 justify-end flex-row-reverse">
+                            <span className="text-sm font-bold text-white tabular-nums">{formatCurrency(amount)}</span>
+                            <span className="text-xs text-white/40 w-8 text-right tabular-nums">{Math.round(pct)}%</span>
+                          </div>
+                          {/* progress bar */}
+                          <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full bg-cyan-400/70" style={{ width: `${pct}%` }} />
+                          </div>
+                          {/* right: month name */}
+                          <span className="text-sm text-white w-10 text-right shrink-0">{name}</span>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
