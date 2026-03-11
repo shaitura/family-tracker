@@ -14,21 +14,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy-rules:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      - name: Deploy Firestore Security Rules
-        run: firebase deploy --only firestore:rules --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} --token ${{ secrets.FIREBASE_TOKEN }}
-
   build:
     runs-on: ubuntu-latest
     steps:
