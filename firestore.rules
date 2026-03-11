@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAllowed() {
+      return request.auth != null
+          && request.auth.token.email_verified == true
+          && request.auth.token.email in [
+               'shaitura@gmail.com',
+               'ortalas@gmail.com'
+             ];
+    }
+
+    // Only the two allowed family members can read/write anything
+    match /{document=**} {
+      allow read, write: if isAllowed();
+    }
+  }
+}
