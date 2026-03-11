@@ -158,25 +158,104 @@ export default function Reports() {
     writeFile(wb, `family-report-${year}-${fullYear ? 'full' : month}.xlsx`);
   };
 
-  const exportPDF = async () => {
-    const el = document.getElementById('reports-content');
-    if (!el) return;
-    const { default: html2canvas } = await import('html2canvas');
-    const canvas = await html2canvas(el, {
-      backgroundColor: '#0f172a',
-      scale: 2,
-      useCORS: true,
-      scrollX: 0,
-      scrollY: -window.scrollY,
-      windowWidth: el.scrollWidth,
-      windowHeight: el.scrollHeight,
-      width: el.scrollWidth,
-      height: el.scrollHeight,
-    });
-    const imgData = canvas.toDataURL('image/png');
+  const exportPDF = () => {
+    const period = fullYear ? `${year} — שנה מלאה` : `${year}-${month}`;
+    const prefix = fullYear ? `${year}-` : `${year}-${month}`;
+
+    const computeStats = (type: string) => {
+      const txs = transactions.filter((t) => t.date.startsWith(prefix) && t.type === type);
+      const tot = txs.reduce((s, t) => s + t.amount, 0);
+      const byCat: Record<string, number> = {};
+      txs.forEach((t) => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
+      const catRows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+      const byPayer: Record<string, number> = {};
+      txs.forEach((t) => { byPayer[t.payer] = (byPayer[t.payer] || 0) + t.amount; });
+      const payerRows = Object.entries(byPayer).map(([p, a]) => [PAYER_LABELS[p] || p, a] as [string, number]);
+      const monthRows = months.map(({ val, label }) => ({
+        label, amount: txs.filter((t) => t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
+      }));
+      const fixedTot = txs.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0);
+      const varTot   = txs.filter((t) => t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0);
+      return { tot, catRows, payerRows, monthRows, fixedTot, varTot };
+    };
+
+    const fmtILS = (n: number) => `₪${Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 })}`;
+    const fmtPct = (n: number, tot: number) => (tot > 0 ? `${(n / tot * 100).toFixed(1)}%` : '—');
+
+    const tbl = (headers: string[], rows: (string | number)[][]) =>
+      `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
+        rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')
+      }</tbody></table>`;
+
+    const section = (label: string, type: string) => {
+      const { tot, catRows, payerRows, monthRows, fixedTot, varTot } = computeStats(type);
+      if (tot === 0) return '';
+      const splitTot = fixedTot + varTot;
+      const activeMonths = monthRows.filter((m) => m.amount > 0);
+
+      return `
+        <div class="section">
+          <h2>${label} &nbsp;<span class="total">${fmtILS(tot)}</span></h2>
+
+          <h3>לפי קטגוריה</h3>
+          ${tbl(['קטגוריה', 'סכום', 'אחוז'],
+            catRows.map(([name, val]) => [name, fmtILS(val), fmtPct(val, tot)]))}
+
+          ${fullYear && activeMonths.length > 0 ? `
+          <h3>לפי חודש</h3>
+          ${tbl(['חודש', 'סכום', 'אחוז'],
+            activeMonths.map((m) => [m.label, fmtILS(m.amount), fmtPct(m.amount, tot)]))}
+          ` : ''}
+
+          ${payerRows.length > 0 ? `
+          <h3>לפי משלם</h3>
+          ${tbl(['משלם', 'סכום', 'אחוז'],
+            payerRows.map(([name, val]) => [name, fmtILS(val), fmtPct(val, tot)]))}
+          ` : ''}
+
+          ${type === 'expense' && splitTot > 0 ? `
+          <h3>קבועה מול משתנה</h3>
+          ${tbl(['סוג', 'סכום', 'אחוז'], [
+            ['קבועה', fmtILS(fixedTot), fmtPct(fixedTot, splitTot)],
+            ['משתנה', fmtILS(varTot),   fmtPct(varTot,   splitTot)],
+          ])}
+          ` : ''}
+        </div>`;
+    };
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8">
+  <title>דוח משפחתי — ${period}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;padding:28px 32px;color:#1e293b;direction:rtl;font-size:13px}
+    h1{font-size:20px;font-weight:700;margin-bottom:2px}
+    .period{color:#64748b;margin-bottom:24px}
+    .section{margin-bottom:28px}
+    h2{font-size:15px;font-weight:700;background:#f1f5f9;padding:7px 12px;border-radius:6px;margin-bottom:10px;display:flex;justify-content:space-between}
+    .total{font-weight:700;color:#0f172a}
+    h3{font-size:12px;font-weight:600;color:#475569;margin:14px 0 5px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#e2e8f0;text-align:right;padding:5px 9px;font-weight:600;font-size:12px}
+    td{padding:4px 9px;border-bottom:1px solid #f1f5f9;font-size:12px}
+    tr:last-child td{border-bottom:none}
+    @page{margin:15mm}
+    @media print{body{padding:0}.section{page-break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <h1>דוח משפחתי</h1>
+  <p class="period">${period}</p>
+  ${section('הוצאות', 'expense')}
+  ${section('הכנסות', 'income')}
+</body>
+</html>`;
+
     const w = window.open('', '_blank');
     if (w) {
-      w.document.write(`<!DOCTYPE html><html dir="rtl"><head><title>דוח משפחתי ${year}-${fullYear ? 'שנה מלאה' : month}</title><style>*{margin:0;padding:0}body{background:#000}img{width:100%;display:block}@media print{img{width:100vw}}</style></head><body><img src="${imgData}"/></body></html>`);
+      w.document.write(html);
       w.document.close();
       w.addEventListener('load', () => { w.focus(); w.print(); });
     }
