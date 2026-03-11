@@ -537,8 +537,8 @@ export default function AnnualAnalysis() {
 
   // Generate available years: 2020 → current year
   const availableYears = Array.from(
-    { length: Number(currentYear) - 2019 },
-    (_, i) => String(2020 + i),
+    { length: Number(currentYear) - 2021 },
+    (_, i) => String(2022 + i),
   ).reverse();
 
   const expenses = transactions.filter((t) => t.type === 'expense');
