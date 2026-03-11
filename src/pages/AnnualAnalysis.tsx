@@ -27,157 +27,6 @@ const TOOLTIP_STYLE = {
   color: '#fff',
 };
 
-// ── Annual Table Tab (סיכום כולל) ─────────────────────────────────────────────
-function AnnualTableTab({ expenses }: { expenses: Transaction[] }) {
-  // Build dynamically from actual data so unknown/extra categories are never dropped
-  const expByCatMonth: Record<string, Record<string, number>> = {};
-  expenses.forEach((t) => {
-    if (!expByCatMonth[t.category]) expByCatMonth[t.category] = {};
-    const m = t.date.slice(5, 7);
-    expByCatMonth[t.category][m] = (expByCatMonth[t.category][m] || 0) + t.amount;
-  });
-
-  const activeCategories = Object.keys(expByCatMonth).filter((cat) =>
-    MONTHS.some((m) => (expByCatMonth[cat][m] || 0) > 0),
-  );
-
-  const monthlyTotals = MONTHS.map((m) =>
-    expenses.filter((t) => t.date.slice(5, 7) === m).reduce((s, t) => s + t.amount, 0),
-  );
-
-  const totalExpense = expenses.reduce((s, t) => s + t.amount, 0);
-
-  // Pie chart data – category totals
-  const pieData = activeCategories.map((cat) => ({
-    name: cat,
-    value: MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0),
-  })).filter((d) => d.value > 0);
-
-  return (
-    <div className="space-y-3">
-      {/* Distribution chart */}
-      <Card>
-        <CardContent className="pt-4 pb-3">
-          <p className="text-xs text-white/40 text-center mb-3">חלוקת הוצאות לפי קטגוריה</p>
-          <div className="flex items-center gap-3" dir="ltr">
-            {/* Pie */}
-            <div className="flex-1 min-w-0">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={88}
-                    innerRadius={40}
-                    paddingAngle={2}
-                    label={({ cx: pcx, cy: pcy, midAngle, outerRadius: or, percent, value }) => {
-                      if (percent < 0.06) return null;
-                      const RADIAN = Math.PI / 180;
-                      const radius = or + 18;
-                      const x = pcx + radius * Math.cos(-midAngle * RADIAN);
-                      const y = pcy + radius * Math.sin(-midAngle * RADIAN);
-                      return (
-                        <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#cbd5e1">
-                          <tspan x={x} dy="-5">{compactNum(value)}</tspan>
-                          <tspan x={x} dy="11">{Math.round(percent * 100)}%</tspan>
-                        </text>
-                      );
-                    }}
-                    labelLine={false}
-                  >
-                    {pieData.map((entry) => (
-                      <Cell key={entry.name} fill={categoryColor(entry.name)} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            {/* Legend – right side */}
-            <div className="flex flex-col gap-1.5 shrink-0 w-[128px]" dir="rtl">
-              {pieData.sort((a, b) => b.value - a.value).map((entry) => {
-                const pct = totalExpense > 0 ? Math.round((entry.value / totalExpense) * 100) : 0;
-                return (
-                  <div key={entry.name} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: categoryColor(entry.name) }} />
-                    <span className="text-[10px] text-white/70 flex-1 truncate">{entry.name}</span>
-                    <span className="text-[9px] text-white/50 shrink-0">{compactNum(entry.value)}</span>
-                    <span className="text-[9px] text-white/30 w-6 text-left shrink-0">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="overflow-x-auto -mx-4 px-1" dir="rtl">
-            <table dir="rtl" className="text-[11px] min-w-[780px] w-full border-collapse">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-right py-2 pr-2 pl-1 text-white/50 font-medium sticky right-0 bg-slate-900 min-w-[70px]">קטגוריה</th>
-                  {MONTH_NAMES.map((m) => (
-                    <th key={m} className="text-center py-2 px-0.5 text-white/40 font-medium w-12">{m}</th>
-                  ))}
-                  <th className="text-center py-2 px-1 text-cyan-400/80 font-bold w-16">סה"כ</th>
-                  <th className="text-center py-2 px-1 text-white/40 font-medium w-16">ממוצע</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeCategories.map((cat) => {
-                  const rowTotal = MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0);
-                  const rowAvg = rowTotal / 12;
-                  return (
-                    <tr key={cat} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
-                      <td
-                        className="py-2 pr-2 pl-1 font-medium sticky right-0 bg-slate-900"
-                        style={{ color: categoryColor(cat) }}
-                      >
-                        {cat}
-                      </td>
-                      {MONTHS.map((m) => {
-                        const val = expByCatMonth[cat][m] || 0;
-                        return (
-                          <td key={m} className={`text-center py-2 px-0.5 ${val > 0 ? 'text-white' : 'text-white/15'}`}>
-                            {val > 0 ? compactNum(val) : '—'}
-                          </td>
-                        );
-                      })}
-                      <td className="text-center py-2 px-1 text-white font-bold">
-                        {rowTotal > 0 ? formatCurrency(rowTotal) : '—'}
-                      </td>
-                      <td className="text-center py-2 px-1 text-white/50">
-                        {rowTotal > 0 ? formatCurrency(rowAvg) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {/* Totals row */}
-                <tr className="border-t-2 border-white/20">
-                  <td className="py-2 pr-2 pl-1 text-white font-bold sticky right-0 bg-slate-900">סה"כ</td>
-                  {monthlyTotals.map((total, i) => (
-                    <td key={i} className={`text-center py-2 px-0.5 font-bold ${total > 0 ? 'text-cyan-400' : 'text-white/15'}`}>
-                      {compactNum(total)}
-                    </td>
-                  ))}
-                  <td className="text-center py-2 px-1 text-cyan-400 font-black">{formatCurrency(totalExpense)}</td>
-                  <td className="text-center py-2 px-1 text-cyan-300 font-bold">{formatCurrency(totalExpense / 12)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 // ── Fixed vs Variable Tab (expenses only) ─────────────────────────────────────
 function FixedVariableTab({ expenses }: { expenses: Transaction[] }) {
   const monthData = MONTHS.map((m, i) => {
@@ -199,6 +48,26 @@ function FixedVariableTab({ expenses }: { expenses: Transaction[] }) {
     קבועה: m.fixed,
     משתנה: m.variable,
   })).reverse(); // RTL: Jan on right → Dec on left
+
+  // Pie chart data – category totals
+  const expByCatMonth: Record<string, Record<string, number>> = {};
+  expenses.forEach((t) => {
+    if (!expByCatMonth[t.category]) expByCatMonth[t.category] = {};
+    const m = t.date.slice(5, 7);
+    expByCatMonth[t.category][m] = (expByCatMonth[t.category][m] || 0) + t.amount;
+  });
+  const activeCategories = Object.keys(expByCatMonth).filter((cat) =>
+    MONTHS.some((m) => (expByCatMonth[cat][m] || 0) > 0),
+  );
+  const totalExpense = expenses.reduce((s, t) => s + t.amount, 0);
+  const pieData = activeCategories.map((cat) => ({
+    name: cat,
+    value: MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0),
+  })).filter((d) => d.value > 0);
+
+  const monthlyTotals = MONTHS.map((m) =>
+    expenses.filter((t) => t.date.slice(5, 7) === m).reduce((s, t) => s + t.amount, 0),
+  );
 
   return (
     <div className="space-y-3">
@@ -285,6 +154,120 @@ function FixedVariableTab({ expenses }: { expenses: Transaction[] }) {
               </tr>
             </tbody>
           </table>
+        </CardContent>
+      </Card>
+
+      {/* Distribution pie chart */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <p className="text-xs text-white/40 text-center mb-3">חלוקת הוצאות לפי קטגוריה</p>
+          <div className="flex items-center gap-3" dir="ltr">
+            <div className="flex-1 min-w-0">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={88}
+                    innerRadius={40}
+                    paddingAngle={2}
+                    label={({ cx: pcx, cy: pcy, midAngle, outerRadius: or, percent, value }) => {
+                      if (percent < 0.06) return null;
+                      const RADIAN = Math.PI / 180;
+                      const radius = or + 18;
+                      const x = pcx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = pcy + radius * Math.sin(-midAngle * RADIAN);
+                      return (
+                        <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#cbd5e1">
+                          <tspan x={x} dy="-5">{compactNum(value)}</tspan>
+                          <tspan x={x} dy="11">{Math.round(percent * 100)}%</tspan>
+                        </text>
+                      );
+                    }}
+                    labelLine={false}
+                  >
+                    {pieData.map((entry) => (
+                      <Cell key={entry.name} fill={categoryColor(entry.name)} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={TOOLTIP_STYLE} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0 w-[128px]" dir="rtl">
+              {pieData.sort((a, b) => b.value - a.value).map((entry) => {
+                const pct = totalExpense > 0 ? Math.round((entry.value / totalExpense) * 100) : 0;
+                return (
+                  <div key={entry.name} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: categoryColor(entry.name) }} />
+                    <span className="text-[10px] text-white/70 flex-1 truncate">{entry.name}</span>
+                    <span className="text-[9px] text-white/50 shrink-0">{compactNum(entry.value)}</span>
+                    <span className="text-[9px] text-white/30 w-6 text-left shrink-0">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Category breakdown table */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="overflow-x-auto -mx-4 px-1" dir="rtl">
+            <table dir="rtl" className="text-[11px] min-w-[780px] w-full border-collapse">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-right py-2 pr-2 pl-1 text-white/50 font-medium sticky right-0 bg-slate-900 min-w-[70px]">קטגוריה</th>
+                  {MONTH_NAMES.map((m) => (
+                    <th key={m} className="text-center py-2 px-0.5 text-white/40 font-medium w-12">{m}</th>
+                  ))}
+                  <th className="text-center py-2 px-1 text-cyan-400/80 font-bold w-16">סה"כ</th>
+                  <th className="text-center py-2 px-1 text-white/40 font-medium w-16">ממוצע</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeCategories.map((cat) => {
+                  const rowTotal = MONTHS.reduce((s, m) => s + (expByCatMonth[cat][m] || 0), 0);
+                  const rowAvg = rowTotal / 12;
+                  return (
+                    <tr key={cat} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
+                      <td className="py-2 pr-2 pl-1 font-medium sticky right-0 bg-slate-900" style={{ color: categoryColor(cat) }}>
+                        {cat}
+                      </td>
+                      {MONTHS.map((m) => {
+                        const val = expByCatMonth[cat][m] || 0;
+                        return (
+                          <td key={m} className={`text-center py-2 px-0.5 ${val > 0 ? 'text-white' : 'text-white/15'}`}>
+                            {val > 0 ? compactNum(val) : '—'}
+                          </td>
+                        );
+                      })}
+                      <td className="text-center py-2 px-1 text-white font-bold">
+                        {rowTotal > 0 ? formatCurrency(rowTotal) : '—'}
+                      </td>
+                      <td className="text-center py-2 px-1 text-white/50">
+                        {rowTotal > 0 ? formatCurrency(rowAvg) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t-2 border-white/20">
+                  <td className="py-2 pr-2 pl-1 text-white font-bold sticky right-0 bg-slate-900">סה"כ</td>
+                  {monthlyTotals.map((total, i) => (
+                    <td key={i} className={`text-center py-2 px-0.5 font-bold ${total > 0 ? 'text-cyan-400' : 'text-white/15'}`}>
+                      {compactNum(total)}
+                    </td>
+                  ))}
+                  <td className="text-center py-2 px-1 text-cyan-400 font-black">{formatCurrency(totalExpense)}</td>
+                  <td className="text-center py-2 px-1 text-cyan-300 font-bold">{formatCurrency(totalExpense / 12)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -594,11 +577,10 @@ export default function AnnualAnalysis() {
       </div>
 
       <Tabs defaultValue="fixed">
-        <TabsList className="grid grid-cols-4 w-full" dir="rtl">
+        <TabsList className="grid grid-cols-3 w-full" dir="rtl">
           <TabsTrigger value="fixed" className="text-xs">הוצאות</TabsTrigger>
           <TabsTrigger value="income" className="text-xs">הכנסות</TabsTrigger>
           <TabsTrigger value="profit" className="text-xs">סיכום</TabsTrigger>
-          <TabsTrigger value="table" className="text-xs">סיכום כולל</TabsTrigger>
         </TabsList>
 
         <TabsContent value="fixed">
@@ -611,10 +593,6 @@ export default function AnnualAnalysis() {
 
         <TabsContent value="profit">
           <NetProfitTab expenses={expenses} incomes={incomes} />
-        </TabsContent>
-
-        <TabsContent value="table">
-          <AnnualTableTab expenses={expenses} />
         </TabsContent>
       </Tabs>
     </div>
