@@ -100,7 +100,7 @@ export default function Reports() {
             <div>
               <p className="text-xs text-white/50 mb-1">שנה</p>
               <select value={year} onChange={(e) => setYear(e.target.value)} className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none">
-                {[currentYear - 1, currentYear, currentYear + 1].map((y) => <option key={y} value={y} className="bg-slate-800">{y}</option>)}
+                {Array.from({ length: currentYear - 2021 }, (_, i) => String(2022 + i)).reverse().map((y) => <option key={y} value={y} className="bg-slate-800">{y}</option>)}
               </select>
             </div>
             <div>
