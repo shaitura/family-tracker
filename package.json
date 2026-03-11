@@ -35,7 +35,8 @@
     "tailwind-merge": "^2.2.0",
     "xlsx": "^0.18.5"
   },
-  "devDependencies": {
+"devDependencies": {
+    "vite-plugin-singlefile": "^2.0.2",
     "@types/react": "^18.2.56",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
