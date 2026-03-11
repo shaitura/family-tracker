@@ -444,15 +444,25 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
         ))}
       </div>
 
-      {/* Avg net profit */}
-      <Card>
-        <CardContent className="py-3 text-center">
-          <p className="text-xs text-white/40">רווח נקי ממוצע חודשי</p>
-          <p className={`text-2xl font-black mt-0.5 ${avgNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {avgNet < 0 ? '-' : ''}{formatCurrency(Math.abs(avgNet))}
-          </p>
-        </CardContent>
-      </Card>
+      {/* Avg net profit + Annual net */}
+      <div className="grid grid-cols-2 gap-2" dir="rtl">
+        <Card>
+          <CardContent className="py-3 text-center">
+            <p className="text-xs text-white/40">רווח נקי ממוצע לחודש</p>
+            <p className={`text-2xl font-black mt-0.5 ${avgNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {avgNet < 0 ? '-' : ''}{formatCurrency(Math.abs(avgNet))}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 text-center">
+            <p className="text-xs text-white/40">רווח/הפסד שנתי</p>
+            <p className={`text-2xl font-black mt-0.5 ${totalNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {totalNet < 0 ? '-' : ''}{formatCurrency(Math.abs(totalNet))}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Chart */}
       <Card>
@@ -587,7 +597,7 @@ export default function AnnualAnalysis() {
         <TabsList className="grid grid-cols-4 w-full" dir="rtl">
           <TabsTrigger value="fixed" className="text-xs">הוצאות</TabsTrigger>
           <TabsTrigger value="income" className="text-xs">הכנסות</TabsTrigger>
-          <TabsTrigger value="profit" className="text-xs">רווח</TabsTrigger>
+          <TabsTrigger value="profit" className="text-xs">סיכום</TabsTrigger>
           <TabsTrigger value="table" className="text-xs">סיכום כולל</TabsTrigger>
         </TabsList>
 
