@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toaster';
-import { CATEGORIES, PAYMENT_METHODS, Transaction, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
+import { CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Transaction, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass } from '@/types';
 import { createPageUrl } from '@/utils';
 import { auth } from '@/lib/firebase';
 
@@ -38,7 +38,7 @@ function emptyForm() {
   return {
     date: today(),
     type: 'expense' as 'expense' | 'income',
-    category: 'שונות' as Category,
+    category: 'שונות' as Category | IncomeCategory,
     sub_category: '',
     amount: '',
     payer: defaultPayer(),
@@ -88,7 +88,7 @@ export default function AddTransaction() {
       const base: Omit<Transaction, 'id'> = {
         date: form.date,
         type: form.type,
-        category: form.category,
+        category: form.category as Category,
         sub_category: form.sub_category || undefined,
         amount: parseFloat(form.amount) || 0,
         payer: form.payer,
@@ -215,7 +215,10 @@ export default function AddTransaction() {
               {(['expense', 'income'] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() => set('type', t)}
+                  onClick={() => {
+                    set('type', t);
+                    set('category', t === 'income' ? INCOME_CATEGORIES[0] : 'שונות');
+                  }}
                   className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
                     form.type === t
                       ? t === 'expense' ? 'bg-rose-500/30 border border-rose-500/60 text-rose-300' : 'bg-emerald-500/30 border border-emerald-500/60 text-emerald-300'
@@ -245,11 +248,13 @@ export default function AddTransaction() {
             <Label className="mb-1 block">קטגוריה</Label>
             <select
               value={form.category}
-              onChange={(e) => set('category', e.target.value as Category)}
+              onChange={(e) => set('category', e.target.value as Category | IncomeCategory)}
               className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               dir="rtl"
             >
-              {CATEGORIES.map((c) => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
+              {(form.type === 'income' ? INCOME_CATEGORIES : CATEGORIES).map((c) => (
+                <option key={c} value={c} className="bg-slate-800">{c}</option>
+              ))}
             </select>
           </div>
 

@@ -9,7 +9,14 @@ export const CATEGORIES = [
   'ביגוד', 'בריאות', 'פנאי', 'ביטוחים', 'תקשורת', 'חשבונות', 'מתנות', 'השקעה', 'שונות',
 ] as const;
 
+export const INCOME_CATEGORIES = [
+  'משכורת', 'מתנה', 'מכירה', 'מופ"ת מילואים', 'קצבת ילדים',
+  'שכר דירה', 'החזר רכב ממוטי', 'ריבית זכות', 'החזר ביטוחי',
+  'החזר מגורם אחר', 'ESPP',
+] as const;
+
 export type Category = typeof CATEGORIES[number];
+export type IncomeCategory = typeof INCOME_CATEGORIES[number];
 
 export const PAYMENT_METHODS: PaymentMethod[] = ['אשראי', 'מזומן', 'העברה', 'ביט', "צ'ק", 'הוראת קבע'];
 
