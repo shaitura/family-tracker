@@ -1,21 +1,12 @@
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithRedirect } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
-import { isAllowedEmail } from '@/lib/auth';
 
 export default function LoginScreen() {
   async function handleLogin() {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      if (!isAllowedEmail(result.user.email ?? '')) {
-        await auth.signOut();
-        alert('חשבון זה אינו מורשה לגשת לאפליקציה.');
-      }
-      // onAuthStateChanged ב-App.tsx מטפל בהמשך
-    } catch (e: unknown) {
-      const code = (e as { code?: string }).code;
-      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-        alert('שגיאה בכניסה. נסה/י שוב.');
-      }
+      await signInWithRedirect(auth, googleProvider);
+    } catch {
+      alert('שגיאה בכניסה. נסה/י שוב.');
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { HashRouter as BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { isAllowedEmail, toUserInfo, UserInfo } from '@/lib/auth';
 import { Toaster } from '@/components/ui/toaster';
@@ -26,6 +26,16 @@ export default function App() {
   const [user, setUser] = useState<UserInfo | null | 'loading'>('loading');
 
   useEffect(() => {
+    // Handle redirect result after Google sign-in redirect
+    getRedirectResult(auth).then((result) => {
+      if (result?.user && !isAllowedEmail(result.user.email ?? '')) {
+        signOut(auth);
+        alert('חשבון זה אינו מורשה לגשת לאפליקציה.');
+      }
+    }).catch(() => {
+      alert('שגיאה בכניסה. נסה/י שוב.');
+    });
+
     return onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser && isAllowedEmail(firebaseUser.email ?? '')) {
         setUser(toUserInfo(firebaseUser));
