@@ -257,7 +257,7 @@ function parseTransactionText(text: string, merchantMap?: MerchantMap): Partial<
       (merchantMap ? guessCategoryFromMap(descForCat, merchantMap) : null)
       ?? guessCategory(descForCat);
 
-    results.push({ date, amount, category, type: 'expense', payer: 'Shi', payment_method: 'אשראי', expense_class: 'משתנה', status: 'paid', notes: description });
+    results.push({ date, amount, category, type: 'expense', payer: 'Shi', payment_method: 'אשראי', expense_class: 'משתנה', status: 'paid', sub_category: description });
   }
   return results;
 }
@@ -410,7 +410,7 @@ export function parseWhatsAppExport(text: string, merchantMap?: MerchantMap): Wa
         payer,
         amount,
         category,
-        notes: desc || undefined,
+        sub_category: desc || undefined,
         payment_method: 'אשראי' as PaymentMethod,
         expense_class: (isFixed ? 'קבועה' : 'משתנה') as ExpenseClass,
         status: 'paid' as Transaction['status'],
