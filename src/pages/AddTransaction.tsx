@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toaster';
 import { CATEGORIES, PAYMENT_METHODS, Transaction, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
 import { createPageUrl } from '@/utils';
+import { auth } from '@/lib/firebase';
 
 const PAYERS: { val: Payer; label: string }[] = [
   { val: 'Shi', label: 'שי' },
@@ -26,6 +27,13 @@ const CLASSES: { val: ExpenseClass; label: string }[] = [
 
 const today = () => new Date().toISOString().split('T')[0];
 
+function defaultPayer(): Payer {
+  const email = auth.currentUser?.email ?? '';
+  if (email === 'ortalas@gmail.com') return 'Ortal';
+  if (email === 'shaitura@gmail.com') return 'Shi';
+  return 'Shi';
+}
+
 function emptyForm() {
   return {
     date: today(),
@@ -33,7 +41,7 @@ function emptyForm() {
     category: 'שונות' as Category,
     sub_category: '',
     amount: '',
-    payer: 'Shi' as Payer,
+    payer: defaultPayer(),
     payment_method: 'אשראי' as PaymentMethod,
     expense_class: 'משתנה' as ExpenseClass,
     notes: '',
