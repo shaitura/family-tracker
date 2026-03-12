@@ -13,9 +13,9 @@ import { Transaction, CATEGORIES, PAYMENT_METHODS, Category, Payer, PaymentMetho
 import { formatCurrency, formatDate, categoryColor, PAYER_LABELS } from '@/utils';
 
 const EMOJI: Record<string, string> = {
-  מזון: '🥗', סופר: '🛒', מסעדות: '🍽️', דיור: '🏠', רכב: '🚗', דלק: '⛽',
+  'מצרכים': '🛒', 'אוכל בחוץ': '🍽️', דיור: '🏠', רכב: '🚗', דלק: '⛽',
   ילדים: '👶', ביגוד: '👗', בריאות: '💊', פנאי: '🎭', ביטוחים: '🛡️',
-  תקשורת: '📱', חשבונות: '🧾', מתנות: '🎁', שונות: '💼',
+  תקשורת: '📱', חשבונות: '🧾', 'מתנות/אירועים': '🎁', שונות: '💼',
 };
 
 const PAYER_OPTIONS = [

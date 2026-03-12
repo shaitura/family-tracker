@@ -116,9 +116,18 @@ function mapPaymentMethod(v: unknown): PaymentMethod {
   return 'אשראי';
 }
 
+const LEGACY_CATEGORY_MAP: Record<string, Category> = {
+  'מזון':    'מצרכים',
+  'סופר':    'מצרכים',
+  'מסעדות':  'אוכל בחוץ',
+  'מתנות':   'מתנות/אירועים',
+};
+
 function mapCategory(raw: string): Category {
   const s = String(raw ?? '').trim();
   if (!s) return 'שונות';
+  // Explicit legacy renames first
+  if (LEGACY_CATEGORY_MAP[s]) return LEGACY_CATEGORY_MAP[s];
   if (CATEGORIES.includes(s as Category)) return s as Category;
   // partial match: "דיור - שכירות" → "דיור"
   for (const cat of CATEGORIES) {
