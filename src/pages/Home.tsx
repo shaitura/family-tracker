@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate, currentMonthKey, createPageUrl, categoryColor, PAYER_LABELS } from '@/utils';
 import { Transaction, Budget } from '@/types';
+import { PendingClarificationsCard } from '@/components/PendingClarificationsCard';
 
 const fadeUp = { hidden: { opacity: 0, y: 16 }, visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.4 } }) };
 
@@ -133,8 +134,13 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* Recent transactions */}
+      {/* Pending clarifications */}
       <motion.div custom={3} initial="hidden" animate="visible" variants={fadeUp}>
+        <PendingClarificationsCard />
+      </motion.div>
+
+      {/* Recent transactions */}
+      <motion.div custom={4} initial="hidden" animate="visible" variants={fadeUp}>
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">

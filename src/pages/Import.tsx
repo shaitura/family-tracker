@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toaster';
 import { Transaction, CATEGORIES, INCOME_CATEGORIES, Category, IncomeCategory, Payer, ExpenseClass } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
+import { usePendingClarifications } from '@/hooks/usePendingClarifications';
 
 const PAYER_LABELS: Record<Payer, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
 const PAYER_COLORS: Record<Payer, string> = {
@@ -32,6 +33,8 @@ export default function Import() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<WaTransaction | null>(null);
+
+  const { addItems: persistClarifications } = usePendingClarifications();
 
   const { data: allTransactions = [] } = useQuery({
     queryKey: ['transactions'],
@@ -62,11 +65,15 @@ export default function Import() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       const savedCount = selected.size;
-      // Keep only items that were NOT saved (unsaved + needs-clarification remain)
-      setPreview((prev) => prev.filter((_, i) => !selected.has(i)));
+      // Persist clarification items to localStorage before removing them from preview
+      const clarItems = preview.filter((t, i) => !selected.has(i) && t.needsClarification);
+      if (clarItems.length > 0) persistClarifications(clarItems);
+      // Keep only: not-saved AND not-clarification
+      setPreview((prev) => prev.filter((t, i) => !selected.has(i) && !t.needsClarification));
       setSelected(new Set());
       setEditingIndex(null);
-      toast({ title: `${savedCount} עסקאות נוספו בהצלחה!`, variant: 'success' });
+      const clarMsg = clarItems.length > 0 ? ` · ${clarItems.length} פריטים עברו לבירור בעמוד הבית` : '';
+      toast({ title: `${savedCount} עסקאות נוספו בהצלחה!${clarMsg}`, variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
   });
