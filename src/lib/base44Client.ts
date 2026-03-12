@@ -317,7 +317,7 @@ function waExtractAmount(line: string): { amount: number; hasDollar: boolean } |
   return { amount: nums[nums.length - 1], hasDollar: false };
 }
 
-export type WaTransaction = Partial<Transaction> & { uncertain?: boolean };
+export type WaTransaction = Omit<Partial<Transaction>, 'category'> & { category?: string; uncertain?: boolean };
 
 export function parseWhatsAppExport(text: string, merchantMap?: MerchantMap): WaTransaction[] {
   const HEADER = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),\s*\d{1,2}:\d{2}\s*-\s*([^:]+):\s*(.*)/;
