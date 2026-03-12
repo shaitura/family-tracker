@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, MessageSquare, Loader2, CheckCircle, AlertTriangle, X, Pencil, Save } from 'lucide-react';
+import { Upload, MessageSquare, Loader2, CheckCircle, AlertTriangle, X, Pencil, Save, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { base44, buildMerchantMap, parseWhatsAppExport, WaTransaction } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toaster';
-import { Transaction, CATEGORIES, INCOME_CATEGORIES, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass } from '@/types';
+import { Transaction, CATEGORIES, INCOME_CATEGORIES, Category, IncomeCategory, Payer, ExpenseClass } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
 
 const PAYER_LABELS: Record<Payer, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
@@ -61,10 +61,12 @@ export default function Import() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
-      setPreview([]);
+      const savedCount = selected.size;
+      // Keep only items that were NOT saved (unsaved + needs-clarification remain)
+      setPreview((prev) => prev.filter((_, i) => !selected.has(i)));
       setSelected(new Set());
-      setText('');
-      toast({ title: `${selected.size} עסקאות נוספו בהצלחה!`, variant: 'success' });
+      setEditingIndex(null);
+      toast({ title: `${savedCount} עסקאות נוספו בהצלחה!`, variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
   });
@@ -132,17 +134,30 @@ export default function Import() {
 
   const commitEdit = () => {
     if (editDraft === null || editingIndex === null) return;
-    setPreview((prev) => prev.map((t, i) => i === editingIndex ? { ...editDraft, uncertain: false } : t));
-    // Auto-select the edited row
+    setPreview((prev) => prev.map((t, i) => i === editingIndex ? { ...editDraft, uncertain: false, needsClarification: false } : t));
     setSelected((prev) => { const n = new Set(prev); n.add(editingIndex); return n; });
     setEditingIndex(null);
     setEditDraft(null);
   };
 
+  const toggleClarification = (e: React.MouseEvent, i: number) => {
+    e.stopPropagation();
+    setPreview((prev) => prev.map((t, idx) =>
+      idx === i ? { ...t, needsClarification: !t.needsClarification, uncertain: false } : t
+    ));
+    // Deselect if marking for clarification
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (!preview[i].needsClarification) n.delete(i); // marking → deselect
+      return n;
+    });
+  };
+
   const setDraft = <K extends keyof WaTransaction>(k: K, v: WaTransaction[K]) =>
     setEditDraft((d) => d ? { ...d, [k]: v } : d);
 
-  const uncertainCount = preview.filter((t) => t.uncertain).length;
+  const clarificationCount = preview.filter((t) => t.needsClarification).length;
+  const uncertainCount = preview.filter((t) => t.uncertain && !t.needsClarification).length;
   const selectedCount = selected.size;
 
   return (
@@ -222,20 +237,31 @@ export default function Import() {
       <AnimatePresence>
         {preview.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+
+            {/* Clarification banner */}
+            {clarificationCount > 0 && (
+              <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-orange-400 shrink-0" />
+                <p className="text-xs text-orange-300">
+                  <span className="font-bold">{clarificationCount}</span> פריטים ממתינים לבירור — יישארו ברשימה לאחר השמירה
+                </p>
+              </div>
+            )}
+
             {/* Header row */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-white">{preview.length} עסקאות זוהו</p>
+                <p className="text-sm font-medium text-white">{preview.length} פריטים ברשימה</p>
                 {uncertainCount > 0 && (
                   <p className="text-xs text-amber-400 flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" />
-                    {uncertainCount} פריטים דורשים בדיקה — לא נבחרו אוטומטית
+                    {uncertainCount} דורשים בדיקה — לא נבחרו אוטומטית
                   </p>
                 )}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setSelected(new Set(preview.map((_, i) => i)))} className="text-xs text-cyan-400 hover:text-cyan-300">בחר הכל</button>
-                <button onClick={() => setSelected(new Set(preview.map((_, i) => i).filter((i) => !preview[i].uncertain)))} className="text-xs text-white/50 hover:text-white/70">רק ודאיים</button>
+                <button onClick={() => setSelected(new Set(preview.map((_, i) => i).filter((i) => !preview[i].needsClarification)))} className="text-xs text-cyan-400 hover:text-cyan-300">בחר הכל</button>
+                <button onClick={() => setSelected(new Set(preview.map((_, i) => i).filter((i) => !preview[i].uncertain && !preview[i].needsClarification)))} className="text-xs text-white/50 hover:text-white/70">רק ודאיים</button>
                 <button onClick={() => setSelected(new Set())} className="text-xs text-white/30 hover:text-white/50">נקה</button>
               </div>
             </div>
@@ -247,19 +273,27 @@ export default function Import() {
                   {/* ── View row ── */}
                   {editingIndex !== i && (
                     <div
-                      onClick={() => toggleSelect(i)}
-                      className={`rounded-xl border px-3 py-2.5 cursor-pointer transition-all flex items-center gap-3 ${
-                        tx.uncertain
-                          ? selected.has(i) ? 'border-amber-500/50 bg-amber-500/10' : 'border-amber-500/20 bg-amber-500/5 opacity-70'
-                          : selected.has(i) ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-white/10 bg-white/5 opacity-50'
+                      onClick={() => !tx.needsClarification && toggleSelect(i)}
+                      className={`rounded-xl border px-3 py-2.5 transition-all flex items-center gap-3 ${
+                        tx.needsClarification
+                          ? 'border-orange-500/40 bg-orange-500/8 cursor-default opacity-80'
+                          : tx.uncertain
+                            ? selected.has(i) ? 'border-amber-500/50 bg-amber-500/10 cursor-pointer' : 'border-amber-500/20 bg-amber-500/5 opacity-70 cursor-pointer'
+                            : selected.has(i) ? 'border-cyan-500/40 bg-cyan-500/10 cursor-pointer' : 'border-white/10 bg-white/5 opacity-50 cursor-pointer'
                       }`}
                     >
-                      {/* Checkbox */}
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        selected.has(i) ? (tx.uncertain ? 'border-amber-400 bg-amber-400' : 'border-cyan-500 bg-cyan-500') : 'border-white/30'
-                      }`}>
-                        {selected.has(i) && <CheckCircle className="w-3 h-3 text-white" />}
-                      </div>
+                      {/* Checkbox / clarification icon */}
+                      {tx.needsClarification ? (
+                        <div className="w-5 h-5 rounded-full border-2 border-orange-400/60 flex items-center justify-center shrink-0">
+                          <HelpCircle className="w-3 h-3 text-orange-400" />
+                        </div>
+                      ) : (
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          selected.has(i) ? (tx.uncertain ? 'border-amber-400 bg-amber-400' : 'border-cyan-500 bg-cyan-500') : 'border-white/30'
+                        }`}>
+                          {selected.has(i) && <CheckCircle className="w-3 h-3 text-white" />}
+                        </div>
+                      )}
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
@@ -284,10 +318,18 @@ export default function Import() {
                           {tx.type === 'income' && (
                             <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full px-1.5 py-0.5">הכנסה</span>
                           )}
+                          {tx.expense_class === 'קבועה' && (
+                            <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full px-1.5 py-0.5">קבועה</span>
+                          )}
                           {tx.installments && tx.installments > 1 && (
                             <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full px-1.5 py-0.5">{tx.installments} תשלומים</span>
                           )}
-                          {tx.uncertain && (
+                          {tx.needsClarification && (
+                            <span className="text-[10px] bg-orange-500/20 text-orange-300 border border-orange-500/30 rounded-full px-1.5 py-0.5 flex items-center gap-0.5">
+                              <HelpCircle className="w-2.5 h-2.5" /> בירור נוסף
+                            </span>
+                          )}
+                          {tx.uncertain && !tx.needsClarification && (
                             <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full px-1.5 py-0.5 flex items-center gap-0.5">
                               <AlertTriangle className="w-2.5 h-2.5" /> בדוק
                             </span>
@@ -295,7 +337,7 @@ export default function Import() {
                         </div>
                       </div>
 
-                      {/* Edit + deselect buttons */}
+                      {/* Action buttons */}
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => openEdit(e, i)}
@@ -303,6 +345,17 @@ export default function Import() {
                           title="ערוך"
                         >
                           <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => toggleClarification(e, i)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            tx.needsClarification
+                              ? 'text-orange-400 bg-orange-500/20 hover:bg-orange-500/10'
+                              : 'text-white/30 hover:text-orange-400 hover:bg-white/10'
+                          }`}
+                          title={tx.needsClarification ? 'הסר סימון בירור' : 'דרוש בירור נוסף'}
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
                         </button>
                         {selected.has(i) && (
                           <button
@@ -347,22 +400,11 @@ export default function Import() {
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[10px] text-white/50 block mb-1">תאריך</label>
-                          <Input
-                            type="date"
-                            value={editDraft.date || ''}
-                            onChange={(e) => setDraft('date', e.target.value)}
-                            className="h-8 text-xs"
-                          />
+                          <Input type="date" value={editDraft.date || ''} onChange={(e) => setDraft('date', e.target.value)} className="h-8 text-xs" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/50 block mb-1">סכום (₪)</label>
-                          <Input
-                            type="number"
-                            value={editDraft.amount || ''}
-                            onChange={(e) => setDraft('amount', parseFloat(e.target.value) || 0)}
-                            className="h-8 text-xs"
-                            min="0" step="0.01"
-                          />
+                          <Input type="number" value={editDraft.amount || ''} onChange={(e) => setDraft('amount', parseFloat(e.target.value) || 0)} className="h-8 text-xs" min="0" step="0.01" />
                         </div>
                       </div>
 
@@ -398,6 +440,43 @@ export default function Import() {
                           ))}
                         </select>
                       </div>
+
+                      {/* Expense class (only for expenses) */}
+                      {editDraft.type === 'expense' && (
+                        <div>
+                          <label className="text-[10px] text-white/50 block mb-1">סוג הוצאה</label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(['משתנה', 'קבועה'] as ExpenseClass[]).map((cls) => (
+                              <button
+                                key={cls}
+                                onClick={() => setDraft('expense_class', cls)}
+                                className={`py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                                  editDraft.expense_class === cls
+                                    ? 'bg-purple-500/30 border-purple-500/60 text-purple-300'
+                                    : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                                }`}
+                              >
+                                {cls === 'משתנה' ? '🔄 משתנה' : '📌 קבועה'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Installments (only for expenses) */}
+                      {editDraft.type === 'expense' && (
+                        <div>
+                          <label className="text-[10px] text-white/50 block mb-1">מספר תשלומים</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="36"
+                            value={editDraft.installments || 1}
+                            onChange={(e) => setDraft('installments', parseInt(e.target.value) || 1)}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      )}
 
                       {/* Notes */}
                       <div>
@@ -438,7 +517,7 @@ export default function Import() {
             >
               {saving
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> שומר...</>
-                : `💾 שמור ${selectedCount} עסקאות`}
+                : `💾 שמור ${selectedCount} עסקאות${clarificationCount > 0 ? ` (${clarificationCount} לבירור יישארו)` : ''}`}
             </Button>
           </motion.div>
         )}
