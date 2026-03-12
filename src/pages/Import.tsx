@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Sparkles, Loader2, CheckCircle, FileText, X } from 'lucide-react';
+import { Upload, MessageSquare, Loader2, CheckCircle, AlertTriangle, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { base44 } from '@/lib/base44Client';
+import { base44, buildMerchantMap, parseWhatsAppExport, WaTransaction } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,31 +12,49 @@ import { useToast } from '@/components/ui/toaster';
 import { Transaction, CATEGORIES, Category, Payer } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
 
+const PAYER_LABELS: Record<Payer, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
+const PAYER_COLORS: Record<Payer, string> = {
+  Shi: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  Ortal: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  Joint: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+};
+
 export default function Import() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [mode, setMode] = useState<'whatsapp' | 'file'>('whatsapp');
   const [text, setText] = useState('');
   const [parsing, setParsing] = useState(false);
-  const [preview, setPreview] = useState<Partial<Transaction>[]>([]);
+  const [preview, setPreview] = useState<WaTransaction[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const { data: allTransactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => base44.entities.Transaction.filter(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const merchantMap = useMemo(() => buildMerchantMap(allTransactions), [allTransactions]);
 
   const { mutate: saveAll, isPending: saving } = useMutation({
     mutationFn: async () => {
       const toSave = preview.filter((_, i) => selected.has(i));
-      await Promise.all(toSave.map((t) => base44.entities.Transaction.create({
-        date: t.date || new Date().toISOString().split('T')[0],
-        type: t.type || 'expense',
-        category: t.category || 'שונות',
-        amount: t.amount || 0,
-        payer: (t.payer as Payer) || 'Shi',
-        payment_method: t.payment_method || 'אשראי',
-        expense_class: t.expense_class || 'משתנה',
-        status: t.status || 'paid',
-        notes: t.notes,
-        sub_category: t.sub_category,
-      } as Omit<Transaction, 'id'>)));
+      await base44.entities.Transaction.bulkCreate(
+        toSave.map((t) => ({
+          date: t.date || new Date().toISOString().split('T')[0],
+          type: t.type || 'expense',
+          category: t.category || 'שונות',
+          amount: t.amount || 0,
+          payer: (t.payer as Payer) || 'Shi',
+          payment_method: t.payment_method || 'אשראי',
+          expense_class: t.expense_class || 'משתנה',
+          status: t.status || 'paid',
+          notes: t.notes,
+          sub_category: t.sub_category,
+          installments: t.installments,
+        } as Omit<Transaction, 'id'>)),
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
@@ -45,17 +63,27 @@ export default function Import() {
       setText('');
       toast({ title: `${selected.size} עסקאות נוספו בהצלחה!`, variant: 'success' });
     },
+    onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
   });
 
-  const parseText = async () => {
+  const parseWhatsApp = () => {
     if (!text.trim()) return;
     setParsing(true);
     try {
-      const res = await base44.integrations.Core.InvokeLLM({ prompt: text });
-      const txs = res.transactions ?? [];
+      const txs = parseWhatsAppExport(text, merchantMap);
       setPreview(txs);
-      setSelected(new Set(txs.map((_, i) => i)));
-      if (txs.length === 0) toast({ title: 'לא נמצאו עסקאות בטקסט', variant: 'destructive' });
+      // Auto-select all non-uncertain items
+      setSelected(new Set(txs.map((_, i) => i).filter((i) => !txs[i].uncertain)));
+      if (txs.length === 0) {
+        toast({ title: 'לא נמצאו עסקאות בטקסט', variant: 'destructive' });
+      } else {
+        const uncertain = txs.filter((t) => t.uncertain).length;
+        toast({
+          title: `נמצאו ${txs.length} עסקאות`,
+          description: uncertain > 0 ? `${uncertain} פריטים דורשים בדיקה (מסומנים בצהוב)` : 'הכל נראה תקין!',
+          variant: 'success',
+        });
+      }
     } finally {
       setParsing(false);
     }
@@ -70,11 +98,12 @@ export default function Import() {
         const wb = XLSX.read(ev.target?.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
-        const txs: Partial<Transaction>[] = rows.map((row) => {
+        const txs: WaTransaction[] = rows.map((row) => {
           const amount = parseFloat(String(row['סכום'] || row['amount'] || row['Amount'] || 0));
           const date = String(row['תאריך'] || row['date'] || new Date().toISOString().split('T')[0]);
           const category = (String(row['קטגוריה'] || row['category'] || 'שונות')) as Category;
-          return { date, amount, category: category as Category, type: 'expense' as const, payer: 'Shi' as const, payment_method: 'אשראי' as const, expense_class: 'משתנה' as const, status: 'paid' as const, notes: String(row['הערות'] || row['notes'] || '') };
+          const payer = (String(row['משלם'] || row['payer'] || 'Shi')) as Payer;
+          return { date, amount, category, type: 'expense' as const, payer, payment_method: 'אשראי' as const, expense_class: 'משתנה' as const, status: 'paid' as const, notes: String(row['הערות'] || row['notes'] || '') };
         }).filter((t) => t.amount && t.amount > 0);
         setPreview(txs);
         setSelected(new Set(txs.map((_, i) => i)));
@@ -87,86 +116,172 @@ export default function Import() {
     e.target.value = '';
   };
 
-  const toggleSelect = (i: number) => {
-    setSelected((prev) => {
-      const n = new Set(prev);
-      n.has(i) ? n.delete(i) : n.add(i);
-      return n;
-    });
-  };
+  const toggleSelect = (i: number) =>
+    setSelected((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
+
+  const uncertainCount = preview.filter((t) => t.uncertain).length;
+  const selectedCount = selected.size;
 
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
       <h1 className="text-lg font-bold text-white">ייבוא עסקאות</h1>
 
-      {/* WhatsApp text import */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-400" />
-            <CardTitle className="text-sm">ייבוא מטקסט WhatsApp / AI</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={`הדבק כאן טקסט עם עסקאות, לדוגמה:\n15/03 רמי לוי 340₪\n16/03 דלק פז 280 ש"ח\n17/03 קפה עלמא 45.50`}
-            rows={5}
-            dir="rtl"
-          />
-          <Button onClick={parseText} disabled={parsing || !text.trim()} className="w-full" variant="gradient">
-            {parsing ? <><Loader2 className="w-4 h-4 animate-spin" /> מפרסר...</> : <><Sparkles className="w-4 h-4" /> פרסר עם AI</>}
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Mode toggle */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setMode('whatsapp')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            mode === 'whatsapp' ? 'bg-green-500/20 border border-green-500/40 text-green-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" /> WhatsApp
+        </button>
+        <button
+          onClick={() => setMode('file')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            mode === 'file' ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
+          }`}
+        >
+          <Upload className="w-4 h-4" /> Excel / CSV
+        </button>
+      </div>
 
-      {/* File upload */}
-      <Card className="border-dashed border-white/20 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => fileRef.current?.click()}>
-        <CardContent className="py-6 text-center">
-          <Upload className="w-8 h-8 text-white/30 mx-auto mb-2" />
-          <p className="text-sm text-white/60">לחץ לטעינת קובץ CSV / Excel</p>
-          <p className="text-xs text-white/30 mt-1">עמודות נדרשות: תאריך, סכום, קטגוריה</p>
-          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFile} />
-        </CardContent>
-      </Card>
+      {/* WhatsApp mode */}
+      <AnimatePresence mode="wait">
+        {mode === 'whatsapp' && (
+          <motion.div key="wa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-green-400" />
+                  הדבק כאן טקסט מיצוא WhatsApp
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={"1/1/26, 10:57 - אורטלטל שלי - Ortal: סופרפארם 79.9₪\n1/1/26, 12:00 - Shai Tura: יוחננוף 245\n..."}
+                  rows={6}
+                  dir="rtl"
+                  className="font-mono text-xs"
+                />
+                <div className="flex items-center gap-2 text-xs text-white/40">
+                  <span>✓ מזהה שי/אורטל אוטומטית</span>
+                  <span>·</span>
+                  <span>✓ מסנן שיחות</span>
+                  <span>·</span>
+                  <span>✓ מסווג לפי היסטוריה</span>
+                </div>
+                <Button onClick={parseWhatsApp} disabled={parsing || !text.trim()} className="w-full" variant="gradient">
+                  {parsing ? <><Loader2 className="w-4 h-4 animate-spin" /> מפרסר...</> : <><MessageSquare className="w-4 h-4" /> פרסר WhatsApp</>}
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {mode === 'file' && (
+          <motion.div key="file" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Card className="border-dashed border-white/20 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => fileRef.current?.click()}>
+              <CardContent className="py-8 text-center">
+                <Upload className="w-10 h-10 text-white/30 mx-auto mb-3" />
+                <p className="text-sm text-white/60">לחץ לטעינת קובץ CSV / Excel</p>
+                <p className="text-xs text-white/30 mt-1">עמודות: תאריך, סכום, קטגוריה, משלם, הערות</p>
+                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFile} />
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Preview */}
       <AnimatePresence>
         {preview.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            {/* Header row */}
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-white">תצוגה מקדימה ({preview.length} עסקאות)</p>
-              <div className="flex gap-2">
-                <button onClick={() => setSelected(new Set(preview.map((_, i) => i)))} className="text-xs text-cyan-400">בחר הכל</button>
-                <button onClick={() => setSelected(new Set())} className="text-xs text-white/40">נקה</button>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-sm font-medium text-white">{preview.length} עסקאות זוהו</p>
+                {uncertainCount > 0 && (
+                  <p className="text-xs text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {uncertainCount} פריטים דורשים בדיקה — לא נבחרו אוטומטית
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setSelected(new Set(preview.map((_, i) => i)))} className="text-xs text-cyan-400 hover:text-cyan-300">בחר הכל</button>
+                <button onClick={() => setSelected(new Set(preview.map((_, i) => i).filter((i) => !preview[i].uncertain)))} className="text-xs text-white/50 hover:text-white/70">רק ודאיים</button>
+                <button onClick={() => setSelected(new Set())} className="text-xs text-white/30 hover:text-white/50">נקה</button>
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
               {preview.map((tx, i) => (
-                <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
+                <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.015, 0.3) }}>
                   <div
                     onClick={() => toggleSelect(i)}
-                    className={`rounded-xl border px-4 py-3 cursor-pointer transition-all flex items-center gap-3 ${selected.has(i) ? 'border-cyan-500/40 bg-cyan-500/10' : 'border-white/10 bg-white/5 opacity-60'}`}
+                    className={`rounded-xl border px-3 py-2.5 cursor-pointer transition-all flex items-center gap-3 ${
+                      tx.uncertain
+                        ? selected.has(i)
+                          ? 'border-amber-500/50 bg-amber-500/10'
+                          : 'border-amber-500/20 bg-amber-500/5 opacity-70'
+                        : selected.has(i)
+                          ? 'border-cyan-500/40 bg-cyan-500/10'
+                          : 'border-white/10 bg-white/5 opacity-50'
+                    }`}
                   >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected.has(i) ? 'border-cyan-500 bg-cyan-500' : 'border-white/30'}`}>
+                    {/* Checkbox */}
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selected.has(i) ? (tx.uncertain ? 'border-amber-400 bg-amber-400' : 'border-cyan-500 bg-cyan-500') : 'border-white/30'
+                    }`}>
                       {selected.has(i) && <CheckCircle className="w-3 h-3 text-white" />}
                     </div>
+
+                    {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-sm text-white truncate">{tx.notes || tx.category}</p>
-                        <p className="text-sm font-bold text-rose-400 shrink-0">{tx.amount ? formatCurrency(tx.amount) : '—'}</p>
+                        <p className={`text-sm font-bold shrink-0 ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {tx.type === 'income' ? '+' : ''}{tx.amount ? formatCurrency(tx.amount) : '—'}
+                        </p>
                       </div>
-                      <div className="flex gap-1.5 mt-1">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         <span className="text-xs text-white/40">{tx.date}</span>
+                        {tx.payer && (
+                          <span className={`text-[10px] border rounded-full px-1.5 py-0.5 font-medium ${PAYER_COLORS[tx.payer as Payer]}`}>
+                            {PAYER_LABELS[tx.payer as Payer]}
+                          </span>
+                        )}
                         {tx.category && (
                           <Badge className="text-[10px] px-1.5 py-0" style={{ backgroundColor: categoryColor(tx.category) + '25', color: categoryColor(tx.category), borderColor: categoryColor(tx.category) + '40' }}>
                             {tx.category}
                           </Badge>
                         )}
+                        {tx.type === 'income' && (
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full px-1.5 py-0.5">הכנסה</span>
+                        )}
+                        {tx.installments && tx.installments > 1 && (
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full px-1.5 py-0.5">{tx.installments} תשלומים</span>
+                        )}
+                        {tx.uncertain && (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full px-1.5 py-0.5 flex items-center gap-0.5">
+                            <AlertTriangle className="w-2.5 h-2.5" /> בדוק
+                          </span>
+                        )}
                       </div>
                     </div>
+
+                    {/* Deselect button */}
+                    {selected.has(i) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleSelect(i); }}
+                        className="shrink-0 text-white/30 hover:text-white/60"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -174,11 +289,13 @@ export default function Import() {
 
             <Button
               onClick={() => saveAll()}
-              disabled={saving || selected.size === 0}
+              disabled={saving || selectedCount === 0}
               className="w-full"
               size="lg"
             >
-              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> שומר...</> : `💾 שמור ${selected.size} עסקאות`}
+              {saving
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> שומר...</>
+                : `💾 שמור ${selectedCount} עסקאות`}
             </Button>
           </motion.div>
         )}

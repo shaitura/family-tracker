@@ -3,7 +3,7 @@ import {
   query, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Transaction, Budget, Asset, Category } from '@/types';
+import { Transaction, Budget, Asset, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Firestore entity factory  (same public API as the old localStorage version)
@@ -260,6 +260,167 @@ function parseTransactionText(text: string, merchantMap?: MerchantMap): Partial<
 
     results.push({ date, amount, category, type: 'expense', payer: 'Shi', payment_method: 'אשראי', expense_class: 'משתנה', status: 'paid', notes: description });
   }
+  return results;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// WhatsApp export parser
+// ────────────────────────────────────────────────────────────────────────────
+
+function waSenderToPayer(sender: string): Payer {
+  const s = sender.toLowerCase();
+  if (s.includes('ortal') || s.includes('אורטל')) return 'Ortal';
+  return 'Shi';
+}
+
+function waParseDate(day: string, month: string, year: string): string {
+  const yr = year.length === 2 ? '20' + year : year;
+  return `${yr}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function waExtractAmount(line: string): { amount: number; hasDollar: boolean } | null {
+  // Remove time patterns to avoid "10:57" being treated as amounts
+  const clean = line.replace(/\d{1,2}:\d{2}/g, '');
+
+  // X+Y sum pattern (e.g. "פארין 35+17")
+  const sumMatch = clean.match(/(\d+(?:[.,]\d{1,2})?)\s*\+\s*(\d+(?:[.,]\d{1,2})?)/);
+  if (sumMatch) {
+    const a = parseFloat(sumMatch[1].replace(',', '.'));
+    const b = parseFloat(sumMatch[2].replace(',', '.'));
+    if (a >= 1 && b >= 1) return { amount: a + b, hasDollar: false };
+  }
+
+  // Explicit ₪ or ש"ח
+  const shekelMatch = clean.match(/([0-9,]+(?:\.\d{1,2})?)\s*(?:₪|ש"ח|שח)/);
+  if (shekelMatch) {
+    const amt = parseFloat(shekelMatch[1].replace(',', ''));
+    if (amt >= 1) return { amount: amt, hasDollar: false };
+  }
+
+  // Dollar $
+  const dollarMatch = clean.match(/(\d+(?:[.,]\d{1,2})?)\s*\$/);
+  if (dollarMatch) {
+    const amt = parseFloat(dollarMatch[1].replace(',', '.'));
+    if (amt >= 1) return { amount: amt, hasDollar: true };
+  }
+  const dollarMatch2 = clean.match(/\$\s*(\d+(?:[.,]\d{1,2})?)/);
+  if (dollarMatch2) {
+    const amt = parseFloat(dollarMatch2[1].replace(',', '.'));
+    if (amt >= 1) return { amount: amt, hasDollar: true };
+  }
+
+  // Plain number — take the last one as the amount (description usually comes first)
+  const nums = [...clean.matchAll(/(\d{1,6}(?:[.,]\d{1,2})?)/g)]
+    .map((m) => parseFloat(m[1].replace(',', '.')))
+    .filter((n) => n >= 2 && n <= 200000);
+  if (!nums.length) return null;
+  return { amount: nums[nums.length - 1], hasDollar: false };
+}
+
+export type WaTransaction = Partial<Transaction> & { uncertain?: boolean };
+
+export function parseWhatsAppExport(text: string, merchantMap?: MerchantMap): WaTransaction[] {
+  const HEADER = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),\s*\d{1,2}:\d{2}\s*-\s*([^:]+):\s*(.*)/;
+
+  interface Block { date: string; payer: Payer; bodyLines: string[] }
+  const blocks: Block[] = [];
+
+  for (const line of text.split('\n')) {
+    const m = HEADER.exec(line);
+    if (m) {
+      const [, day, month, year, sender, body] = m;
+      blocks.push({ date: waParseDate(day, month, year), payer: waSenderToPayer(sender), bodyLines: [body] });
+    } else if (blocks.length > 0 && line.trim()) {
+      blocks[blocks.length - 1].bodyLines.push(line);
+    }
+  }
+
+  const results: WaTransaction[] = [];
+
+  for (const { date, payer, bodyLines } of blocks) {
+    for (const rawLine of bodyLines) {
+      // Clean system markers
+      const line = rawLine
+        .replace(/<This message was edited>/g, '')
+        .replace(/\(file attached\)/g, '')
+        .replace(/[\u200e\u200f]/g, '') // RTL/LTR marks
+        .trim();
+
+      if (!line || line.length < 2) continue;
+      // Skip media/link lines
+      if (/\.(jpg|jpeg|png|mp4|opus|webp)/i.test(line)) continue;
+      if (line.startsWith('http')) continue;
+      // Skip lines starting with ) which are side-notes added in message
+      if (line.startsWith(')')) continue;
+
+      const extracted = waExtractAmount(line);
+      if (!extracted) continue;
+      const { amount, hasDollar } = extracted;
+
+      // Determine type
+      let type: 'expense' | 'income' = 'expense';
+      if (/^הכנסה/.test(line)) type = 'income';
+      if (/(?:^|[\s])החזר[\s\u05d4-\u05ea]/.test(line) || /^החזר/.test(line)) type = 'income';
+
+      // Installments
+      let installments = 1;
+      const instMatch = line.match(/[ב\-–]?\s*(\d+)\s*תשלומים/);
+      if (instMatch) {
+        installments = parseInt(instMatch[1]);
+        // If two numbers exist and ratio matches installments, take the larger (total)
+        const allNums = [...line.matchAll(/([0-9,]+(?:\.\d{1,2})?)/g)]
+          .map((m) => parseFloat(m[1].replace(',', '')))
+          .filter((n) => n >= 2 && n <= 200000);
+        if (allNums.length >= 2) {
+          allNums.sort((a, b) => b - a);
+          const [large, small] = allNums;
+          if (Math.abs(large / installments - small) < 2) {
+            // large is total, small is per-installment
+            // keep large as amount
+          }
+        }
+      }
+
+      // Fixed expense detection
+      const isFixed = /לחודש|חודשי|חודשית/.test(line);
+
+      // Build description (strip amount, currency, installment text, emoji)
+      let desc = line
+        .replace(/\d{1,6}(?:[.,]\d{1,2})?\s*\+\s*\d{1,6}(?:[.,]\d{1,2})?/g, '')
+        .replace(/[0-9,]+(?:\.\d{1,2})?\s*(?:₪|ש"ח|שח|\$)?/g, '')
+        .replace(/[ב\-–]?\s*\d+\s*תשלומים/g, '')
+        .replace(/\(.*?\)/g, '')
+        .replace(/^הכנסה\s*[-–]\s*/, '')
+        .replace(/[₪$]/g, '')
+        .replace(/[\u{1F600}-\u{1F6FF}]/gu, '')
+        .replace(/😮|😶|❤️|🙂|☺️|😊|🤔/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const noDesc = !desc || desc.length < 2;
+      const isQuestion = /\?/.test(line.slice(-3));
+      const uncertain = hasDollar || isQuestion || noDesc;
+
+      const category =
+        (merchantMap ? guessCategoryFromMap(desc || line, merchantMap) : null) ??
+        guessCategory(desc || line);
+
+      results.push({
+        date,
+        type,
+        payer,
+        amount,
+        category,
+        notes: desc || undefined,
+        payment_method: 'אשראי' as PaymentMethod,
+        expense_class: (isFixed ? 'קבועה' : 'משתנה') as ExpenseClass,
+        status: 'paid' as Transaction['status'],
+        installments: installments > 1 ? installments : undefined,
+        uncertain,
+      });
+    }
+  }
+
   return results;
 }
 
