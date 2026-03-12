@@ -226,6 +226,7 @@ export default function Admin() {
   const [fixCatOpen, setFixCatOpen]             = useState(false);
   const [fixCatStatus, setFixCatStatus]         = useState('');
   const [fixCatLoading, setFixCatLoading]       = useState(false);
+  const [fixCatRows, setFixCatRows]             = useState<{ from: string; to: Category; count: number }[]>([]);
   const [deleteYearOpen, setDeleteYearOpen]     = useState(false);
   const [deleteYear, setDeleteYear]             = useState(new Date().getFullYear());
   const [deleteYearLoading, setDeleteYearLoading] = useState(false);
@@ -315,29 +316,23 @@ export default function Admin() {
   }
 
   // ── Fix categories in Firestore ─────────────────────────────────────────
-  const [fixCatPreview, setFixCatPreview] = useState<{ from: string; to: string; count: number }[]>([]);
 
   async function scanFixCategories() {
     setFixCatLoading(true);
-    setFixCatPreview([]);
+    setFixCatRows([]);
     setFixCatStatus('סורק עסקאות…');
     try {
       const all = await base44.entities.Transaction.filter();
-      const groups: Record<string, { to: string; count: number }> = {};
+      const counts: Record<string, number> = {};
       for (const t of all) {
-        const normalized = mapCategory(t.category);
-        if (normalized !== t.category) {
-          const key = `${t.category}→${normalized}`;
-          if (!groups[key]) groups[key] = { to: normalized, count: 0 };
-          groups[key].count++;
-        }
+        const key = String(t.category ?? '').trim() || '(ריק)';
+        counts[key] = (counts[key] ?? 0) + 1;
       }
-      const preview = Object.entries(groups).map(([key, { to, count }]) => ({
-        from: key.split('→')[0], to, count,
-      })).sort((a, b) => b.count - a.count);
-      setFixCatPreview(preview);
-      const total = preview.reduce((s, r) => s + r.count, 0);
-      setFixCatStatus(total === 0 ? `✅ כל ${all.length} הרשומות עם קטגוריה תקינה` : `נמצאו ${total} עסקאות לתיקון`);
+      const rows = Object.entries(counts)
+        .map(([from, count]) => ({ from, to: mapCategory(from), count }))
+        .sort((a, b) => b.count - a.count);
+      setFixCatRows(rows);
+      setFixCatStatus(`נמצאו ${rows.length} קטגוריות שונות ב-${all.length} עסקאות`);
     } catch (e) {
       setFixCatStatus(`❌ שגיאה: ${String(e)}`);
     }
@@ -345,20 +340,32 @@ export default function Admin() {
   }
 
   async function runFixCategories() {
+    const mapping: Record<string, Category> = {};
+    for (const row of fixCatRows) {
+      if (row.from !== row.to) mapping[row.from] = row.to;
+    }
+    if (Object.keys(mapping).length === 0) {
+      setFixCatStatus('✅ אין שינויים לבצע');
+      return;
+    }
     setFixCatLoading(true);
     setFixCatStatus('טוען עסקאות…');
     try {
       const all = await base44.entities.Transaction.filter();
-      const toFix = all.filter((t) => mapCategory(t.category) !== t.category);
+      const toFix = all.filter((t) => {
+        const key = String(t.category ?? '').trim() || '(ריק)';
+        return key in mapping;
+      });
       if (toFix.length === 0) { setFixCatStatus('✅ אין מה לתקן'); setFixCatLoading(false); return; }
       let done = 0;
       for (const t of toFix) {
-        await base44.entities.Transaction.update(t.id, { category: mapCategory(t.category) });
+        const key = String(t.category ?? '').trim() || '(ריק)';
+        await base44.entities.Transaction.update(t.id, { category: mapping[key] });
         done++;
         if (done % 20 === 0 || done === toFix.length) setFixCatStatus(`מתקן… ${done}/${toFix.length}`);
       }
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      setFixCatPreview([]);
+      setFixCatRows([]);
       setFixCatStatus(`✅ תוקנו ${toFix.length} עסקאות`);
     } catch (e) {
       setFixCatStatus(`❌ שגיאה: ${String(e)}`);
@@ -618,7 +625,7 @@ export default function Admin() {
             </button>
           )}
           <button onClick={exportCSV}        className="bg-gray-200  text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">⬇ ייצא CSV</button>
-          <button onClick={() => { setFixCatStatus(''); setFixCatPreview([]); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
+          <button onClick={() => { setFixCatStatus(''); setFixCatRows([]); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
           <button onClick={() => { setDeleteYearStatus(''); setDeleteYearOpen(true); }} className="bg-orange-100 text-orange-700 px-3 py-1.5 rounded text-sm hover:bg-orange-200 border border-orange-300">🗓 מחק שנה</button>
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
@@ -939,49 +946,89 @@ export default function Admin() {
       {/* ── Fix Categories Dialog ── */}
       {fixCatOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" dir="rtl">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl" dir="rtl">
             <div className="text-4xl mb-2 text-center">🔧</div>
             <h2 className="text-lg font-bold mb-1 text-center">תיקון קטגוריות בבסיס הנתונים</h2>
             <p className="text-gray-500 text-sm mb-3 text-center">
-              סורק ומנרמל קטגוריות לא-תקניות (לדוגמה: "דיור - שכירות" → "דיור").
+              סרוק את כל הקטגוריות הקיימות, ערוך את מיפוי היעד לפי הצורך, ולחץ "תקן".
             </p>
+
             {fixCatStatus && (
               <p className="text-sm font-medium text-teal-700 mb-3 bg-teal-50 rounded-lg px-3 py-2 text-center">{fixCatStatus}</p>
             )}
-            {fixCatPreview.length > 0 && (
-              <div className="mb-4 max-h-48 overflow-y-auto border rounded-lg text-sm">
+
+            {fixCatRows.length > 0 && (
+              <div className="mb-3 max-h-96 overflow-y-auto border rounded-lg text-sm">
                 <table className="w-full">
-                  <thead className="bg-gray-50 sticky top-0">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-600">קטגוריה נוכחית</th>
-                      <th className="px-2 py-1.5 text-center text-gray-400">→</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-600">אחרי תיקון</th>
-                      <th className="px-3 py-1.5 text-center font-medium text-gray-600">כמות</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-600 w-5/12">קטגוריה נוכחית</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-600 w-5/12">קטגוריה יעד</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-600 w-2/12">כמות</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {fixCatPreview.map((row) => (
-                      <tr key={row.from} className="border-t">
-                        <td className="px-3 py-1.5 text-red-600">{row.from}</td>
-                        <td className="px-2 py-1.5 text-center text-gray-400">→</td>
-                        <td className="px-3 py-1.5 text-green-700 font-medium">{row.to}</td>
-                        <td className="px-3 py-1.5 text-center text-gray-500">{row.count}</td>
+                    {fixCatRows.map((row, i) => (
+                      <tr key={row.from} className={`border-t ${row.from !== row.to ? 'bg-yellow-50' : ''}`}>
+                        <td className={`px-3 py-1.5 font-mono text-sm ${row.from !== row.to ? 'text-red-600' : 'text-gray-700'}`}>
+                          {row.from}
+                        </td>
+                        <td className="px-2 py-1">
+                          <select
+                            value={row.to}
+                            onChange={(e) => {
+                              const updated = [...fixCatRows];
+                              updated[i] = { ...row, to: e.target.value as Category };
+                              setFixCatRows(updated);
+                            }}
+                            className={`w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400
+                              ${row.from !== row.to ? 'border-teal-400 bg-teal-50 text-teal-800 font-medium' : 'border-gray-200 text-gray-700'}`}
+                          >
+                            {CATEGORIES.map((cat) => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-1.5 text-center text-gray-500 tabular-nums">{row.count}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+
+            {fixCatRows.length > 0 && (
+              <p className="text-xs text-gray-400 mb-3 text-center">
+                שורות מסומנות בצהוב יעודכנו · לחץ על הרשימה הנפתחת לשינוי יעד
+              </p>
+            )}
+
             <div className="flex gap-3 justify-center">
-              <button onClick={() => { setFixCatOpen(false); setFixCatStatus(''); setFixCatPreview([]); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm" disabled={fixCatLoading}>סגור</button>
-              {fixCatPreview.length === 0 && !fixCatStatus.startsWith('✅') && (
-                <button onClick={scanFixCategories} disabled={fixCatLoading} className="px-5 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium disabled:opacity-60">
-                  {fixCatLoading ? 'סורק…' : 'סרוק →'}
+              <button
+                onClick={() => { setFixCatOpen(false); setFixCatStatus(''); setFixCatRows([]); }}
+                className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm"
+                disabled={fixCatLoading}
+              >
+                סגור
+              </button>
+              {fixCatRows.length === 0 && (
+                <button
+                  onClick={scanFixCategories}
+                  disabled={fixCatLoading}
+                  className="px-5 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium disabled:opacity-60"
+                >
+                  {fixCatLoading ? 'סורק…' : '🔍 סרוק'}
                 </button>
               )}
-              {fixCatPreview.length > 0 && (
-                <button onClick={runFixCategories} disabled={fixCatLoading} className="px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium disabled:opacity-60">
-                  {fixCatLoading ? 'מתקן…' : `תקן ${fixCatPreview.reduce((s,r)=>s+r.count,0)} עסקאות →`}
+              {fixCatRows.length > 0 && (
+                <button
+                  onClick={runFixCategories}
+                  disabled={fixCatLoading || fixCatRows.every((r) => r.from === r.to)}
+                  className="px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium disabled:opacity-60"
+                >
+                  {fixCatLoading
+                    ? 'מתקן…'
+                    : `✅ תקן ${fixCatRows.filter((r) => r.from !== r.to).reduce((s, r) => s + r.count, 0)} עסקאות`}
                 </button>
               )}
             </div>
