@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { base44, migrateLocalToFirestore, hasLocalData } from '@/lib/base44Client';
-import { Transaction, CATEGORIES, PAYMENT_METHODS, Category, PaymentMethod } from '@/types';
+import { Transaction, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, PaymentMethod } from '@/types';
 
 // Display labels for enum values stored in English
 const OPTION_LABELS: Record<string, Record<string, string>> = {
@@ -136,6 +136,12 @@ function mapCategory(raw: string): Category {
   return 'שונות';
 }
 
+function mapIncomeCategory(raw: string): IncomeCategory {
+  const s = String(raw ?? '').trim();
+  if (INCOME_CATEGORIES.includes(s as IncomeCategory)) return s as IncomeCategory;
+  return 'משכורת';
+}
+
 function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[] {
   const results: MonthPreview[] = [];
 
@@ -226,7 +232,7 @@ export default function Admin() {
   const [fixCatOpen, setFixCatOpen]             = useState(false);
   const [fixCatStatus, setFixCatStatus]         = useState('');
   const [fixCatLoading, setFixCatLoading]       = useState(false);
-  const [fixCatRows, setFixCatRows]             = useState<{ from: string; to: Category; count: number }[]>([]);
+  const [fixCatRows, setFixCatRows]             = useState<{ from: string; to: string; count: number; txType: 'expense' | 'income' }[]>([]);
   const [deleteYearOpen, setDeleteYearOpen]     = useState(false);
   const [deleteYear, setDeleteYear]             = useState(new Date().getFullYear());
   const [deleteYearLoading, setDeleteYearLoading] = useState(false);
@@ -323,14 +329,25 @@ export default function Admin() {
     setFixCatStatus('סורק עסקאות…');
     try {
       const all = await base44.entities.Transaction.filter();
-      const counts: Record<string, number> = {};
+      // Group by [txType, category] so expense and income are handled separately
+      const counts: Record<string, { count: number; txType: 'expense' | 'income' }> = {};
       for (const t of all) {
-        const key = String(t.category ?? '').trim() || '(ריק)';
-        counts[key] = (counts[key] ?? 0) + 1;
+        const txType = t.type === 'income' ? 'income' : 'expense';
+        const cat = String(t.category ?? '').trim() || '(ריק)';
+        const key = `${txType}::${cat}`;
+        if (!counts[key]) counts[key] = { count: 0, txType };
+        counts[key].count++;
       }
       const rows = Object.entries(counts)
-        .map(([from, count]) => ({ from, to: mapCategory(from), count }))
-        .sort((a, b) => b.count - a.count);
+        .map(([key, { count, txType }]) => {
+          const from = key.slice(key.indexOf('::') + 2);
+          const to = txType === 'income' ? mapIncomeCategory(from) : mapCategory(from);
+          return { from, to, count, txType };
+        })
+        .sort((a, b) => {
+          if (a.txType !== b.txType) return a.txType === 'expense' ? -1 : 1;
+          return b.count - a.count;
+        });
       setFixCatRows(rows);
       setFixCatStatus(`נמצאו ${rows.length} קטגוריות שונות ב-${all.length} עסקאות`);
     } catch (e) {
@@ -340,9 +357,10 @@ export default function Admin() {
   }
 
   async function runFixCategories() {
-    const mapping: Record<string, Category> = {};
+    // mapping key: `txType::from` → target category string
+    const mapping: Record<string, string> = {};
     for (const row of fixCatRows) {
-      if (row.from !== row.to) mapping[row.from] = row.to;
+      if (row.from !== row.to) mapping[`${row.txType}::${row.from}`] = row.to;
     }
     if (Object.keys(mapping).length === 0) {
       setFixCatStatus('✅ אין שינויים לבצע');
@@ -353,14 +371,17 @@ export default function Admin() {
     try {
       const all = await base44.entities.Transaction.filter();
       const toFix = all.filter((t) => {
-        const key = String(t.category ?? '').trim() || '(ריק)';
-        return key in mapping;
+        const txType = t.type === 'income' ? 'income' : 'expense';
+        const cat = String(t.category ?? '').trim() || '(ריק)';
+        return `${txType}::${cat}` in mapping;
       });
       if (toFix.length === 0) { setFixCatStatus('✅ אין מה לתקן'); setFixCatLoading(false); return; }
       let done = 0;
       for (const t of toFix) {
-        const key = String(t.category ?? '').trim() || '(ריק)';
-        await base44.entities.Transaction.update(t.id, { category: mapping[key] });
+        const txType = t.type === 'income' ? 'income' : 'expense';
+        const cat = String(t.category ?? '').trim() || '(ריק)';
+        const newCat = mapping[`${txType}::${cat}`];
+        await base44.entities.Transaction.update(t.id, { category: newCat as Category });
         done++;
         if (done % 20 === 0 || done === toFix.length) setFixCatStatus(`מתקן… ${done}/${toFix.length}`);
       }
@@ -962,14 +983,20 @@ export default function Admin() {
                 <table className="w-full">
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600 w-5/12">קטגוריה נוכחית</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-600">סוג</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-600 w-4/12">קטגוריה נוכחית</th>
                       <th className="px-3 py-2 text-right font-medium text-gray-600 w-5/12">קטגוריה יעד</th>
-                      <th className="px-3 py-2 text-center font-medium text-gray-600 w-2/12">כמות</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-600">כמות</th>
                     </tr>
                   </thead>
                   <tbody>
                     {fixCatRows.map((row, i) => (
-                      <tr key={row.from} className={`border-t ${row.from !== row.to ? 'bg-yellow-50' : ''}`}>
+                      <tr key={`${row.txType}::${row.from}`} className={`border-t ${row.from !== row.to ? 'bg-yellow-50' : ''}`}>
+                        <td className="px-3 py-1.5">
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${row.txType === 'income' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {row.txType === 'income' ? 'הכנסה' : 'הוצאה'}
+                          </span>
+                        </td>
                         <td className={`px-3 py-1.5 font-mono text-sm ${row.from !== row.to ? 'text-red-600' : 'text-gray-700'}`}>
                           {row.from}
                         </td>
@@ -978,13 +1005,13 @@ export default function Admin() {
                             value={row.to}
                             onChange={(e) => {
                               const updated = [...fixCatRows];
-                              updated[i] = { ...row, to: e.target.value as Category };
+                              updated[i] = { ...row, to: e.target.value };
                               setFixCatRows(updated);
                             }}
                             className={`w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400
                               ${row.from !== row.to ? 'border-teal-400 bg-teal-50 text-teal-800 font-medium' : 'border-gray-200 text-gray-700'}`}
                           >
-                            {CATEGORIES.map((cat) => (
+                            {(row.txType === 'income' ? INCOME_CATEGORIES : CATEGORIES).map((cat) => (
                               <option key={cat} value={cat}>{cat}</option>
                             ))}
                           </select>
