@@ -458,10 +458,10 @@ export default function Transactions() {
       {/* List */}
       <div className="space-y-2">
         <AnimatePresence>
-          {filtered.map((tx, i) => {
+          {filtered.map((tx) => {
             const isEditing = editingId === tx.id;
             return (
-              <motion.div key={tx.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ delay: i * 0.02 }}>
+              <motion.div key={tx.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>
                 <Card className={isEditing ? 'border-cyan-500/40' : ''}>
                   <CardContent className="py-3 px-4">
                     {/* ── Row ── */}
