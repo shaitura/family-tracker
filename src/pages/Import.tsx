@@ -305,7 +305,7 @@ export default function Import() {
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm text-white truncate">{tx.notes || tx.category}</p>
+                          <p className="text-sm text-white truncate">{tx.sub_category || tx.notes || tx.category}</p>
                           <p className={`text-sm font-bold shrink-0 ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {tx.type === 'income' ? '+' : ''}{tx.amount ? formatCurrency(tx.amount) : '—'}
                           </p>
@@ -485,12 +485,12 @@ export default function Import() {
                         </div>
                       )}
 
-                      {/* Notes */}
+                      {/* Description */}
                       <div>
-                        <label className="text-[10px] text-white/50 block mb-1">תיאור</label>
+                        <label className="text-[10px] text-white/50 block mb-1">תיאור / שם ההוצאה</label>
                         <Input
-                          value={editDraft.notes || ''}
-                          onChange={(e) => setDraft('notes', e.target.value)}
+                          value={editDraft.sub_category || ''}
+                          onChange={(e) => setDraft('sub_category', e.target.value)}
                           className="h-8 text-xs"
                           dir="rtl"
                           placeholder="שם הוצאה / הכנסה..."
