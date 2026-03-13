@@ -148,14 +148,24 @@ export default function Transactions() {
     [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, search]
   );
 
+  // Extract YYYY-MM from a date string regardless of format
+  function monthKey(dateStr: string): string {
+    if (dateStr.length < 7) return dateStr;
+    const mid = dateStr.slice(5, 7);
+    const num = parseInt(mid, 10);
+    if (num >= 1 && num <= 12) {
+      // Middle segment is a valid month → YYYY-MM-DD format
+      return dateStr.slice(0, 7);
+    }
+    // Middle segment is a day (> 12) → YYYY-DD-MM format
+    return dateStr.slice(0, 4) + '-' + dateStr.slice(8, 10);
+  }
+
   // Group by month (YYYY-MM)
   const groupedByMonth = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
-      // Dates stored as YYYY-DD-MM → extract YYYY-MM
-      const key = t.date.length >= 10
-        ? t.date.slice(0, 4) + '-' + t.date.slice(8, 10)
-        : t.date.slice(0, 7);
+      const key = monthKey(t.date);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
