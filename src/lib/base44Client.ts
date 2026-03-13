@@ -327,8 +327,9 @@ export function parseWhatsAppExport(text: string, merchantMap?: MerchantMap): Wa
   for (const line of text.split('\n')) {
     const m = HEADER.exec(line);
     if (m) {
-      const [, day, month, year, sender, body] = m;
-      blocks.push({ date: waParseDate(day, month, year), payer: waSenderToPayer(sender), bodyLines: [body] });
+      const [, first, second, year, sender, body] = m;
+      // WhatsApp exports dates as MM/DD/YYYY → first=month, second=day
+      blocks.push({ date: waParseDate(second, first, year), payer: waSenderToPayer(sender), bodyLines: [body] });
     } else if (blocks.length > 0 && line.trim()) {
       blocks[blocks.length - 1].bodyLines.push(line);
     }
