@@ -139,7 +139,7 @@ export default function Transactions() {
         if (filterStatus && t.status !== filterStatus) return false;
         if (!search) {
           if (filterYear && !t.date.startsWith(filterYear)) return false;
-          if (filterMonth && t.date.slice(5, 7) !== filterMonth) return false;
+          if (filterMonth && t.date.slice(8, 10) !== filterMonth) return false;
         }
         if (search && !matchesSearch(t, search)) return false;
         return true;
@@ -152,12 +152,15 @@ export default function Transactions() {
   const groupedByMonth = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
-      const key = t.date.slice(0, 7);
+      // Dates stored as YYYY-DD-MM → extract YYYY-MM
+      const key = t.date.length >= 10
+        ? t.date.slice(0, 4) + '-' + t.date.slice(8, 10)
+        : t.date.slice(0, 7);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
-    // Already sorted by date descending, so groups are in order
-    return Array.from(map.entries());
+    // Sort groups by YYYY-MM descending (newest first)
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered]);
 
   const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
