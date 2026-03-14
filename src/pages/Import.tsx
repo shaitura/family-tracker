@@ -510,10 +510,10 @@ export default function Import() {
                         </select>
                       </div>
 
-                      {/* Expense class (only for expenses) */}
-                      {editDraft.type === 'expense' && (
+                      {/* Fixed / Variable */}
+                      {(
                         <div>
-                          <label className="text-[10px] text-white/50 block mb-1">סוג הוצאה</label>
+                          <label className="text-[10px] text-white/50 block mb-1">{editDraft.type === 'income' ? 'סוג הכנסה' : 'סוג הוצאה'}</label>
                           <div className="grid grid-cols-2 gap-1.5">
                             {(['משתנה', 'קבועה'] as ExpenseClass[]).map((cls) => (
                               <button
