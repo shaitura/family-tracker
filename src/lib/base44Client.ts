@@ -426,6 +426,66 @@ export function parseWhatsAppExport(text: string, merchantMap?: MerchantMap): Wa
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Bank income TSV parser  (DD/MM/YYYY \t Payer-He \t Description \t ₪ Amount)
+// ────────────────────────────────────────────────────────────────────────────
+
+const PAYER_HE_MAP: Record<string, Payer> = {
+  'שי': 'Shi', 'אורטל': 'Ortal', 'משותפת': 'Joint', 'משותף': 'Joint',
+};
+
+function guessBankIncomeCategory(desc: string): string {
+  const d = desc;
+  if (/משכורת/i.test(d)) return 'משכורת';
+  if (/בונוס/i.test(d)) return 'משכורת';
+  if (/ESPP/i.test(d)) return 'ESPP';
+  if (/שכר דירה/i.test(d)) return 'שכר דירה';
+  if (/קצבת ילדים/i.test(d)) return 'קצבת ילדים';
+  if (/מילואים/i.test(d)) return 'מופ"ת מילואים';
+  if (/קרן השתלמות/i.test(d)) return 'ריבית זכות';
+  if (/ריבית/i.test(d)) return 'ריבית זכות';
+  if (/ויזה|עמלות/i.test(d)) return 'ריבית זכות';
+  if (/מנורה|ביטוח/i.test(d)) return 'החזר ביטוחי';
+  if (/החזר רכב/i.test(d)) return 'החזר רכב ממוטי';
+  if (/החזר/i.test(d)) return 'החזר מגורם אחר';
+  return 'מתנה';
+}
+
+export function parseBankIncomeText(text: string): WaTransaction[] {
+  const results: WaTransaction[] = [];
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    // Support both tab and multiple-space separation (copy-paste from Excel)
+    const parts = line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/);
+    if (parts.length < 4) continue;
+    const [datePart, payerHe, desc, amountPart] = parts.map((p) => p.trim());
+    // Parse DD/MM/YYYY
+    const dm = datePart.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!dm) continue;
+    const date = `${dm[3]}-${dm[2].padStart(2, '0')}-${dm[1].padStart(2, '0')}`;
+    const payer: Payer = PAYER_HE_MAP[payerHe] ?? 'Joint';
+    // Parse ₪ 22 or ₪ 46,724
+    const amountStr = amountPart.replace(/[₪\s,]/g, '');
+    const amount = parseFloat(amountStr);
+    if (!amount || amount <= 0) continue;
+    const category = guessBankIncomeCategory(desc);
+    results.push({
+      date,
+      type: 'income',
+      payer,
+      amount,
+      category,
+      sub_category: desc,
+      payment_method: 'העברה' as PaymentMethod,
+      expense_class: 'קבועה' as ExpenseClass,
+      status: 'paid' as Transaction['status'],
+      uncertain: false,
+    });
+  }
+  return results;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────────────────
 export const base44 = {
