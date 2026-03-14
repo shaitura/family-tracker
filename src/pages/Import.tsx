@@ -1,9 +1,9 @@
 import { useState, useRef, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, MessageSquare, Loader2, CheckCircle, AlertTriangle, X, Pencil, Save, HelpCircle } from 'lucide-react';
+import { Upload, MessageSquare, Loader2, CheckCircle, AlertTriangle, X, Pencil, Save, HelpCircle, Landmark } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { base44, buildMerchantMap, parseWhatsAppExport, WaTransaction } from '@/lib/base44Client';
+import { base44, buildMerchantMap, parseWhatsAppExport, parseBankIncomeText, WaTransaction } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,8 @@ export default function Import() {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<'whatsapp' | 'file'>('whatsapp');
+  const [mode, setMode] = useState<'whatsapp' | 'file' | 'bank'>('whatsapp');
+  const switchMode = (m: 'whatsapp' | 'file' | 'bank') => { setMode(m); setText(''); setPreview([]); setSelected(new Set()); setEditingIndex(null); };
   const [text, setText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [preview, setPreview] = useState<WaTransaction[]>([]);
@@ -95,6 +96,24 @@ export default function Import() {
           description: uncertain > 0 ? `${uncertain} פריטים דורשים בדיקה (מסומנים בצהוב)` : 'הכל נראה תקין!',
           variant: 'success',
         });
+      }
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const parseBankIncome = () => {
+    if (!text.trim()) return;
+    setParsing(true);
+    setEditingIndex(null);
+    try {
+      const txs = parseBankIncomeText(text);
+      setPreview(txs);
+      setSelected(new Set(txs.map((_, i) => i)));
+      if (txs.length === 0) {
+        toast({ title: 'לא נמצאו הכנסות בטקסט — בדוק שהפורמט תקין', variant: 'destructive' });
+      } else {
+        toast({ title: `נמצאו ${txs.length} הכנסות`, variant: 'success' });
       }
     } finally {
       setParsing(false);
@@ -174,7 +193,7 @@ export default function Import() {
       {/* Mode toggle */}
       <div className="flex gap-2">
         <button
-          onClick={() => setMode('whatsapp')}
+          onClick={() => switchMode('whatsapp')}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
             mode === 'whatsapp' ? 'bg-green-500/20 border border-green-500/40 text-green-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
           }`}
@@ -182,12 +201,20 @@ export default function Import() {
           <MessageSquare className="w-4 h-4" /> WhatsApp
         </button>
         <button
-          onClick={() => setMode('file')}
+          onClick={() => switchMode('bank')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            mode === 'bank' ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
+          }`}
+        >
+          <Landmark className="w-4 h-4" /> הכנסות בנק
+        </button>
+        <button
+          onClick={() => switchMode('file')}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
             mode === 'file' ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'
           }`}
         >
-          <Upload className="w-4 h-4" /> Excel / CSV
+          <Upload className="w-4 h-4" /> Excel
         </button>
       </div>
 
@@ -220,6 +247,41 @@ export default function Import() {
                 </div>
                 <Button onClick={parseWhatsApp} disabled={parsing || !text.trim()} className="w-full" variant="gradient">
                   {parsing ? <><Loader2 className="w-4 h-4 animate-spin" /> מפרסר...</> : <><MessageSquare className="w-4 h-4" /> פרסר WhatsApp</>}
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {mode === 'bank' && (
+          <motion.div key="bank" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Landmark className="w-4 h-4 text-emerald-400" />
+                  הדבק כאן נתוני הכנסות מהבנק
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={"08/01/2026\tשי\tמשכורת שי\t₪ 18,955\n01/01/2026\tאורטל\tאורטל - בונוס שנתי\t₪ 46,724\n20/01/2026\tמשותפת\tקצבת ילדים\t₪ 437"}
+                  rows={8}
+                  dir="rtl"
+                  className="font-mono text-xs"
+                />
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 space-y-1">
+                  <p className="text-[11px] text-emerald-300 font-medium">פורמט: העתק מהאקסל של הבנק</p>
+                  <p className="text-[10px] text-white/40">תאריך (DD/MM/YYYY) · משלם (שי/אורטל/משותפת) · תיאור · סכום (₪)</p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-white/40">
+                  <span>✓ מסווג קטגוריות הכנסה אוטומטית</span>
+                  <span>·</span>
+                  <span>✓ ממיר שמות לעברית</span>
+                </div>
+                <Button onClick={parseBankIncome} disabled={parsing || !text.trim()} className="w-full" variant="gradient">
+                  {parsing ? <><Loader2 className="w-4 h-4 animate-spin" /> מפרסר...</> : <><Landmark className="w-4 h-4" /> פרסר הכנסות בנק</>}
                 </Button>
               </CardContent>
             </Card>
