@@ -30,7 +30,15 @@ export default function Home() {
   const overBudget = budget && expenses > budget.total_limit;
   const nearBudget = budget && budgetPct >= (budget.alert_threshold ?? 80);
 
-  const recent = [...transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
+  const recent = [...transactions]
+    .sort((a, b) => {
+      // Sort by created_at (when reported to app) if available, then by date
+      const ta = a.created_at ?? 0;
+      const tb = b.created_at ?? 0;
+      if (tb !== ta) return tb - ta;
+      return b.date.localeCompare(a.date);
+    })
+    .slice(0, 8);
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -160,7 +168,7 @@ export default function Home() {
                   <span className="text-base">{getCategoryEmoji(tx.category)}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{tx.notes || tx.category}</p>
+                  <p className="text-sm font-medium text-white truncate">{tx.sub_category || tx.notes || tx.category}</p>
                   <p className="text-xs text-white/40">{formatDate(tx.date)} · {PAYER_LABELS[tx.payer]}</p>
                 </div>
                 <span className={`text-sm font-bold shrink-0 ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
