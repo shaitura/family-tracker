@@ -46,6 +46,7 @@ export type RiskLevel = 'סולידי' | 'מנייתי' | 'כללי' | 'נדל"�
 export interface Transaction {
   id: string;
   date: string;
+  created_at?: number;
   type: TransactionType;
   category: Category;
   sub_category?: string;

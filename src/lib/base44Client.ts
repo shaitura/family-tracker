@@ -36,7 +36,7 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
 
     async create(item: Omit<T, 'id'>): Promise<T> {
       const clean = Object.fromEntries(
-        Object.entries(item as Record<string, unknown>).filter(([, v]) => v !== undefined),
+        Object.entries({ created_at: Date.now(), ...(item as Record<string, unknown>) }).filter(([, v]) => v !== undefined),
       );
       const ref = await addDoc(collection(db, collectionName), clean);
       return { ...item, id: ref.id } as T;
@@ -50,11 +50,12 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
       for (let i = 0; i < total; i += CHUNK) {
         const batch = writeBatch(db);
         const chunk = items.slice(i, i + CHUNK);
-        chunk.forEach((item) => {
+        const batchTs = Date.now();
+        chunk.forEach((item, idx) => {
           const ref = doc(collection(db, collectionName));
           // strip undefined values — Firestore rejects them
           const clean = Object.fromEntries(
-            Object.entries(item as Record<string, unknown>).filter(([, v]) => v !== undefined),
+            Object.entries({ created_at: batchTs + idx, ...(item as Record<string, unknown>) }).filter(([, v]) => v !== undefined),
           );
           batch.set(ref, clean);
         });
