@@ -469,6 +469,8 @@ export function parseBankIncomeText(text: string): WaTransaction[] {
     const amount = parseFloat(amountStr);
     if (!amount || amount <= 0) continue;
     const category = guessBankIncomeCategory(desc);
+    // Fixed income: recurring salary, rent, child allowance, reserve duty
+    const isFixed = /משכורת|שכר דירה|קצבת ילדים|מילואים/.test(desc);
     results.push({
       date,
       type: 'income',
@@ -477,7 +479,7 @@ export function parseBankIncomeText(text: string): WaTransaction[] {
       category,
       sub_category: desc,
       payment_method: 'העברה' as PaymentMethod,
-      expense_class: 'קבועה' as ExpenseClass,
+      expense_class: (isFixed ? 'קבועה' : 'משתנה') as ExpenseClass,
       status: 'paid' as Transaction['status'],
       uncertain: false,
     });
