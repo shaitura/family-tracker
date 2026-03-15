@@ -436,7 +436,7 @@ const PAYER_HE_MAP: Record<string, Payer> = {
 function guessBankIncomeCategory(desc: string): string {
   const d = desc;
   if (/משכורת/i.test(d)) return 'משכורת';
-  if (/בונוס/i.test(d)) return 'משכורת';
+  if (/בונוס/i.test(d)) return 'בונוס';
   if (/ESPP/i.test(d)) return 'ESPP';
   if (/שכר דירה/i.test(d)) return 'שכר דירה';
   if (/קצבת ילדים/i.test(d)) return 'קצבת ילדים';
