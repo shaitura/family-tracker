@@ -15,6 +15,7 @@ import { formatCurrency, categoryColor } from '@/utils';
 import { usePendingClarifications } from '@/hooks/usePendingClarifications';
 
 const PAYER_LABELS: Record<Payer, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
+const MONTH_LABELS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 const PAYER_COLORS: Record<Payer, string> = {
   Shi: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
   Ortal: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
@@ -34,6 +35,9 @@ export default function Import() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<WaTransaction | null>(null);
+  const [editSelectedMonths, setEditSelectedMonths] = useState<number[]>([]);
+  const toggleEditMonth = (m: number) =>
+    setEditSelectedMonths((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
 
   const { addItems: persistClarifications } = usePendingClarifications();
 
@@ -156,14 +160,39 @@ export default function Import() {
     setEditDraft({ ...preview[i] });
   };
 
-  const cancelEdit = () => { setEditingIndex(null); setEditDraft(null); };
+  const cancelEdit = () => { setEditingIndex(null); setEditDraft(null); setEditSelectedMonths([]); };
 
   const commitEdit = () => {
     if (editDraft === null || editingIndex === null) return;
-    setPreview((prev) => prev.map((t, i) => i === editingIndex ? { ...editDraft, uncertain: false, needsClarification: false } : t));
-    setSelected((prev) => { const n = new Set(prev); n.add(editingIndex); return n; });
+    if (editDraft.type === 'income' && editDraft.expense_class === 'קבועה' && editSelectedMonths.length > 0) {
+      const year = new Date(editDraft.date ?? new Date().toISOString().split('T')[0]).getFullYear();
+      const expanded = [...editSelectedMonths].sort((a, b) => a - b).map((m) => ({
+        ...editDraft,
+        date: `${year}-${String(m).padStart(2, '0')}-01`,
+        uncertain: false,
+        needsClarification: false,
+      }));
+      setPreview((prev) => {
+        const next = [...prev];
+        next.splice(editingIndex, 1, ...expanded);
+        return next;
+      });
+      setSelected((prev) => {
+        const n = new Set<number>();
+        for (const idx of prev) {
+          if (idx < editingIndex) n.add(idx);
+          else if (idx > editingIndex) n.add(idx + expanded.length - 1);
+        }
+        for (let i = editingIndex; i < editingIndex + expanded.length; i++) n.add(i);
+        return n;
+      });
+    } else {
+      setPreview((prev) => prev.map((t, i) => i === editingIndex ? { ...editDraft, uncertain: false, needsClarification: false } : t));
+      setSelected((prev) => { const n = new Set(prev); n.add(editingIndex); return n; });
+    }
     setEditingIndex(null);
     setEditDraft(null);
+    setEditSelectedMonths([]);
   };
 
   const toggleClarification = (e: React.MouseEvent, i: number) => {
@@ -531,6 +560,58 @@ export default function Import() {
                           </div>
                         </div>
                       )}
+
+                      {/* Month selector for fixed income */}
+                      <AnimatePresence>
+                        {editDraft.type === 'income' && editDraft.expense_class === 'קבועה' && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="rounded-xl bg-purple-500/10 border border-purple-500/20 p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] text-purple-300 font-medium">באילו חודשים ההכנסה חוזרת?</span>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setEditSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1))}
+                                    className="text-[10px] text-purple-400 hover:text-purple-300 underline"
+                                  >הכל</button>
+                                  <button
+                                    onClick={() => setEditSelectedMonths([])}
+                                    className="text-[10px] text-white/40 hover:text-white/60 underline"
+                                  >נקה</button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1">
+                                {MONTH_LABELS.map((name, i) => {
+                                  const m = i + 1;
+                                  const active = editSelectedMonths.includes(m);
+                                  return (
+                                    <button
+                                      key={m}
+                                      onClick={() => toggleEditMonth(m)}
+                                      className={`py-1 rounded-lg text-[10px] font-medium transition-all ${
+                                        active
+                                          ? 'bg-purple-500/50 border border-purple-400/60 text-white'
+                                          : 'bg-white/5 border border-white/10 text-white/40 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      {name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {editSelectedMonths.length > 0 && (
+                                <p className="mt-2 text-[10px] text-purple-300/70 text-center">
+                                  ההכנסה תתווסף ל-{editSelectedMonths.length} חודשים בשנת {new Date(editDraft.date ?? new Date().toISOString().split('T')[0]).getFullYear()}
+                                </p>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       {/* Installments (only for expenses) */}
                       {editDraft.type === 'expense' && (
