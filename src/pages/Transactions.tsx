@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback, memo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain } from 'lucide-react';
@@ -80,19 +80,191 @@ const MONTH_NAMES = ['ינו','פבר','מרץ','אפר','מאי','יוני','י
 
 function matchesSearch(t: Transaction, q: string): boolean {
   const s = q.toLowerCase();
-  return [
-    t.sub_category ?? '',
-    t.category,
-    t.notes ?? '',
-    t.payer,
-    t.payment_method,
-    t.expense_class ?? '',
-    t.status,
-    String(t.amount),
-    t.date,
-    PAYER_LABELS[t.payer] ?? '',
-  ].some((v) => v.toLowerCase().includes(s));
+  return (
+    (t.sub_category ?? '').toLowerCase().includes(s) ||
+    t.category.toLowerCase().includes(s) ||
+    (t.notes ?? '').toLowerCase().includes(s) ||
+    t.payer.toLowerCase().includes(s) ||
+    t.payment_method.toLowerCase().includes(s) ||
+    (t.expense_class ?? '').toLowerCase().includes(s) ||
+    t.status.toLowerCase().includes(s) ||
+    String(t.amount).includes(s) ||
+    t.date.includes(s) ||
+    (PAYER_LABELS[t.payer] ?? '').toLowerCase().includes(s)
+  );
 }
+
+function monthKey(dateStr: string): string {
+  if (dateStr.length < 7) return dateStr;
+  const mid = dateStr.slice(5, 7);
+  const num = parseInt(mid, 10);
+  if (num >= 1 && num <= 12) return dateStr.slice(0, 7);
+  return dateStr.slice(0, 4) + '-' + dateStr.slice(8, 10);
+}
+
+// ── Memoized transaction row (isolates editForm state so typing doesn't re-render siblings) ──
+interface TxRowProps {
+  tx: Transaction;
+  isEditing: boolean;
+  onStartEdit: (tx: Transaction) => void;
+  onCancelEdit: () => void;
+  onSave: (id: string, data: Partial<Transaction>, allMonths: boolean) => void;
+  onDelete: (id: string) => void;
+  updatePending: boolean;
+}
+const TransactionRow = memo(function TransactionRow({
+  tx, isEditing, onStartEdit, onCancelEdit, onSave, onDelete, updatePending,
+}: TxRowProps) {
+  const [editForm, setEditForm] = useState<Partial<Transaction>>({});
+  const [applyToAll, setApplyToAll] = useState(false);
+  const setE = useCallback(<K extends keyof Transaction>(k: K, v: Transaction[K]) =>
+    setEditForm((f) => ({ ...f, [k]: v })), []);
+
+  useEffect(() => {
+    if (isEditing) { setEditForm({ ...tx }); setApplyToAll(false); }
+  }, [isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>
+      <Card className={isEditing ? 'border-cyan-500/40' : ''}>
+        <CardContent className="py-3 px-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg"
+              style={{ backgroundColor: categoryColor(tx.category) + '20', border: `1px solid ${categoryColor(tx.category)}35` }}>
+              {EMOJI[tx.category] ?? '💰'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{tx.sub_category || tx.notes || tx.category}</p>
+                  <p className="text-xs text-white/40 mt-0.5">{formatDate(tx.date)} · {PAYER_LABELS[tx.payer]} · {tx.payment_method}</p>
+                </div>
+                <div className="text-left shrink-0">
+                  <p className={`text-sm font-bold ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{tx.category}</Badge>
+                {tx.expense_class && <Badge variant={tx.expense_class === 'קבועה' ? 'purple' : 'default'} className="text-[10px] px-1.5 py-0">{tx.expense_class}</Badge>}
+                {tx.status !== 'paid' && <Badge variant={tx.status === 'pending' ? 'warning' : 'secondary'} className="text-[10px] px-1.5 py-0">{tx.status === 'pending' ? 'ממתין' : 'עתידי'}</Badge>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => isEditing ? onCancelEdit() : onStartEdit(tx)}
+                className={`p-1.5 rounded-lg transition-all ${isEditing ? 'text-cyan-400 bg-cyan-400/10' : 'text-white/20 hover:text-cyan-400 hover:bg-cyan-400/10'}`}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button onClick={() => onDelete(tx.id)} className="p-1.5 rounded-lg text-white/20 hover:text-rose-400 hover:bg-rose-400/10 transition-all">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {isEditing && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-white/10 space-y-3" dir="rtl">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] mb-1 block">תאריך</Label>
+                      <Input type="date" value={editForm.date ?? ''} onChange={(e) => setE('date', e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] mb-1 block">סכום (₪)</Label>
+                      <Input type="number" value={editForm.amount ?? ''} onChange={(e) => setE('amount', parseFloat(e.target.value) || 0)} className="h-8 text-xs" min="0" step="0.01" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] mb-1 block">קטגוריה</Label>
+                    <select value={editForm.category ?? ''} onChange={(e) => setE('category', e.target.value as Category)}
+                      className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
+                      {CATEGORIES.map((c) => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] mb-1 block">תת-קטגוריה</Label>
+                    <Input value={editForm.sub_category ?? ''} onChange={(e) => setE('sub_category', e.target.value)} placeholder="תיאור ספציפי..." className="h-8 text-xs" dir="rtl" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] mb-1 block">משלם</Label>
+                    <div className="flex gap-1.5">
+                      {([['Shi','שי'],['Ortal','אורטל'],['Joint','משותף']] as [Payer,string][]).map(([v,l]) => (
+                        <button key={v} onClick={() => setE('payer', v)}
+                          className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${editForm.payer === v ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] mb-1 block">אמצעי תשלום</Label>
+                    <select value={editForm.payment_method ?? ''} onChange={(e) => setE('payment_method', e.target.value as PaymentMethod)}
+                      className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
+                      {PAYMENT_METHODS.map((m) => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] mb-1 block">סוג הוצאה</Label>
+                      <div className="flex gap-1">
+                        {(['קבועה','משתנה'] as ExpenseClass[]).map((v) => (
+                          <button key={v} onClick={() => { setE('expense_class', v); if (v !== 'קבועה') setApplyToAll(false); }}
+                            className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${editForm.expense_class === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] mb-1 block">סטטוס</Label>
+                      <select value={editForm.status ?? 'paid'} onChange={(e) => setE('status', e.target.value as Transaction['status'])}
+                        className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
+                        <option value="paid" className="bg-slate-800">שולם</option>
+                        <option value="pending" className="bg-slate-800">ממתין</option>
+                        <option value="future" className="bg-slate-800">עתידי</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] mb-1 block">הערות</Label>
+                    <Input value={editForm.notes ?? ''} onChange={(e) => setE('notes', e.target.value)} placeholder="הערה חופשית..." className="h-8 text-xs" dir="rtl" />
+                  </div>
+                  {editForm.expense_class === 'קבועה' && (
+                    <button
+                      onClick={() => setApplyToAll((v) => !v)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${applyToAll ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300' : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/60'}`}
+                    >
+                      <span>החל על כל ההעתקים באותה שנה</span>
+                      <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${applyToAll ? 'bg-purple-500 border-purple-400' : 'border-white/30'}`}>
+                        {applyToAll && <span className="w-2 h-2 rounded-full bg-white" />}
+                      </span>
+                    </button>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" onClick={onCancelEdit} className="flex-1 text-xs h-8">ביטול</Button>
+                    <Button size="sm" onClick={() => onSave(tx.id, editForm, applyToAll)} disabled={updatePending}
+                      className="flex-1 text-xs h-8 bg-cyan-500/80 hover:bg-cyan-500 text-white border-0">
+                      {updatePending ? '...' : <><Save className="w-3 h-3 ml-1" />שמור</>}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+});
 
 export default function Transactions() {
   const qc = useQueryClient();
@@ -187,6 +359,7 @@ export default function Transactions() {
 
   // ── List state ────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [filterCat, setFilterCat] = useState('');
   const [filterPayer, setFilterPayer] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -199,9 +372,6 @@ export default function Transactions() {
 
   // inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Transaction>>({});
-  const [applyToAll, setApplyToAll] = useState(false);
-  const setE = <K extends keyof Transaction>(k: K, v: Transaction[K]) => setEditForm((f) => ({ ...f, [k]: v }));
 
   const { mutate: update, isPending: updatePending } = useMutation({
     mutationFn: async ({ id, data, allMonths }: { id: string; data: Partial<Transaction>; allMonths: boolean }) => {
@@ -225,17 +395,16 @@ export default function Transactions() {
     onSuccess: (_, { allMonths }) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       setEditingId(null);
-      setApplyToAll(false);
       toast({ title: allMonths ? 'כל ההעתקים עודכנו' : 'עסקה עודכנה', variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בעדכון', description: String(e), variant: 'destructive' }),
   });
 
-  function startEdit(tx: Transaction) {
-    setEditingId(tx.id);
-    setEditForm({ ...tx });
-    setApplyToAll(false);
-  }
+  const handleStartEdit = useCallback((tx: Transaction) => { setEditingId(tx.id); }, []);
+  const handleCancelEdit = useCallback(() => { setEditingId(null); }, []);
+  const handleSave = useCallback((id: string, data: Partial<Transaction>, allMonths: boolean) => {
+    update({ id, data, allMonths });
+  }, [update]);
 
   // bulk edit
   const [showBulkEdit, setShowBulkEdit] = useState(false);
@@ -254,6 +423,7 @@ export default function Transactions() {
     mutationFn: (id: string) => base44.entities.Transaction.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); toast({ title: 'עסקה נמחקה', variant: 'default' }); },
   });
+  const handleDelete = useCallback((id: string) => { del(id); }, [del]);
 
   const availableYears = useMemo(() => {
     const years = new Set(transactions.map((t) => t.date.slice(0, 4)));
@@ -269,29 +439,16 @@ export default function Transactions() {
         if (filterPaymentMethod && t.payment_method !== filterPaymentMethod) return false;
         if (filterExpenseClass && t.expense_class !== filterExpenseClass) return false;
         if (filterStatus && t.status !== filterStatus) return false;
-        if (!search) {
+        if (!deferredSearch) {
           if (filterYear && !t.date.startsWith(filterYear)) return false;
           if (filterMonth && t.date.slice(8, 10) !== filterMonth) return false;
         }
-        if (search && !matchesSearch(t, search)) return false;
+        if (deferredSearch && !matchesSearch(t, deferredSearch)) return false;
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, search]
+    [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, deferredSearch]
   );
-
-  // Extract YYYY-MM from a date string regardless of format
-  function monthKey(dateStr: string): string {
-    if (dateStr.length < 7) return dateStr;
-    const mid = dateStr.slice(5, 7);
-    const num = parseInt(mid, 10);
-    if (num >= 1 && num <= 12) {
-      // Middle segment is a valid month → YYYY-MM-DD format
-      return dateStr.slice(0, 7);
-    }
-    // Middle segment is a day (> 12) → YYYY-DD-MM format
-    return dateStr.slice(0, 4) + '-' + dateStr.slice(8, 10);
-  }
 
   // Group by month (YYYY-MM)
   const groupedByMonth = useMemo(() => {
@@ -894,168 +1051,18 @@ export default function Transactions() {
 
                 {/* Transactions in this month */}
                 <div className="space-y-2">
-                  {monthTxs.map((tx) => {
-                    const isEditing = editingId === tx.id;
-                    return (
-                      <motion.div key={tx.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>
-                        <Card className={isEditing ? 'border-cyan-500/40' : ''}>
-                          <CardContent className="py-3 px-4">
-                            {/* ── Row ── */}
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg"
-                                style={{ backgroundColor: categoryColor(tx.category) + '20', border: `1px solid ${categoryColor(tx.category)}35` }}>
-                                {EMOJI[tx.category] ?? '💰'}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-white truncate">{tx.sub_category || tx.notes || tx.category}</p>
-                                    <p className="text-xs text-white/40 mt-0.5">{formatDate(tx.date)} · {PAYER_LABELS[tx.payer]} · {tx.payment_method}</p>
-                                  </div>
-                                  <div className="text-left shrink-0">
-                                    <p className={`text-sm font-bold ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{tx.category}</Badge>
-                                  {tx.expense_class && <Badge variant={tx.expense_class === 'קבועה' ? 'purple' : 'default'} className="text-[10px] px-1.5 py-0">{tx.expense_class}</Badge>}
-                                  {tx.status !== 'paid' && <Badge variant={tx.status === 'pending' ? 'warning' : 'secondary'} className="text-[10px] px-1.5 py-0">{tx.status === 'pending' ? 'ממתין' : 'עתידי'}</Badge>}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                  onClick={() => isEditing ? setEditingId(null) : startEdit(tx)}
-                                  className={`p-1.5 rounded-lg transition-all ${isEditing ? 'text-cyan-400 bg-cyan-400/10' : 'text-white/20 hover:text-cyan-400 hover:bg-cyan-400/10'}`}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </button>
-                                <button onClick={() => del(tx.id)} className="p-1.5 rounded-lg text-white/20 hover:text-rose-400 hover:bg-rose-400/10 transition-all">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* ── Inline edit form ── */}
-                            <AnimatePresence>
-                              {isEditing && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  className="overflow-hidden"
-                                >
-                                  <div className="mt-3 pt-3 border-t border-white/10 space-y-3" dir="rtl">
-                                    {/* Date & Amount */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div>
-                                        <Label className="text-[10px] mb-1 block">תאריך</Label>
-                                        <Input type="date" value={editForm.date ?? ''} onChange={(e) => setE('date', e.target.value)} className="h-8 text-xs" />
-                                      </div>
-                                      <div>
-                                        <Label className="text-[10px] mb-1 block">סכום (₪)</Label>
-                                        <Input type="number" value={editForm.amount ?? ''} onChange={(e) => setE('amount', parseFloat(e.target.value) || 0)} className="h-8 text-xs" min="0" step="0.01" />
-                                      </div>
-                                    </div>
-
-                                    {/* Category */}
-                                    <div>
-                                      <Label className="text-[10px] mb-1 block">קטגוריה</Label>
-                                      <select value={editForm.category ?? ''} onChange={(e) => setE('category', e.target.value as Category)}
-                                        className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
-                                        {CATEGORIES.map((c) => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
-                                      </select>
-                                    </div>
-
-                                    {/* Sub-category */}
-                                    <div>
-                                      <Label className="text-[10px] mb-1 block">תת-קטגוריה</Label>
-                                      <Input value={editForm.sub_category ?? ''} onChange={(e) => setE('sub_category', e.target.value)} placeholder="תיאור ספציפי..." className="h-8 text-xs" dir="rtl" />
-                                    </div>
-
-                                    {/* Payer */}
-                                    <div>
-                                      <Label className="text-[10px] mb-1 block">משלם</Label>
-                                      <div className="flex gap-1.5">
-                                        {([['Shi','שי'],['Ortal','אורטל'],['Joint','משותף']] as [Payer,string][]).map(([v,l]) => (
-                                          <button key={v} onClick={() => setE('payer', v)}
-                                            className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${editForm.payer === v ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
-                                            {l}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-
-                                    {/* Payment method */}
-                                    <div>
-                                      <Label className="text-[10px] mb-1 block">אמצעי תשלום</Label>
-                                      <select value={editForm.payment_method ?? ''} onChange={(e) => setE('payment_method', e.target.value as PaymentMethod)}
-                                        className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
-                                        {PAYMENT_METHODS.map((m) => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
-                                      </select>
-                                    </div>
-
-                                    {/* Expense class & Status */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div>
-                                        <Label className="text-[10px] mb-1 block">סוג הוצאה</Label>
-                                        <div className="flex gap-1">
-                                          {(['קבועה','משתנה'] as ExpenseClass[]).map((v) => (
-                                            <button key={v} onClick={() => { setE('expense_class', v); if (v !== 'קבועה') setApplyToAll(false); }}
-                                              className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${editForm.expense_class === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
-                                              {v}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <Label className="text-[10px] mb-1 block">סטטוס</Label>
-                                        <select value={editForm.status ?? 'paid'} onChange={(e) => setE('status', e.target.value as Transaction['status'])}
-                                          className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
-                                          <option value="paid" className="bg-slate-800">שולם</option>
-                                          <option value="pending" className="bg-slate-800">ממתין</option>
-                                          <option value="future" className="bg-slate-800">עתידי</option>
-                                        </select>
-                                      </div>
-                                    </div>
-
-                                    {/* Notes */}
-                                    <div>
-                                      <Label className="text-[10px] mb-1 block">הערות</Label>
-                                      <Input value={editForm.notes ?? ''} onChange={(e) => setE('notes', e.target.value)} placeholder="הערה חופשית..." className="h-8 text-xs" dir="rtl" />
-                                    </div>
-
-                                    {/* Apply to all months toggle — only for fixed */}
-                                    {editForm.expense_class === 'קבועה' && (
-                                      <button
-                                        onClick={() => setApplyToAll((v) => !v)}
-                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${applyToAll ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300' : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/60'}`}
-                                      >
-                                        <span>החל על כל ההעתקים באותה שנה</span>
-                                        <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${applyToAll ? 'bg-purple-500 border-purple-400' : 'border-white/30'}`}>
-                                          {applyToAll && <span className="w-2 h-2 rounded-full bg-white" />}
-                                        </span>
-                                      </button>
-                                    )}
-
-                                    {/* Buttons */}
-                                    <div className="flex gap-2 pt-1">
-                                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="flex-1 text-xs h-8">ביטול</Button>
-                                      <Button size="sm" onClick={() => update({ id: tx.id, data: editForm, allMonths: applyToAll })} disabled={updatePending}
-                                        className="flex-1 text-xs h-8 bg-cyan-500/80 hover:bg-cyan-500 text-white border-0">
-                                        {updatePending ? '...' : <><Save className="w-3 h-3 ml-1" />שמור</>}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
+                  {monthTxs.map((tx) => (
+                    <TransactionRow
+                      key={tx.id}
+                      tx={tx}
+                      isEditing={editingId === tx.id}
+                      onStartEdit={handleStartEdit}
+                      onCancelEdit={handleCancelEdit}
+                      onSave={handleSave}
+                      onDelete={handleDelete}
+                      updatePending={updatePending}
+                    />
+                  ))}
                 </div>
               </motion.div>
             );
