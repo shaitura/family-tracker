@@ -8,7 +8,6 @@ import { Toaster } from '@/components/ui/toaster';
 import Layout from '@/components/Layout';
 import LoginScreen from '@/components/LoginScreen';
 import Home from '@/pages/Home';
-import AddTransaction from '@/pages/AddTransaction';
 import Transactions from '@/pages/Transactions';
 import Reports from '@/pages/Reports';
 import MonthlyReports from '@/pages/MonthlyReports';
@@ -57,7 +56,7 @@ export default function App() {
           <Layout user={user} onLogout={() => signOut(auth)}>
             <Routes>
               <Route path="/"                  element={<Home />} />
-              <Route path="/add-transaction"   element={<AddTransaction />} />
+              <Route path="/add-transaction"   element={<Transactions />} />
               <Route path="/transactions"      element={<Transactions />} />
               <Route path="/reports"           element={<Reports />} />
               <Route path="/monthly-reports"   element={<MonthlyReports />} />
