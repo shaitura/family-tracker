@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, List, ListPlus, BarChart2, Shield, Settings,
   Database, LogOut, TrendingUp, Maximize2, Minimize2, Camera, X, Mail, Download,
@@ -28,6 +28,7 @@ export default function Layout({
   onLogout: () => void;
 }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [wideView, setWideView] = useState(true);
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
@@ -297,10 +298,12 @@ export default function Layout({
           {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly, headerOnly }) => {
             if (adminOnly || headerOnly) return null;
             const active = location.pathname === href;
+            const isTransactions = href === createPageUrl('Transactions');
             return (
               <Link
                 key={href}
                 to={href}
+                onClick={active && isTransactions ? (e) => { e.preventDefault(); navigate(href, { state: { openForm: Date.now() } }); } : undefined}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 flex-1 h-14 rounded-2xl transition-all duration-200',
                   accent

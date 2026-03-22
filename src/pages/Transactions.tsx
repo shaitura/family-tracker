@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback, memo } from 'react';
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useDeferredValue, useCallback, memo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain } from 'lucide-react';
 import { base44, buildMerchantMap } from '@/lib/base44Client';
@@ -272,6 +273,15 @@ export default function Transactions() {
 
   // ── Add-form collapsed state (open by default) ───────────────────────────
   const [formOpen, setFormOpen] = useState(true);
+  const location = useLocation();
+
+  // Open form when user clicks the active 'הוצאות' nav item again
+  useEffect(() => {
+    if (location.state?.openForm) {
+      setFormOpen(true);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [location.state?.openForm]);
 
   // ── Add-transaction state ─────────────────────────────────────────────────
   const [form, setForm] = useState(emptyForm());
@@ -469,14 +479,13 @@ export default function Transactions() {
   const currentMonthRef = useRef<HTMLDivElement>(null);
   const didScrollRef = useRef(false);
 
-  useEffect(() => {
+  // useLayoutEffect runs before paint → no visible jump to current month
+  useLayoutEffect(() => {
     if (didScrollRef.current) return;
     if (!currentMonthRef.current) return;
     if (transactions.length === 0) return;
     didScrollRef.current = true;
-    setTimeout(() => {
-      currentMonthRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    currentMonthRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
   }, [transactions.length]);
 
   // ── Scroll indicator: track which month is currently visible ─────────────
