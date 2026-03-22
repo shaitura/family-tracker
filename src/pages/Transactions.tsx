@@ -1,16 +1,18 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save } from 'lucide-react';
-import { base44 } from '@/lib/base44Client';
+import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain } from 'lucide-react';
+import { base44, buildMerchantMap } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/toaster';
-import { Transaction, CATEGORIES, PAYMENT_METHODS, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
+import { Transaction, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass } from '@/types';
 import { formatCurrency, formatDate, formatMonth, categoryColor, PAYER_LABELS } from '@/utils';
+import { auth } from '@/lib/firebase';
 
 const EMOJI: Record<string, string> = {
   'מצרכים': '🛒', 'אוכל בחוץ': '🍽️', דיור: '🏠', רכב: '🚗', דלק: '⛽',
