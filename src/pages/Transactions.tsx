@@ -610,8 +610,8 @@ export default function Transactions() {
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
 
-      {/* ── Add Transaction Panel ── */}
-      <div className="sticky top-14 z-30 -mx-4 px-4 pt-2 pb-2 bg-[#090914]/90 backdrop-blur-md border-b border-white/8">
+      {/* ── Add Transaction Button — fixed below header, always visible ── */}
+      <div className="fixed top-14 ls:top-10 right-0 md:right-16 lg:right-52 left-0 z-30 px-4 pt-2 pb-2 bg-[#090914]/90 backdrop-blur-md border-b border-white/8">
         <button
           onClick={() => setFormOpen((v) => !v)}
           className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white hover:from-cyan-500/30 hover:to-purple-500/30 transition-all"
@@ -623,6 +623,9 @@ export default function Transactions() {
           <motion.span animate={{ rotate: formOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="text-white/50 text-xs">▼</motion.span>
         </button>
       </div>
+
+      {/* Spacer — compensates for fixed button bar height (~54px) */}
+      <div className="h-[54px]" />
 
       <AnimatePresence initial={false}>
         {formOpen && (
