@@ -1,7 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Home, List, PlusCircle, BarChart2, Shield, Settings,
+  Home, List, BarChart2, Shield, Settings,
   Database, LogOut, TrendingUp, Maximize2, Minimize2, Camera, X, Mail, Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -10,8 +10,7 @@ import { UserInfo } from '@/lib/auth';
 
 const NAV_ITEMS = [
   { label: 'בית',     icon: Home,       href: createPageUrl('Home') },
-  { label: 'הוצאות', icon: List,       href: createPageUrl('Transactions') },
-  { label: 'הוצאה',  icon: PlusCircle, href: createPageUrl('AddTransaction'), accent: true },
+  { label: 'הוצאות', icon: List,       href: createPageUrl('Transactions'), accent: true },
   { label: 'דוחות',  icon: BarChart2,  href: createPageUrl('Reports') },
   { label: 'שנתי',   icon: TrendingUp, href: '/annual-analysis' },
   { label: 'נכסים',  icon: Shield,     href: createPageUrl('Assets') },
