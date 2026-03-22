@@ -98,8 +98,8 @@ export default function Transactions() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  // ── Tab state ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'list' | 'add'>('list');
+  // ── Add-form collapsed state (open by default) ───────────────────────────
+  const [formOpen, setFormOpen] = useState(true);
 
   // ── Add-transaction state ─────────────────────────────────────────────────
   const [form, setForm] = useState(emptyForm());
@@ -154,7 +154,7 @@ export default function Transactions() {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       setAddSuccess(true);
       setSelectedMonths([]);
-      setTimeout(() => { setAddSuccess(false); setForm(emptyForm()); setActiveTab('list'); }, 1500);
+      setTimeout(() => { setAddSuccess(false); setForm(emptyForm()); setFormOpen(false); }, 1500);
       toast({ title: 'העסקה נשמרה בהצלחה!', variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
@@ -416,36 +416,23 @@ export default function Transactions() {
   return (
     <div className="space-y-4 animate-fade-in" dir="rtl">
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-2">
+      {/* ── Add Transaction Panel ── */}
+      <div>
         <button
-          onClick={() => setActiveTab('list')}
-          className={`flex items-center gap-2 flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'list'
-              ? 'bg-white/10 border border-white/20 text-white'
-              : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/70'
-          }`}
+          onClick={() => setFormOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white hover:from-cyan-500/30 hover:to-purple-500/30 transition-all"
         >
-          <List className="w-4 h-4 mx-auto" />
-          <span>כל העסקאות</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('add')}
-          className={`flex items-center gap-2 flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'add'
-              ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white'
-              : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/70'
-          }`}
-        >
-          <PlusCircle className="w-4 h-4 mx-auto" />
-          <span>הוסף עסקה</span>
+          <div className="flex items-center gap-2">
+            <PlusCircle className="w-4 h-4 text-cyan-400" />
+            <span className="text-sm font-semibold">הוסף עסקה</span>
+          </div>
+          <motion.span animate={{ rotate: formOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="text-white/50 text-xs">▼</motion.span>
         </button>
       </div>
 
-      {/* ── Add Transaction Panel ── */}
-      <AnimatePresence mode="wait">
-        {activeTab === 'add' && (
-          <motion.div key="add-panel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
+      <AnimatePresence initial={false}>
+        {formOpen && (
+          <motion.div key="add-panel" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
 
             {addSuccess ? (
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center justify-center py-16 gap-4">
@@ -631,10 +618,6 @@ export default function Transactions() {
       </AnimatePresence>
 
       {/* ── List Panel ── */}
-      <AnimatePresence>
-        {activeTab === 'list' && (
-          <motion.div key="list-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-
       {/* Search + filter toggle */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -1071,10 +1054,6 @@ export default function Transactions() {
           </div>
         )}
       </div>
-
-          </motion.div>
-        )}
-      </AnimatePresence>
 
     </div>
   );
