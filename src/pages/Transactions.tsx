@@ -14,6 +14,46 @@ import { Transaction, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, 
 import { formatCurrency, formatDate, formatMonth, categoryColor, PAYER_LABELS } from '@/utils';
 import { auth } from '@/lib/firebase';
 
+// ── AddTransaction helpers ────────────────────────────────────────────────
+const PAYERS: { val: Payer; label: string }[] = [
+  { val: 'Shi', label: 'שי' },
+  { val: 'Ortal', label: 'אורטל' },
+  { val: 'Joint', label: 'משותף' },
+];
+
+const CLASSES: { val: ExpenseClass; label: string }[] = [
+  { val: 'קבועה', label: 'קבועה' },
+  { val: 'משתנה', label: 'משתנה' },
+];
+
+const MONTH_LABELS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+const today = () => new Date().toISOString().split('T')[0];
+
+function defaultPayer(): Payer {
+  const email = auth.currentUser?.email ?? '';
+  if (email === 'ortalas@gmail.com') return 'Ortal';
+  if (email === 'shaitura@gmail.com') return 'Shi';
+  return 'Shi';
+}
+
+function emptyForm() {
+  return {
+    date: today(),
+    type: 'expense' as 'expense' | 'income',
+    category: 'שונות' as Category | IncomeCategory,
+    sub_category: '',
+    amount: '',
+    payer: defaultPayer(),
+    payment_method: 'אשראי' as PaymentMethod,
+    expense_class: 'משתנה' as ExpenseClass,
+    notes: '',
+    installments: '1',
+    status: 'paid' as Transaction['status'],
+  };
+}
+
+// ── Transactions list helpers ─────────────────────────────────────────────
 const EMOJI: Record<string, string> = {
   'מצרכים': '🛒', 'אוכל בחוץ': '🍽️', דיור: '🏠', רכב: '🚗', דלק: '⛽',
   ילדים: '👶', ביגוד: '👗', בריאות: '💊', ספורט: '⚽', לימודים: '📚', פנאי: '🎭', ביטוחים: '🛡️',
