@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain } from 'lucide-react';
@@ -306,6 +306,21 @@ export default function Transactions() {
   }, [filtered]);
 
   const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
+
+  // ── Scroll to current month on load ──────────────────────────────────────
+  const currentMonthKey = new Date().toISOString().slice(0, 7); // e.g. "2026-03"
+  const currentMonthRef = useRef<HTMLDivElement>(null);
+  const didScrollRef = useRef(false);
+
+  useEffect(() => {
+    if (didScrollRef.current) return;
+    if (!currentMonthRef.current) return;
+    if (transactions.length === 0) return;
+    didScrollRef.current = true;
+    setTimeout(() => {
+      currentMonthRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, [transactions.length]);
 
   function clearFilters() {
     setFilterCat(''); setFilterPayer(''); setFilterType('');
@@ -859,7 +874,7 @@ export default function Transactions() {
             const monthIncome = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
             const monthExpense = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
             return (
-              <motion.div key={monthKey} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <motion.div key={monthKey} ref={monthKey === currentMonthKey ? currentMonthRef : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Month header */}
                 <div className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2">
