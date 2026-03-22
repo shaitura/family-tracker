@@ -98,6 +98,94 @@ export default function Transactions() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  // ── Tab state ─────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'list' | 'add'>('list');
+
+  // ── Add-transaction state ─────────────────────────────────────────────────
+  const [form, setForm] = useState(emptyForm());
+  const [aiText, setAiText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [addSuccess, setAddSuccess] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const toggleMonth = (m: number) =>
+    setSelectedMonths((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
+
+  // merchantMap is computed after transactions query below
+
+  const { mutate: save, isPending: savePending } = useMutation({
+    mutationFn: async () => {
+      const year = new Date(form.date).getFullYear();
+      const base: Omit<Transaction, 'id'> = {
+        date: form.date,
+        type: form.type,
+        category: form.category as Category,
+        sub_category: form.sub_category || undefined,
+        amount: parseFloat(form.amount) || 0,
+        payer: form.payer,
+        payment_method: form.payment_method,
+        expense_class: form.expense_class,
+        notes: form.notes || undefined,
+        installments: parseInt(form.installments) || 1,
+        status: form.status,
+      };
+      if (form.expense_class === 'קבועה' && selectedMonths.length > 0) {
+        await Promise.all(selectedMonths.map((m) => {
+          const mm = String(m).padStart(2, '0');
+          return base44.entities.Transaction.create({ ...base, date: `${year}-${mm}-01` });
+        }));
+        return;
+      }
+      const inst = parseInt(form.installments) || 1;
+      if (inst > 1) {
+        await Promise.all(Array.from({ length: inst }, (_, i) => {
+          const d = new Date(form.date);
+          d.setMonth(d.getMonth() + i);
+          return base44.entities.Transaction.create({ ...base, date: d.toISOString().split('T')[0], amount: base.amount / inst, notes: `${base.notes || base.category} - תשלום ${i + 1}/${inst}` });
+        }));
+      } else {
+        await base44.entities.Transaction.create(base);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      setAddSuccess(true);
+      setSelectedMonths([]);
+      setTimeout(() => { setAddSuccess(false); setForm(emptyForm()); setActiveTab('list'); }, 1500);
+      toast({ title: 'העסקה נשמרה בהצלחה!', variant: 'success' });
+    },
+    onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
+  });
+
+  const handleAiParse = async () => {
+    if (!aiText.trim()) return;
+    setAiLoading(true);
+    try {
+      const res = await base44.integrations.Core.InvokeLLM({
+        prompt: aiText,
+        merchantMap: Object.keys(merchantMap).length > 0 ? merchantMap : undefined,
+      });
+      const tx = res.transactions?.[0];
+      if (tx) {
+        if (tx.date) set('date', tx.date);
+        if (tx.amount) set('amount', String(tx.amount));
+        if (tx.category) set('category', tx.category as Category);
+        if (tx.notes) set('notes', tx.notes);
+        if (tx.payer) set('payer', tx.payer as Payer);
+        toast({ title: 'פורסר בהצלחה!', description: 'בדוק את הפרטים ושמור', variant: 'success' });
+      } else {
+        toast({ title: 'לא נמצאה עסקה בטקסט', variant: 'destructive' });
+      }
+    } finally {
+      setAiLoading(false);
+      setAiText('');
+    }
+  };
+
+  // ── List state ────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterPayer, setFilterPayer] = useState('');
@@ -159,6 +247,8 @@ export default function Transactions() {
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.filter(),
   });
+
+  const merchantMap = useMemo(() => buildMerchantMap(transactions), [transactions]);
 
   const { mutate: del } = useMutation({
     mutationFn: (id: string) => base44.entities.Transaction.delete(id),
