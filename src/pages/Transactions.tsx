@@ -479,6 +479,28 @@ export default function Transactions() {
     }, 100);
   }, [transactions.length]);
 
+  // ── Scroll indicator: track which month is currently visible ─────────────
+  const [scrollMonth, setScrollMonth] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (groupedByMonth.length === 0) return;
+    const elements = document.querySelectorAll('[data-month]');
+    if (elements.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          setScrollMonth(visible[0].target.getAttribute('data-month'));
+        }
+      },
+      { rootMargin: '-80px 0px -50% 0px', threshold: 0 }
+    );
+    elements.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [groupedByMonth]);
+
   function clearFilters() {
     setFilterCat(''); setFilterPayer(''); setFilterType('');
     setFilterPaymentMethod(''); setFilterExpenseClass(''); setFilterStatus('');
@@ -589,7 +611,7 @@ export default function Transactions() {
     <div className="space-y-4 animate-fade-in" dir="rtl">
 
       {/* ── Add Transaction Panel ── */}
-      <div>
+      <div className="sticky top-14 z-30 -mx-4 px-4 pt-2 pb-2 bg-[#090914]/90 backdrop-blur-md border-b border-white/8">
         <button
           onClick={() => setFormOpen((v) => !v)}
           className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white hover:from-cyan-500/30 hover:to-purple-500/30 transition-all"
@@ -1033,7 +1055,7 @@ export default function Transactions() {
             return (
               <motion.div key={monthKey} ref={monthKey === currentMonthKey ? currentMonthRef : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Month header */}
-                <div className="flex items-center justify-between mb-2 px-1">
+                <div data-month={monthKey} className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold text-white/80 capitalize">
                       {formatMonth(monthKey)}
@@ -1076,6 +1098,28 @@ export default function Transactions() {
           </div>
         )}
       </div>
+
+      {/* ── Floating month indicator ── */}
+      <AnimatePresence>
+        {scrollMonth && (
+          <motion.div
+            key={scrollMonth}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 12 }}
+            className="fixed left-2 top-1/2 -translate-y-1/2 z-20 pointer-events-none"
+          >
+            <div
+              className="bg-white/8 backdrop-blur-sm border border-white/12 rounded-full px-1.5 py-3 flex flex-col items-center gap-0.5"
+              style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+            >
+              <span className="text-[10px] font-semibold text-white/50 leading-none">
+                {formatMonth(scrollMonth)}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
