@@ -6,7 +6,7 @@ import { Category } from '@/types';
 const PAGE_ROUTES: Record<string, string> = {
   Home: '/',
   Import: '/import',
-  AddTransaction: '/add-transaction',
+  AddTransaction: '/transactions',
   Reports: '/reports',
   MonthlyReports: '/monthly-reports',
   Assets: '/assets',
