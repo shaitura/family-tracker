@@ -271,8 +271,8 @@ export default function Transactions() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  // ── Add-form collapsed state (open by default) ───────────────────────────
-  const [formOpen, setFormOpen] = useState(true);
+  // ── Add-form modal state ───────────────────────────────────────────────────
+  const [formOpen, setFormOpen] = useState(false);
   const location = useLocation();
 
   // Open form when user clicks the active 'הוצאות' nav item again
@@ -622,23 +622,56 @@ export default function Transactions() {
       {/* ── Add Transaction Button — fixed below header, always visible ── */}
       <div className="fixed top-14 ls:top-10 right-0 md:right-16 lg:right-52 left-0 z-30 px-4 pt-2 pb-2 bg-[#090914]/90 backdrop-blur-md border-b border-white/8">
         <button
-          onClick={() => setFormOpen((v) => !v)}
+          onClick={() => setFormOpen(true)}
           className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white hover:from-cyan-500/30 hover:to-purple-500/30 transition-all"
         >
           <div className="flex items-center gap-2">
             <PlusCircle className="w-4 h-4 text-cyan-400" />
             <span className="text-sm font-semibold">הוסף עסקה</span>
           </div>
-          <motion.span animate={{ rotate: formOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="text-white/50 text-xs">▼</motion.span>
+          <PlusCircle className="w-4 h-4 text-cyan-400/50" />
         </button>
       </div>
 
       {/* Spacer — compensates for fixed button bar height (~54px) */}
       <div className="h-[54px]" />
 
-      <AnimatePresence initial={false}>
+      {/* ── Add Transaction Modal Popup ── */}
+      <AnimatePresence>
         {formOpen && (
-          <motion.div key="add-panel" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
+          <motion.div
+            key="modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setFormOpen(false); }}
+          >
+            <motion.div
+              key="modal-panel"
+              initial={{ opacity: 0, y: 60 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 60 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full sm:max-w-lg bg-[#0f0f1a] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <PlusCircle className="w-5 h-5 text-cyan-400" />
+                  <span className="text-base font-semibold text-white">הוצאה / הכנסה חדשה</span>
+                </div>
+                <button
+                  onClick={() => setFormOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/60 hover:text-white transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body — scrollable */}
+              <div className="overflow-y-auto flex-1 p-4">
+          <div className="space-y-4">
 
             {addSuccess ? (
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center justify-center py-16 gap-4">
@@ -819,6 +852,9 @@ export default function Transactions() {
                 </Card>
               </>
             )}
+          </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
