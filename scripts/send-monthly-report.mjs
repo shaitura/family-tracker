@@ -191,7 +191,7 @@ if (!resendKey) { console.error('❌ Missing RESEND_API_KEY'); process.exit(1); 
 const resend = new Resend(resendKey);
 const { error } = await resend.emails.send({
   from:    `Family Tracker <${fromEmail}>`,
-  to:      ['shaitura@gmail.com', 'ortalas@gmail.com'],
+  to:      ['shaitura@gmail.com'],
   subject: `סיכום חודשי — ${monthLabel}`,
   html: `<div dir="rtl" style="font-family:Arial,sans-serif;padding:20px;color:#111">
     <h2 style="color:#6d28d9">סיכום חודש ${monthLabel}</h2>
