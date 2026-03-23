@@ -2,7 +2,7 @@ name: Monthly Financial Report
 
 on:
   schedule:
-    - cron: '0 4 1 * *'  # ראשון לחודש ב-04:00 UTC (06:00 שעון ישראל)
+    - cron: '0 6 1 * *'  # ראשון לחודש ב-06:00 UTC (08:00 שעון ישראל)
   workflow_dispatch:       # אפשרות להריץ ידנית מ-GitHub לצורך בדיקה
 
 jobs:
