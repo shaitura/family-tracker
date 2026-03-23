@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { User, Bell, Wallet, LogOut, ChevronLeft } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +31,21 @@ export default function Settings() {
   const [notifyBudget, setNotifyBudget] = useState(true);
   const [notifyLarge, setNotifyLarge] = useState(true);
   const [notifyMonthly, setNotifyMonthly] = useState(false);
+
+  useEffect(() => {
+    getDoc(doc(db, 'settings', 'notifications')).then((snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        if (d.notifyBudget !== undefined) setNotifyBudget(d.notifyBudget);
+        if (d.notifyLarge !== undefined) setNotifyLarge(d.notifyLarge);
+        if (d.notifyMonthly !== undefined) setNotifyMonthly(d.notifyMonthly);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const saveNotifSetting = (key: string, value: boolean) => {
+    setDoc(doc(db, 'settings', 'notifications'), { [key]: value }, { merge: true }).catch(() => {});
+  };
 
   const { mutate: saveBudget, isPending } = useMutation({
     mutationFn: async () => {
@@ -122,16 +139,16 @@ export default function Settings() {
       {/* Notifications */}
       <Section icon={Bell} title="התראות">
         {[
-          { label: 'התראת חריגת תקציב', desc: 'קבל התראה כשמתקרבים לתקציב', state: notifyBudget, set: setNotifyBudget },
-          { label: 'הוצאות גדולות', desc: 'התראה על הוצאות מעל ₪500', state: notifyLarge, set: setNotifyLarge },
-          { label: 'סיכום חודשי', desc: 'קבל סיכום בסוף כל חודש', state: notifyMonthly, set: setNotifyMonthly },
-        ].map(({ label, desc, state, set }) => (
+          { label: 'התראת חריגת תקציב', desc: 'קבל התראה כשמתקרבים לתקציב', state: notifyBudget, set: setNotifyBudget, fsKey: 'notifyBudget' },
+          { label: 'הוצאות גדולות', desc: 'התראה על הוצאות מעל ₪500', state: notifyLarge, set: setNotifyLarge, fsKey: 'notifyLarge' },
+          { label: 'סיכום חודשי', desc: 'שליחת דו"ח PDF במייל ב-1 לחודש', state: notifyMonthly, set: setNotifyMonthly, fsKey: 'notifyMonthly' },
+        ].map(({ label, desc, state, set, fsKey }) => (
           <div key={label} className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white">{label}</p>
               <p className="text-xs text-white/40">{desc}</p>
             </div>
-            <Switch checked={state} onCheckedChange={set} />
+            <Switch checked={state} onCheckedChange={(v) => { set(v); saveNotifSetting(fsKey, v); }} />
           </div>
         ))}
       </Section>

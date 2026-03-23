@@ -1,0 +1,34 @@
+name: Monthly Financial Report
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'  # ראשון לחודש ב-04:00 UTC (06:00 שעון ישראל)
+  workflow_dispatch:       # אפשרות להריץ ידנית מ-GitHub לצורך בדיקה
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Hebrew fonts
+        run: sudo apt-get install -y fonts-noto fonts-noto-hinted
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install script dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Send monthly report
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+        run: node send-monthly-report.mjs
