@@ -16,9 +16,9 @@ import puppeteer               from 'puppeteer';
 import { Resend }              from 'resend';
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
-const saBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
-if (!saBase64) { console.error('❌ Missing FIREBASE_SERVICE_ACCOUNT'); process.exit(1); }
-const serviceAccount = JSON.parse(Buffer.from(saBase64, 'base64').toString('utf8'));
+const saRaw = process.env.FIREBASE_SERVICE_ACCOUNT;
+if (!saRaw) { console.error('❌ Missing FIREBASE_SERVICE_ACCOUNT'); process.exit(1); }
+const serviceAccount = JSON.parse(saRaw);
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
