@@ -272,7 +272,7 @@ export default function Transactions() {
   const { toast } = useToast();
 
   // ── Add-form modal state ───────────────────────────────────────────────────
-  const [formOpen, setFormOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(true);
   const location = useLocation();
 
   // Open form when user clicks the active 'הוצאות' nav item again
