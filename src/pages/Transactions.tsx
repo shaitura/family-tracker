@@ -1123,8 +1123,8 @@ export default function Transactions() {
                 {/* Transactions in this month */}
                 <div className="space-y-2">
                   {monthTxs.map((tx) => {
-                    const dupKey = `${tx.type}|${tx.category}|${tx.sub_category ?? ''}`;
-                    const isDup = monthTxs.filter((t) => `${t.type}|${t.category}|${t.sub_category ?? ''}` === dupKey).length > 1;
+                    const dupKey = `${tx.sub_category ?? ''}|${tx.amount}`;
+                    const isDup = (tx.sub_category ?? '') !== '' && monthTxs.filter((t) => `${t.sub_category ?? ''}|${t.amount}` === dupKey).length > 1;
                     return (
                       <TransactionRow
                         key={tx.id}
