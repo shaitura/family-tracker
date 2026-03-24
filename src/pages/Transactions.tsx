@@ -628,7 +628,7 @@ export default function Transactions() {
         >
           <div className="flex items-center gap-2">
             <PlusCircle className="w-4 h-4 text-cyan-400" />
-            <span className="text-sm font-semibold">הוסף עסקה</span>
+            <span className="text-sm font-semibold">הוסף הכנסה/הוצאה חדשה</span>
           </div>
           <PlusCircle className="w-4 h-4 text-cyan-400/50" />
         </button>
