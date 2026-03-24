@@ -119,6 +119,7 @@ const TransactionRow = memo(function TransactionRow({
 }: TxRowProps) {
   const [editForm, setEditForm] = useState<Partial<Transaction>>({});
   const [applyToAll, setApplyToAll] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const setE = useCallback(<K extends keyof Transaction>(k: K, v: Transaction[K]) =>
     setEditForm((f) => ({ ...f, [k]: v })), []);
 
@@ -160,9 +161,16 @@ const TransactionRow = memo(function TransactionRow({
               >
                 <Pencil className="w-4 h-4" />
               </button>
-              <button onClick={() => onDelete(tx.id)} className="p-1.5 rounded-lg text-white/20 hover:text-rose-400 hover:bg-rose-400/10 transition-all">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {confirmDelete ? (
+                <div className="flex gap-1">
+                  <Button size="sm" variant="destructive" className="h-7 text-xs px-2" onClick={() => onDelete(tx.id)}>מחק</Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setConfirmDelete(false)}>ביטול</Button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-lg text-white/20 hover:text-rose-400 hover:bg-rose-400/10 transition-all">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
