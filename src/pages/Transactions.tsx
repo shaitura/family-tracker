@@ -336,7 +336,7 @@ export default function Transactions() {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       setAddSuccess(true);
       setSelectedMonths([]);
-      setTimeout(() => { setAddSuccess(false); setForm(emptyForm()); setFormOpen(false); }, 1500);
+      setTimeout(() => { setAddSuccess(false); setForm(emptyForm()); }, 1500);
       toast({ title: 'העסקה נשמרה בהצלחה!', variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בשמירה', description: String(e), variant: 'destructive' }),
