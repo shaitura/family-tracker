@@ -281,7 +281,16 @@ export default function Transactions() {
   const { toast } = useToast();
 
   // ── Add-form modal state ───────────────────────────────────────────────────
-  const [formOpen, setFormOpen] = useState(true);
+  const [autoOpen, setAutoOpen] = useState(() => localStorage.getItem('tx_autoopen') !== 'false');
+  const [formOpen, setFormOpen] = useState(() => localStorage.getItem('tx_autoopen') !== 'false');
+
+  const toggleAutoOpen = useCallback(() => {
+    setAutoOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('tx_autoopen', String(next));
+      return next;
+    });
+  }, []);
   const location = useLocation();
 
   // Open form when user clicks the active 'הוצאות' nav item again
@@ -630,16 +639,26 @@ export default function Transactions() {
 
       {/* ── Add Transaction Button — fixed below header, always visible ── */}
       <div className="fixed top-14 ls:top-10 right-0 md:right-16 lg:right-52 left-0 z-30 px-4 pt-2 pb-2 bg-[#090914]/90 backdrop-blur-md border-b border-white/8">
-        <button
-          onClick={() => setFormOpen(true)}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white hover:from-cyan-500/30 hover:to-purple-500/30 transition-all"
-        >
-          <div className="flex items-center gap-2">
-            <PlusCircle className="w-4 h-4 text-cyan-400" />
-            <span className="text-sm font-semibold">הוסף הכנסה/הוצאה חדשה</span>
-          </div>
-          <PlusCircle className="w-4 h-4 text-cyan-400/50" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFormOpen(true)}
+            className="flex-1 flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white hover:from-cyan-500/30 hover:to-purple-500/30 transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <PlusCircle className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-semibold">הוסף הכנסה/הוצאה חדשה</span>
+            </div>
+            <PlusCircle className="w-4 h-4 text-cyan-400/50" />
+          </button>
+          <button
+            onClick={toggleAutoOpen}
+            title={autoOpen ? 'בטל פתיחה אוטומטית' : 'הפעל פתיחה אוטומטית'}
+            className={`shrink-0 flex flex-col items-center justify-center gap-0.5 px-2.5 py-2 rounded-xl border transition-all text-[10px] font-medium ${autoOpen ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30 hover:text-white/50'}`}
+          >
+            <span>{autoOpen ? '●' : '○'}</span>
+            <span>אוטו</span>
+          </button>
+        </div>
       </div>
 
       {/* Spacer — compensates for fixed button bar height (~54px) */}
