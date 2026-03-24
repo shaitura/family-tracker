@@ -107,6 +107,7 @@ function monthKey(dateStr: string): string {
 interface TxRowProps {
   tx: Transaction;
   isEditing: boolean;
+  isDuplicate: boolean;
   onStartEdit: (tx: Transaction) => void;
   onCancelEdit: () => void;
   onSave: (id: string, data: Partial<Transaction>, allMonths: boolean) => void;
@@ -114,7 +115,7 @@ interface TxRowProps {
   updatePending: boolean;
 }
 const TransactionRow = memo(function TransactionRow({
-  tx, isEditing, onStartEdit, onCancelEdit, onSave, onDelete, updatePending,
+  tx, isEditing, isDuplicate, onStartEdit, onCancelEdit, onSave, onDelete, updatePending,
 }: TxRowProps) {
   const [editForm, setEditForm] = useState<Partial<Transaction>>({});
   const [applyToAll, setApplyToAll] = useState(false);
@@ -127,7 +128,7 @@ const TransactionRow = memo(function TransactionRow({
 
   return (
     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>
-      <Card className={isEditing ? 'border-cyan-500/40' : ''}>
+      <Card className={isEditing ? 'border-cyan-500/40' : isDuplicate ? 'border-yellow-500/40 bg-yellow-500/5' : ''}>
         <CardContent className="py-3 px-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg"
@@ -1121,18 +1122,23 @@ export default function Transactions() {
 
                 {/* Transactions in this month */}
                 <div className="space-y-2">
-                  {monthTxs.map((tx) => (
-                    <TransactionRow
-                      key={tx.id}
-                      tx={tx}
-                      isEditing={editingId === tx.id}
-                      onStartEdit={handleStartEdit}
-                      onCancelEdit={handleCancelEdit}
-                      onSave={handleSave}
-                      onDelete={handleDelete}
-                      updatePending={updatePending}
-                    />
-                  ))}
+                  {monthTxs.map((tx) => {
+                    const dupKey = `${tx.type}|${tx.category}|${tx.sub_category ?? ''}`;
+                    const isDup = monthTxs.filter((t) => `${t.type}|${t.category}|${t.sub_category ?? ''}` === dupKey).length > 1;
+                    return (
+                      <TransactionRow
+                        key={tx.id}
+                        tx={tx}
+                        isEditing={editingId === tx.id}
+                        isDuplicate={isDup}
+                        onStartEdit={handleStartEdit}
+                        onCancelEdit={handleCancelEdit}
+                        onSave={handleSave}
+                        onDelete={handleDelete}
+                        updatePending={updatePending}
+                      />
+                    );
+                  })}
                 </div>
               </motion.div>
             );
