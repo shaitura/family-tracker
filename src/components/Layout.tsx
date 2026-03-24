@@ -202,11 +202,13 @@ export default function Layout({
         <nav className="flex flex-col gap-1 p-2 pt-4">
           {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly }) => {
             const active = location.pathname === href;
+            const isTransactions = href === createPageUrl('Transactions');
             return (
               <Link
                 key={href}
                 to={href}
                 title={label}
+                onClick={active && isTransactions ? (e) => { e.preventDefault(); navigate(href, { state: { openForm: Date.now() } }); } : undefined}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
                   accent
