@@ -3,7 +3,7 @@ import {
   query, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Transaction, Budget, Asset, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
+import { Transaction, Budget, Asset, MileageSettings, MileageReading, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Firestore entity factory  (same public API as the old localStorage version)
@@ -492,9 +492,11 @@ export function parseBankIncomeText(text: string): WaTransaction[] {
 // ────────────────────────────────────────────────────────────────────────────
 export const base44 = {
   entities: {
-    Transaction: makeEntity<Transaction>('transactions'),
-    Budget:      makeEntity<Budget>('budgets'),
-    Asset:       makeEntity<Asset>('assets'),
+    Transaction:     makeEntity<Transaction>('transactions'),
+    Budget:          makeEntity<Budget>('budgets'),
+    Asset:           makeEntity<Asset>('assets'),
+    MileageSettings: makeEntity<MileageSettings>('mileage_settings'),
+    MileageReading:  makeEntity<MileageReading>('mileage_readings'),
   },
   integrations: {
     Core: {

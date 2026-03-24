@@ -12,6 +12,7 @@ const PAGE_ROUTES: Record<string, string> = {
   Assets: '/assets',
   Settings: '/settings',
   Transactions: '/transactions',
+  Mileage: '/mileage',
 };
 
 export function createPageUrl(page: string): string {
