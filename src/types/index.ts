@@ -67,6 +67,21 @@ export interface Budget {
   alert_threshold: number;
 }
 
+export interface MileageSettings {
+  id: string;
+  car_receipt_date: string; // YYYY-MM-DD
+  yearly_km_limit: number;
+  created_at?: number;
+}
+
+export interface MileageReading {
+  id: string;
+  reading_date: string; // YYYY-MM-DD
+  odometer_km: number;
+  note?: string;
+  created_at?: number;
+}
+
 export interface Asset {
   id: string;
   owner: AssetOwner;
