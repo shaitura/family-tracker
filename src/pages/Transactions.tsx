@@ -399,7 +399,6 @@ export default function Transactions() {
   const [filterMonth, setFilterMonth] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [visibleMonthCount, setVisibleMonthCount] = useState(MONTHS_PER_PAGE);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -530,26 +529,12 @@ export default function Transactions() {
     );
     elements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [groupedByMonth]);
+  }, [groupedByMonth, visibleMonthCount]);
 
   // ── Reset visible months when filters change ──────────────────────────────
   useEffect(() => {
     setVisibleMonthCount(MONTHS_PER_PAGE);
   }, [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, deferredSearch]);
-
-  // ── Load more months when sentinel is visible ─────────────────────────────
-  useEffect(() => {
-    const sentinel = loadMoreRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) setVisibleMonthCount((prev) => prev + MONTHS_PER_PAGE);
-      },
-      { rootMargin: '300px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleMonthCount, groupedByMonth.length]);
 
   function clearFilters() {
     setFilterCat(''); setFilterPayer(''); setFilterType('');
@@ -1202,10 +1187,15 @@ export default function Transactions() {
           </div>
         )}
 
-        {/* Sentinel — triggers loading of next months batch */}
+        {/* Load more button */}
         {visibleMonthCount < groupedByMonth.length && (
-          <div ref={loadMoreRef} className="h-12 flex items-center justify-center">
-            <span className="text-white/20 text-xs">טוען חודשים נוספים...</span>
+          <div className="flex justify-center py-2">
+            <button
+              onClick={() => setVisibleMonthCount((prev) => prev + MONTHS_PER_PAGE)}
+              className="px-4 py-2 rounded-xl text-xs text-white/40 border border-white/10 hover:border-white/20 hover:text-white/60 transition-all"
+            >
+              טען עוד {Math.min(MONTHS_PER_PAGE, groupedByMonth.length - visibleMonthCount)} חודשים
+            </button>
           </div>
         )}
       </div>
