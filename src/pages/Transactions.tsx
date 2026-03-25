@@ -445,7 +445,8 @@ export default function Transactions() {
     queryFn: () => base44.entities.Transaction.filter(),
   });
 
-  const merchantMap = useMemo(() => buildMerchantMap(transactions), [transactions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const merchantMap = useMemo(() => buildMerchantMap(transactions), [transactions.length]);
 
   const { mutate: del } = useMutation({
     mutationFn: (id: string) => base44.entities.Transaction.delete(id),
