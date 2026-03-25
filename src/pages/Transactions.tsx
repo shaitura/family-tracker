@@ -124,9 +124,14 @@ const TransactionRow = memo(function TransactionRow({
   const setE = useCallback(<K extends keyof Transaction>(k: K, v: Transaction[K]) =>
     setEditForm((f) => ({ ...f, [k]: v })), []);
 
+  const wasEditingRef = useRef(false);
   useEffect(() => {
-    if (isEditing) { setEditForm({ ...tx }); setApplyToAll(false); }
-  }, [isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isEditing && !wasEditingRef.current) {
+      setEditForm({ ...tx });
+      setApplyToAll(false);
+    }
+    wasEditingRef.current = isEditing;
+  }, [isEditing, tx]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>
