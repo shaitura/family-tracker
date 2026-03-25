@@ -78,6 +78,7 @@ const BULK_FIELDS = [
 ];
 
 const MONTH_NAMES = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
+const MONTHS_PER_PAGE = 4;
 
 function matchesSearch(t: Transaction, q: string): boolean {
   const s = q.toLowerCase();
@@ -397,6 +398,8 @@ export default function Transactions() {
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [visibleMonthCount, setVisibleMonthCount] = useState(MONTHS_PER_PAGE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -528,6 +531,25 @@ export default function Transactions() {
     elements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [groupedByMonth]);
+
+  // ── Reset visible months when filters change ──────────────────────────────
+  useEffect(() => {
+    setVisibleMonthCount(MONTHS_PER_PAGE);
+  }, [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, deferredSearch]);
+
+  // ── Load more months when sentinel is visible ─────────────────────────────
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) setVisibleMonthCount((prev) => prev + MONTHS_PER_PAGE);
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleMonthCount, groupedByMonth.length]);
 
   function clearFilters() {
     setFilterCat(''); setFilterPayer(''); setFilterType('');
@@ -1126,7 +1148,7 @@ export default function Transactions() {
       {/* Grouped list */}
       <div className="space-y-6">
         <AnimatePresence>
-          {groupedByMonth.map(([monthKey, monthTxs]) => {
+          {groupedByMonth.slice(0, visibleMonthCount).map(([monthKey, monthTxs]) => {
             const monthIncome = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
             const monthExpense = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
             return (
@@ -1177,6 +1199,13 @@ export default function Transactions() {
           <div className="text-center py-12 text-white/30">
             <p className="text-4xl mb-2">🔍</p>
             <p>לא נמצאו עסקאות</p>
+          </div>
+        )}
+
+        {/* Sentinel — triggers loading of next months batch */}
+        {visibleMonthCount < groupedByMonth.length && (
+          <div ref={loadMoreRef} className="h-12 flex items-center justify-center">
+            <span className="text-white/20 text-xs">טוען חודשים נוספים...</span>
           </div>
         )}
       </div>
