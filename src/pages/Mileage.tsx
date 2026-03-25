@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -124,15 +124,17 @@ export default function Mileage() {
   const [onboardForm, setOnboardForm] = useState({ car_receipt_date: '', yearly_km_limit: '20000' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Sync settingsForm when data loads
+  // Sync settingsForm when the settings dialog opens
+  const wasSettingsOpenRef = useRef(false);
   useEffect(() => {
-    if (settings) {
+    if (settingsOpen && !wasSettingsOpenRef.current && settings) {
       setSettingsForm({
         car_receipt_date: settings.car_receipt_date,
         yearly_km_limit:  String(settings.yearly_km_limit),
       });
     }
-  }, [settings?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    wasSettingsOpenRef.current = settingsOpen;
+  }, [settingsOpen, settings]);
 
   // ── Computed ─────────────────────────────────────────────────────────────────
   const stats = useMemo(
