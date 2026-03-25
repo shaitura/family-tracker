@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { label: 'Admin',  icon: Database,   href: '/admin', adminOnly: true },
   { label: 'הגדרות', icon: Settings,   href: createPageUrl('Settings'), headerOnly: true },
 ];
+const TRANSACTIONS_HREF = createPageUrl('Transactions');
 
 export default function Layout({
   children,
@@ -203,7 +204,7 @@ export default function Layout({
         <nav className="flex flex-col gap-1 p-2 pt-4">
           {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly }) => {
             const active = location.pathname === href;
-            const isTransactions = href === createPageUrl('Transactions');
+            const isTransactions = href === TRANSACTIONS_HREF;
             return (
               <Link
                 key={href}
@@ -301,7 +302,7 @@ export default function Layout({
           {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly, headerOnly }) => {
             if (adminOnly || headerOnly) return null;
             const active = location.pathname === href;
-            const isTransactions = href === createPageUrl('Transactions');
+            const isTransactions = href === TRANSACTIONS_HREF;
             return (
               <Link
                 key={href}
