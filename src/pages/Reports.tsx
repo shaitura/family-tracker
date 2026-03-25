@@ -23,6 +23,8 @@ export default function Reports() {
 
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ['transactions'], queryFn: () => base44.entities.Transaction.filter() });
 
+  const months = Array.from({ length: 12 }, (_, i) => ({ val: String(i + 1).padStart(2, '0'), label: new Date(2000, i).toLocaleString('he', { month: 'short' }) }));
+
   const filtered = useMemo(() => transactions.filter((t) => {
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
     if (!t.date.startsWith(prefix)) return false;
@@ -42,7 +44,6 @@ export default function Reports() {
     }
     const catData = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
     const payerData = Object.entries(byPayer).map(([payer, amount]) => ({ name: PAYER_LABELS[payer] || payer, amount }));
-    const months = Array.from({ length: 12 }, (_, i) => ({ val: String(i + 1).padStart(2, '0'), label: new Date(2000, i).toLocaleString('he', { month: 'short' }) }));
     const byMonth = months.map(({ val, label }) => {
       const sum = filtered.filter((t) => t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0);
       return { name: label, amount: sum };
