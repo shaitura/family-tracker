@@ -56,7 +56,7 @@ export default function App() {
         <BrowserRouter>
           <Layout user={user} onLogout={() => signOut(auth)}>
             <Routes>
-              <Route path="/"                  element={<Navigate to="/transactions" replace />} />
+              <Route path="/"                  element={<Home />} />
               <Route path="/add-transaction"   element={<Transactions />} />
               <Route path="/transactions"      element={<Transactions />} />
               <Route path="/reports"           element={<Reports />} />
