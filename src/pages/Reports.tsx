@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
 import { Download } from 'lucide-react';
@@ -23,53 +23,56 @@ export default function Reports() {
 
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ['transactions'], queryFn: () => base44.entities.Transaction.filter() });
 
-  const filtered = transactions.filter((t) => {
+  const filtered = useMemo(() => transactions.filter((t) => {
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
     if (!t.date.startsWith(prefix)) return false;
     if (t.type !== txType) return false;
     if (expClass && t.expense_class !== expClass) return false;
     return true;
-  });
+  }), [transactions, year, month, fullYear, txType, expClass]);
 
-  // By category
-  const byCat: Record<string, number> = {};
-  filtered.forEach((t) => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
-  const catData = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
-
-  // By payer
-  const byPayer: Record<string, number> = {};
-  filtered.forEach((t) => { byPayer[t.payer] = (byPayer[t.payer] || 0) + t.amount; });
-  const payerData = Object.entries(byPayer).map(([payer, amount]) => ({ name: PAYER_LABELS[payer] || payer, amount }));
+  const { catData, payerData, total, byMonth } = useMemo(() => {
+    const byCat: Record<string, number> = {};
+    const byPayer: Record<string, number> = {};
+    let total = 0;
+    for (const t of filtered) {
+      byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+      byPayer[t.payer] = (byPayer[t.payer] || 0) + t.amount;
+      total += t.amount;
+    }
+    const catData = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+    const payerData = Object.entries(byPayer).map(([payer, amount]) => ({ name: PAYER_LABELS[payer] || payer, amount }));
+    const months = Array.from({ length: 12 }, (_, i) => ({ val: String(i + 1).padStart(2, '0'), label: new Date(2000, i).toLocaleString('he', { month: 'short' }) }));
+    const byMonth = months.map(({ val, label }) => {
+      const sum = filtered.filter((t) => t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0);
+      return { name: label, amount: sum };
+    });
+    return { catData, payerData, total, byMonth };
+  }, [filtered, year]);
 
   // Fixed vs variable (ignores expClass filter so split is always meaningful)
-  const filteredForSplit = transactions.filter((t) => {
-    const prefix = fullYear ? `${year}-` : `${year}-${month}`;
-    if (!t.date.startsWith(prefix)) return false;
-    if (t.type !== txType) return false;
-    return true;
-  });
-  const fixedTotal = filteredForSplit.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0);
-  const varTotal   = filteredForSplit.filter((t) => t.expense_class === 'משתנה').reduce((s, t) => s + t.amount, 0);
-  const splitTotal = fixedTotal + varTotal;
-
-  // Categories within each class
-  const fixedByCat: Record<string, number> = {};
-  const varByCat:   Record<string, number> = {};
-  filteredForSplit.forEach((t) => {
-    if (t.expense_class === 'קבועה') fixedByCat[t.category] = (fixedByCat[t.category] || 0) + t.amount;
-    if (t.expense_class === 'משתנה') varByCat[t.category]   = (varByCat[t.category]   || 0) + t.amount;
-  });
-  const fixedCats = Object.entries(fixedByCat).sort((a, b) => b[1] - a[1]);
-  const varCats   = Object.entries(varByCat).sort((a, b) => b[1] - a[1]);
-
-  // By month (only used in full-year mode)
-  const months = Array.from({ length: 12 }, (_, i) => ({ val: String(i + 1).padStart(2, '0'), label: new Date(2000, i).toLocaleString('he', { month: 'short' }) }));
-  const byMonth = months.map(({ val, label }) => {
-    const sum = filtered.filter((t) => t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0);
-    return { name: label, amount: sum };
-  });
-
-  const total = filtered.reduce((s, t) => s + t.amount, 0);
+  const { fixedTotal, varTotal, splitTotal, fixedCats, varCats } = useMemo(() => {
+    const filteredForSplit = transactions.filter((t) => {
+      const prefix = fullYear ? `${year}-` : `${year}-${month}`;
+      if (!t.date.startsWith(prefix)) return false;
+      if (t.type !== txType) return false;
+      return true;
+    });
+    const fixedByCat: Record<string, number> = {};
+    const varByCat:   Record<string, number> = {};
+    let fixedTotal = 0, varTotal = 0;
+    for (const t of filteredForSplit) {
+      if (t.expense_class === 'קבועה') { fixedByCat[t.category] = (fixedByCat[t.category] || 0) + t.amount; fixedTotal += t.amount; }
+      if (t.expense_class === 'משתנה') { varByCat[t.category]   = (varByCat[t.category]   || 0) + t.amount; varTotal   += t.amount; }
+    }
+    return {
+      fixedTotal,
+      varTotal,
+      splitTotal: fixedTotal + varTotal,
+      fixedCats: Object.entries(fixedByCat).sort((a, b) => b[1] - a[1]),
+      varCats:   Object.entries(varByCat).sort((a, b) => b[1] - a[1]),
+    };
+  }, [transactions, year, month, fullYear, txType]);
 
   const exportExcel = async () => {
     const { utils, writeFile } = await import('xlsx');
