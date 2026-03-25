@@ -15,7 +15,7 @@ export type UserInfo = {
 };
 
 export function isAllowedEmail(email: string): boolean {
-  return ALLOWED_EMAILS.map((e) => e.toLowerCase()).includes(email.toLowerCase());
+  return ALLOWED_EMAILS.map((e) => e.trim().toLowerCase()).includes(email.trim().toLowerCase());
 }
 
 export function toUserInfo(user: User): UserInfo {
