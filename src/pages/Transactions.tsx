@@ -505,14 +505,20 @@ export default function Transactions() {
   const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
+    // The scroll container is <main> in Layout — not window
+    const scrollEl = document.querySelector<HTMLElement>('main');
+    if (!scrollEl) return;
+
     if (currentMonthRef.current) {
-      currentMonthRef.current.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'instant',
-        block: 'start',
-      });
+      // Account for the fixed add-transaction button bar (~54px) above the list
+      const FIXED_BAR = 62;
+      const containerTop = scrollEl.getBoundingClientRect().top;
+      const elTop = currentMonthRef.current.getBoundingClientRect().top;
+      const target = scrollEl.scrollTop + (elTop - containerTop) - FIXED_BAR;
+      scrollEl.scrollTo({ top: Math.max(0, target), behavior: smooth ? 'smooth' : 'instant' });
     } else {
       // Current month has no transactions — scroll to top (most recent month)
-      window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
+      scrollEl.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
     }
   }, []);
 
