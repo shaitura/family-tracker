@@ -505,20 +505,13 @@ export default function Transactions() {
   const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
-    // The scroll container is <main> in Layout — not window
-    const scrollEl = document.querySelector<HTMLElement>('main');
-    if (!scrollEl) return;
-
+    const behavior = smooth ? 'smooth' : 'instant';
     if (currentMonthRef.current) {
-      // Account for the fixed add-transaction button bar (~54px) above the list
-      const FIXED_BAR = 62;
-      const containerTop = scrollEl.getBoundingClientRect().top;
-      const elTop = currentMonthRef.current.getBoundingClientRect().top;
-      const target = scrollEl.scrollTop + (elTop - containerTop) - FIXED_BAR;
-      scrollEl.scrollTo({ top: Math.max(0, target), behavior: smooth ? 'smooth' : 'instant' });
+      currentMonthRef.current.scrollIntoView({ behavior, block: 'start' });
     } else {
       // Current month has no transactions — scroll to top (most recent month)
-      scrollEl.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
+      document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
+      window.scrollTo({ top: 0, behavior });
     }
   }, []);
 
@@ -1166,7 +1159,7 @@ export default function Transactions() {
             const monthIncome = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
             const monthExpense = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
             return (
-              <motion.div key={monthKey} ref={monthKey === currentMonthKey ? currentMonthRef : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <motion.div key={monthKey} ref={monthKey === currentMonthKey ? currentMonthRef : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={monthKey === currentMonthKey ? { scrollMarginTop: '110px' } : undefined}>
                 {/* Month header */}
                 <div data-month={monthKey} className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2">
