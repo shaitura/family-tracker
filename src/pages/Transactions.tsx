@@ -505,11 +505,34 @@ export default function Transactions() {
   const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
-    const behavior = smooth ? 'smooth' : 'instant';
+    const behavior = smooth ? 'smooth' : 'instant' as ScrollBehavior;
+    // header (h-14 = 56px) + fixed button bar (~54px) = 110px total fixed overhead
+    const OFFSET = 110;
+
+    const scrollTo = (el: HTMLElement, top: number) =>
+      el.scrollTo({ top: Math.max(0, top), behavior });
+
     if (currentMonthRef.current) {
-      currentMonthRef.current.scrollIntoView({ behavior, block: 'start' });
+      // Walk up DOM to find the actual scrollable container
+      let container: HTMLElement | null = currentMonthRef.current.parentElement;
+      while (container) {
+        const { overflowY } = window.getComputedStyle(container);
+        if ((overflowY === 'auto' || overflowY === 'scroll') && container.scrollHeight > container.clientHeight)
+          break;
+        container = container.parentElement;
+      }
+
+      if (container) {
+        const cRect = container.getBoundingClientRect();
+        const eRect = currentMonthRef.current.getBoundingClientRect();
+        scrollTo(container, container.scrollTop + (eRect.top - cRect.top) - OFFSET);
+      } else {
+        // Fallback: window scroll
+        const eRect = currentMonthRef.current.getBoundingClientRect();
+        window.scrollTo({ top: Math.max(0, window.scrollY + eRect.top - OFFSET), behavior });
+      }
     } else {
-      // Current month has no transactions — scroll to top (most recent month)
+      // No current-month transactions — go to very top
       document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
       window.scrollTo({ top: 0, behavior });
     }
