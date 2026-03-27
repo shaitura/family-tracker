@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, useLayoutEffect, useDeferredValue
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain } from 'lucide-react';
+import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain, CalendarCheck } from 'lucide-react';
 import { base44, buildMerchantMap } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -499,19 +499,30 @@ export default function Transactions() {
 
   const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
 
-  // ── Scroll to current month on load ──────────────────────────────────────
+  // ── Scroll to current month ───────────────────────────────────────────────
   const currentMonthKey = new Date().toISOString().slice(0, 7); // e.g. "2026-03"
   const currentMonthRef = useRef<HTMLDivElement>(null);
   const didScrollRef = useRef(false);
 
-  // useLayoutEffect runs before paint → no visible jump to current month
+  const scrollToCurrentMonth = useCallback((smooth = false) => {
+    if (currentMonthRef.current) {
+      currentMonthRef.current.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'instant',
+        block: 'start',
+      });
+    } else {
+      // Current month has no transactions — scroll to top (most recent month)
+      window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
+    }
+  }, []);
+
+  // On initial data load: scroll to current month before paint (no visible jump)
   useLayoutEffect(() => {
     if (didScrollRef.current) return;
-    if (!currentMonthRef.current) return;
     if (transactions.length === 0) return;
     didScrollRef.current = true;
-    currentMonthRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
-  }, [transactions.length]);
+    scrollToCurrentMonth(false);
+  }, [transactions.length, scrollToCurrentMonth]);
 
   // ── Scroll indicator: track which month is currently visible ─────────────
   const [scrollMonth, setScrollMonth] = useState<string | null>(null);
@@ -661,6 +672,14 @@ export default function Transactions() {
               <span className="text-sm font-semibold">הוסף הכנסה/הוצאה חדשה</span>
             </div>
             <PlusCircle className="w-4 h-4 text-cyan-400/50" />
+          </button>
+          <button
+            onClick={() => scrollToCurrentMonth(true)}
+            title="קפוץ לחודש נוכחי"
+            className="shrink-0 flex flex-col items-center justify-center gap-0.5 px-2.5 py-2 rounded-xl border transition-all text-[10px] font-medium bg-white/5 border-white/10 text-white/30 hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/10"
+          >
+            <CalendarCheck className="w-3.5 h-3.5" />
+            <span>היום</span>
           </button>
           <button
             onClick={toggleAutoOpen}
