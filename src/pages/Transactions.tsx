@@ -765,8 +765,8 @@ export default function Transactions() {
               <>
                 {/* AI Quick Parse */}
                 <Card>
-                  <CardContent className="pt-3 space-y-2">
-                    <div className="flex items-center gap-2">
+                  <CardContent className="pt-2.5 pb-2.5">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                       <span className="text-xs font-medium text-white/80">פענוח מהיר עם AI</span>
                       {transactions.length > 0 && (
@@ -777,8 +777,8 @@ export default function Transactions() {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Textarea value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="'סופר רמי לוי 250 ש״ח 15/03' ..." rows={1} dir="rtl" className="flex-1 resize-none" />
-                      <Button variant="gradient" size="sm" onClick={handleAiParse} disabled={aiLoading || !aiText.trim()} className="shrink-0 self-stretch">
+                      <Input value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="'סופר רמי לוי 250 ש״ח 15/03' ..." dir="rtl" className="flex-1 h-9" />
+                      <Button variant="gradient" size="sm" onClick={handleAiParse} disabled={aiLoading || !aiText.trim()} className="shrink-0 h-9 px-3">
                         {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                       </Button>
                     </div>
