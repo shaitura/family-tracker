@@ -751,8 +751,8 @@ export default function Transactions() {
               </div>
 
               {/* Modal Body — scrollable */}
-              <div className="overflow-y-auto flex-1 p-3">
-          <div className="space-y-2">
+              <div className="overflow-y-auto flex-1 p-2">
+          <div className="space-y-1.5">
 
             {addSuccess ? (
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center justify-center py-16 gap-4">
@@ -787,18 +787,15 @@ export default function Transactions() {
 
                 {/* Add Form */}
                 <Card>
-                  <CardContent className="pt-3 space-y-2">
+                  <CardContent className="pt-2 pb-2 space-y-1.5">
                     {/* Type */}
-                    <div>
-                      <Label className="mb-1 block text-xs">סוג</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(['expense', 'income'] as const).map((t) => (
-                          <button key={t} onClick={() => { set('type', t); set('category', t === 'income' ? INCOME_CATEGORIES[0] : 'שונות'); }}
-                            className={`py-1.5 rounded-xl text-sm font-semibold transition-all ${form.type === t ? t === 'expense' ? 'bg-rose-500/30 border border-rose-500/60 text-rose-300' : 'bg-emerald-500/30 border border-emerald-500/60 text-emerald-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
-                            {t === 'expense' ? '💸 הוצאה' : '💰 הכנסה'}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['expense', 'income'] as const).map((t) => (
+                        <button key={t} onClick={() => { set('type', t); set('category', t === 'income' ? INCOME_CATEGORIES[0] : 'שונות'); }}
+                          className={`py-1.5 rounded-xl text-sm font-semibold transition-all ${form.type === t ? t === 'expense' ? 'bg-rose-500/30 border border-rose-500/60 text-rose-300' : 'bg-emerald-500/30 border border-emerald-500/60 text-emerald-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
+                          {t === 'expense' ? '💸 הוצאה' : '💰 הכנסה'}
+                        </button>
+                      ))}
                     </div>
 
                     {/* Date & Amount */}
@@ -840,9 +837,7 @@ export default function Transactions() {
                     </div>
 
                     {/* Payer */}
-                    <div>
-                      <Label className="mb-0.5 block text-xs">משלם</Label>
-                      <div className="flex gap-2">
+                    <div className="flex gap-2">
                         {PAYERS.map(({ val, label }) => (
                           <button key={val} onClick={() => set('payer', val)}
                             className={`flex-1 py-1.5 rounded-xl text-sm font-medium transition-all ${form.payer === val ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
@@ -850,11 +845,9 @@ export default function Transactions() {
                           </button>
                         ))}
                       </div>
-                    </div>
 
                     {/* Expense class */}
                     <div>
-                      <Label className="mb-0.5 block text-xs">{form.type === 'income' ? 'סוג הכנסה' : 'סוג הוצאה'}</Label>
                       <div className="flex gap-2">
                         {CLASSES.map(({ val, label }) => (
                           <button key={val} onClick={() => { set('expense_class', val); if (val !== 'קבועה') setSelectedMonths([]); }}
