@@ -737,22 +737,22 @@ export default function Transactions() {
               className="w-full sm:max-w-lg bg-[#0f0f1a] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
-                  <PlusCircle className="w-5 h-5 text-cyan-400" />
-                  <span className="text-base font-semibold text-white">הוצאה / הכנסה חדשה</span>
+                  <PlusCircle className="w-4 h-4 text-cyan-400" />
+                  <span className="text-sm font-semibold text-white">הוצאה / הכנסה חדשה</span>
                 </div>
                 <button
                   onClick={() => setFormOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/60 hover:text-white transition-all"
+                  className="w-7 h-7 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/60 hover:text-white transition-all"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Modal Body — scrollable */}
-              <div className="overflow-y-auto flex-1 p-4">
-          <div className="space-y-4">
+              <div className="overflow-y-auto flex-1 p-3">
+          <div className="space-y-2">
 
             {addSuccess ? (
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center justify-center py-16 gap-4">
@@ -765,36 +765,36 @@ export default function Transactions() {
               <>
                 {/* AI Quick Parse */}
                 <Card>
-                  <CardContent className="pt-4 space-y-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-purple-400" />
-                        <span className="text-sm font-medium text-white/80">פענוח מהיר עם AI</span>
-                      </div>
+                  <CardContent className="pt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-xs font-medium text-white/80">פענוח מהיר עם AI</span>
                       {transactions.length > 0 && (
-                        <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
-                          <Brain className="w-3 h-3 text-emerald-400" />
-                          <span className="text-[10px] text-emerald-400 font-medium">מאומן על {transactions.length.toLocaleString()} עסקאות</span>
+                        <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-1.5 py-0.5 mr-auto">
+                          <Brain className="w-2.5 h-2.5 text-emerald-400" />
+                          <span className="text-[9px] text-emerald-400 font-medium">מאומן על {transactions.length.toLocaleString()} עסקאות</span>
                         </div>
                       )}
                     </div>
-                    <Textarea value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="הדבק טקסט כגון: 'סופר רמי לוי 250 ש״ח 15/03' ..." rows={2} dir="rtl" />
-                    <Button variant="gradient" size="sm" onClick={handleAiParse} disabled={aiLoading || !aiText.trim()} className="w-full">
-                      {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> מפענח...</> : <><Sparkles className="w-4 h-4" /> פענח טקסט</>}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Textarea value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="'סופר רמי לוי 250 ש״ח 15/03' ..." rows={1} dir="rtl" className="flex-1 resize-none" />
+                      <Button variant="gradient" size="sm" onClick={handleAiParse} disabled={aiLoading || !aiText.trim()} className="shrink-0 self-stretch">
+                        {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
 
                 {/* Add Form */}
                 <Card>
-                  <CardContent className="pt-4 space-y-4">
+                  <CardContent className="pt-3 space-y-2">
                     {/* Type */}
                     <div>
-                      <Label className="mb-2 block">סוג</Label>
+                      <Label className="mb-1 block text-xs">סוג</Label>
                       <div className="grid grid-cols-2 gap-2">
                         {(['expense', 'income'] as const).map((t) => (
                           <button key={t} onClick={() => { set('type', t); set('category', t === 'income' ? INCOME_CATEGORIES[0] : 'שונות'); }}
-                            className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${form.type === t ? t === 'expense' ? 'bg-rose-500/30 border border-rose-500/60 text-rose-300' : 'bg-emerald-500/30 border border-emerald-500/60 text-emerald-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
+                            className={`py-1.5 rounded-xl text-sm font-semibold transition-all ${form.type === t ? t === 'expense' ? 'bg-rose-500/30 border border-rose-500/60 text-rose-300' : 'bg-emerald-500/30 border border-emerald-500/60 text-emerald-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {t === 'expense' ? '💸 הוצאה' : '💰 הכנסה'}
                           </button>
                         ))}
@@ -802,63 +802,63 @@ export default function Transactions() {
                     </div>
 
                     {/* Date & Amount */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="mb-1 block">תאריך</Label>
-                        <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
+                        <Label className="mb-0.5 block text-xs">תאריך</Label>
+                        <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} className="h-9" />
                       </div>
                       <div>
-                        <Label className="mb-1 block">סכום (₪)</Label>
-                        <Input type="number" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)} min="0" step="0.01" />
+                        <Label className="mb-0.5 block text-xs">סכום (₪)</Label>
+                        <Input type="number" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)} min="0" step="0.01" className="h-9" />
                       </div>
                     </div>
 
                     {/* Category */}
                     <div>
-                      <Label className="mb-1 block">קטגוריה</Label>
+                      <Label className="mb-0.5 block text-xs">קטגוריה</Label>
                       <select value={form.category} onChange={(e) => set('category', e.target.value as Category | IncomeCategory)}
-                        className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
+                        className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
                         {(form.type === 'income' ? INCOME_CATEGORIES : CATEGORIES).map((c) => (
                           <option key={c} value={c} className="bg-slate-800">{c}</option>
                         ))}
                       </select>
                     </div>
 
-                    {/* Sub-category */}
-                    <div>
-                      <Label className="mb-1 block">תת-קטגוריה (אופציונלי)</Label>
-                      <Input placeholder="תיאור ספציפי..." value={form.sub_category} onChange={(e) => set('sub_category', e.target.value)} dir="rtl" />
+                    {/* Sub-category + Payment Method */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="mb-0.5 block text-xs">תת-קטגוריה</Label>
+                        <Input placeholder="תיאור..." value={form.sub_category} onChange={(e) => set('sub_category', e.target.value)} dir="rtl" className="h-9" />
+                      </div>
+                      <div>
+                        <Label className="mb-0.5 block text-xs">אמצעי תשלום</Label>
+                        <select value={form.payment_method} onChange={(e) => set('payment_method', e.target.value as PaymentMethod)}
+                          className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
+                          {PAYMENT_METHODS.map((m) => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
+                        </select>
+                      </div>
                     </div>
 
                     {/* Payer */}
                     <div>
-                      <Label className="mb-2 block">משלם</Label>
+                      <Label className="mb-0.5 block text-xs">משלם</Label>
                       <div className="flex gap-2">
                         {PAYERS.map(({ val, label }) => (
                           <button key={val} onClick={() => set('payer', val)}
-                            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${form.payer === val ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
+                            className={`flex-1 py-1.5 rounded-xl text-sm font-medium transition-all ${form.payer === val ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {label}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Payment Method */}
-                    <div>
-                      <Label className="mb-1 block">אמצעי תשלום</Label>
-                      <select value={form.payment_method} onChange={(e) => set('payment_method', e.target.value as PaymentMethod)}
-                        className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
-                        {PAYMENT_METHODS.map((m) => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
-                      </select>
-                    </div>
-
                     {/* Expense class */}
                     <div>
-                      <Label className="mb-2 block">{form.type === 'income' ? 'סוג הכנסה' : 'סוג הוצאה'}</Label>
+                      <Label className="mb-0.5 block text-xs">{form.type === 'income' ? 'סוג הכנסה' : 'סוג הוצאה'}</Label>
                       <div className="flex gap-2">
                         {CLASSES.map(({ val, label }) => (
                           <button key={val} onClick={() => { set('expense_class', val); if (val !== 'קבועה') setSelectedMonths([]); }}
-                            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${form.expense_class === val ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
+                            className={`flex-1 py-1.5 rounded-xl text-sm font-medium transition-all ${form.expense_class === val ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {label}
                           </button>
                         ))}
@@ -897,16 +897,16 @@ export default function Transactions() {
                       </AnimatePresence>
                     </div>
 
-                    {/* Installments & Status */}
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* Installments & Status & Notes */}
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="mb-1 block">מספר תשלומים</Label>
-                        <Input type="number" min="1" max="36" value={form.installments} onChange={(e) => set('installments', e.target.value)} />
+                        <Label className="mb-0.5 block text-xs">תשלומים</Label>
+                        <Input type="number" min="1" max="36" value={form.installments} onChange={(e) => set('installments', e.target.value)} className="h-9" />
                       </div>
                       <div>
-                        <Label className="mb-1 block">סטטוס</Label>
+                        <Label className="mb-0.5 block text-xs">סטטוס</Label>
                         <select value={form.status} onChange={(e) => set('status', e.target.value as Transaction['status'])}
-                          className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
+                          className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
                           <option value="paid" className="bg-slate-800">שולם</option>
                           <option value="pending" className="bg-slate-800">ממתין</option>
                           <option value="future" className="bg-slate-800">עתידי</option>
@@ -915,15 +915,15 @@ export default function Transactions() {
                     </div>
 
                     {parseInt(form.installments) > 1 && (
-                      <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-3 text-xs text-cyan-300">
+                      <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-2 text-xs text-cyan-300">
                         ℹ️ הסכום יחולק ל-{form.installments} תשלומים של {form.amount ? `₪${(parseFloat(form.amount) / parseInt(form.installments)).toFixed(0)}` : '—'} כל אחד
                       </div>
                     )}
 
                     {/* Notes */}
                     <div>
-                      <Label className="mb-1 block">הערות</Label>
-                      <Input placeholder="הערה חופשית..." value={form.notes} onChange={(e) => set('notes', e.target.value)} dir="rtl" />
+                      <Label className="mb-0.5 block text-xs">הערות</Label>
+                      <Input placeholder="הערה חופשית..." value={form.notes} onChange={(e) => set('notes', e.target.value)} dir="rtl" className="h-9" />
                     </div>
 
                     <Button onClick={() => save()} disabled={savePending || !form.amount} className="w-full" size="lg">
