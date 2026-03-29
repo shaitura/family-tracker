@@ -485,6 +485,8 @@ export default function Transactions() {
     [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, deferredSearch]
   );
 
+  const currentMonthKey = new Date().toISOString().slice(0, 7); // e.g. "2026-03"
+
   // Group by month (YYYY-MM)
   const groupedByMonth = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -504,7 +506,6 @@ export default function Transactions() {
   const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
 
   // ── Scroll to current month ───────────────────────────────────────────────
-  const currentMonthKey = new Date().toISOString().slice(0, 7); // e.g. "2026-03"
   const currentMonthRef = useRef<HTMLDivElement>(null);
   const didScrollRef = useRef(false);
 
