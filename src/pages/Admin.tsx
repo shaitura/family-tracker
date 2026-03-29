@@ -295,7 +295,7 @@ export default function Admin() {
   }
 
   async function deleteSelected() {
-    for (const id of selectedIds) await base44.entities.Transaction.delete(id);
+    await base44.entities.Transaction.bulkDelete([...selectedIds]);
     setSelectedIds(new Set());
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
   }
