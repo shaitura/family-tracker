@@ -379,7 +379,7 @@ export default function Transactions() {
         if (tx.date) set('date', tx.date);
         if (tx.amount) set('amount', String(tx.amount));
         if (tx.category) set('category', tx.category as Category);
-        if (tx.notes) set('notes', tx.notes);
+        if (tx.notes) set('sub_category', tx.notes);
         if (tx.payer) set('payer', tx.payer as Payer);
         toast({ title: 'פורסר בהצלחה!', description: 'בדוק את הפרטים ושמור', variant: 'success' });
       } else {
