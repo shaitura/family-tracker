@@ -508,44 +508,28 @@ export default function Transactions() {
   const currentMonthRef = useRef<HTMLDivElement>(null);
   const didScrollRef = useRef(false);
 
+  const [scrollToToday, setScrollToToday] = useState<false | ScrollBehavior>(false);
+
   const scrollToCurrentMonth = useCallback((smooth = false) => {
-    // Ensure current month is visible in the list
-    setVisibleMonthCount((prev) => {
-      const idx = groupedByMonth.findIndex(([k]) => k === currentMonthKey);
-      return idx >= 0 ? Math.max(prev, idx + 1) : prev;
-    });
-    const behavior = smooth ? 'smooth' : 'instant' as ScrollBehavior;
-    // header (h-14 = 56px) + fixed button bar (~54px) = 110px total fixed overhead
-    const OFFSET = 110;
+    const idx = groupedByMonth.findIndex(([k]) => k === currentMonthKey);
+    if (idx >= 0) setVisibleMonthCount((prev) => Math.max(prev, idx + 1));
+    setScrollToToday(smooth ? 'smooth' : 'instant');
+  }, [groupedByMonth, currentMonthKey]);
 
-    const scrollTo = (el: HTMLElement, top: number) =>
-      el.scrollTo({ top: Math.max(0, top), behavior });
-
-    if (currentMonthRef.current) {
-      // Walk up DOM to find the actual scrollable container
-      let container: HTMLElement | null = currentMonthRef.current.parentElement;
-      while (container) {
-        const { overflowY } = window.getComputedStyle(container);
-        if ((overflowY === 'auto' || overflowY === 'scroll') && container.scrollHeight > container.clientHeight)
-          break;
-        container = container.parentElement;
-      }
-
-      if (container) {
-        const cRect = container.getBoundingClientRect();
-        const eRect = currentMonthRef.current.getBoundingClientRect();
-        scrollTo(container, container.scrollTop + (eRect.top - cRect.top) - OFFSET);
+  useEffect(() => {
+    if (!scrollToToday) return;
+    const behavior = scrollToToday;
+    setScrollToToday(false);
+    setTimeout(() => {
+      if (currentMonthRef.current) {
+        currentMonthRef.current.scrollIntoView({ behavior, block: 'start' });
+        setTimeout(() => window.scrollBy({ top: -110, behavior }), 10);
       } else {
-        // Fallback: window scroll
-        const eRect = currentMonthRef.current.getBoundingClientRect();
-        window.scrollTo({ top: Math.max(0, window.scrollY + eRect.top - OFFSET), behavior });
+        document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
+        window.scrollTo({ top: 0, behavior });
       }
-    } else {
-      // No current-month transactions — go to very top
-      document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
-      window.scrollTo({ top: 0, behavior });
-    }
-  }, []);
+    }, 50);
+  }, [scrollToToday]);
 
   // On initial data load: scroll to current month before paint (no visible jump)
   useLayoutEffect(() => {
