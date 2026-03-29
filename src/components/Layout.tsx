@@ -37,6 +37,8 @@ export default function Layout({
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [backupBlobUrl, setBackupBlobUrl] = useState<string | null>(null);
+  const [backupFilename, setBackupFilename] = useState('');
 
   const createBackup = async () => {
     setBackupLoading(true);
@@ -53,14 +55,51 @@ export default function Layout({
         assets: assetData,
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'family-tracker-backup-' + new Date().toISOString().split('T')[0] + '.json';
-      a.click();
+      const filename = 'family-tracker-backup-' + new Date().toISOString().split('T')[0] + '.json';
+      const url = URL.createObjectURL(blob);
+      setBackupFilename(filename);
+      setBackupBlobUrl(url);
     } catch (e) {
       console.error('Backup failed', e);
     }
     setBackupLoading(false);
+  };
+
+  const saveBackup = () => {
+    if (!backupBlobUrl) return;
+    const a = document.createElement('a');
+    a.href = backupBlobUrl;
+    a.download = backupFilename;
+    a.click();
+  };
+
+  const shareBackupNative = async () => {
+    if (!backupBlobUrl) return;
+    try {
+      const blob = await (await fetch(backupBlobUrl)).blob();
+      const file = new File([blob], backupFilename, { type: 'application/json' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Family Tracker Backup' });
+        return true;
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  };
+
+  const shareBackupEmail = async () => {
+    const shared = await shareBackupNative();
+    if (!shared) {
+      saveBackup();
+      window.open('mailto:shaitura@gmail.com?subject=' + encodeURIComponent('גיבוי Family Tracker - ' + backupFilename) + '&body=' + encodeURIComponent('קובץ הגיבוי הורד למחשב — צרף אותו למייל זה.'));
+    }
+  };
+
+  const shareBackupWhatsApp = async () => {
+    const shared = await shareBackupNative();
+    if (!shared) {
+      saveBackup();
+      window.open('https://web.whatsapp.com/');
+    }
   };
 
   const takeScreenshot = async () => {
@@ -283,6 +322,55 @@ export default function Layout({
       </main>
 
       {/* ── Screenshot share modal ──────────────────────────────────────── */}
+      {backupBlobUrl && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setBackupBlobUrl(null)}>
+          <div className="w-full max-w-sm bg-slate-900 border border-white/15 rounded-2xl shadow-2xl overflow-hidden" dir="rtl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">שתף את הגיבוי</h3>
+                <button onClick={() => setBackupBlobUrl(null)} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="text-white/50 text-xs mb-4 text-center">{backupFilename}</p>
+
+              {'share' in navigator && (
+                <button
+                  onClick={async () => { const ok = await shareBackupNative(); if (!ok) saveBackup(); }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white text-sm font-semibold mb-2"
+                >
+                  שתף
+                </button>
+              )}
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={shareBackupWhatsApp}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-medium hover:bg-green-500/30 transition-colors"
+                >
+                  <span className="text-lg">💬</span>
+                  WhatsApp
+                </button>
+                <button
+                  onClick={shareBackupEmail}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 text-xs font-medium hover:bg-blue-500/30 transition-colors"
+                >
+                  <Mail size={18} />
+                  מייל
+                </button>
+                <button
+                  onClick={saveBackup}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white/70 text-xs font-medium hover:bg-white/15 transition-colors"
+                >
+                  <Download size={18} />
+                  שמור
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {screenshotDataUrl && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setScreenshotDataUrl(null)}>
           <div className="w-full max-w-sm bg-slate-900 border border-white/15 rounded-2xl shadow-2xl overflow-hidden" dir="rtl" onClick={(e) => e.stopPropagation()}>
