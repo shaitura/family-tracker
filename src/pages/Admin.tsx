@@ -224,6 +224,7 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pasteOpen, setPasteOpen]         = useState(false);
   const [confirmClear, setConfirmClear]   = useState(false);
+  const [confirmText, setConfirmText]     = useState('');
   const [pasteRows, setPasteRows]         = useState<Partial<Transaction>[]>([]);
   const [pasteText, setPasteText]         = useState('');
   const [migrateOpen, setMigrateOpen]           = useState(false);
@@ -299,13 +300,34 @@ export default function Admin() {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
   }
 
+  async function createBackup() {
+    const [txData, budgetData, assetData] = await Promise.all([
+      base44.entities.Transaction.filter({}),
+      base44.entities.Budget.filter({}),
+      base44.entities.Asset.filter({}),
+    ]);
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      transactions: txData,
+      budgets: budgetData,
+      assets: assetData,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'family-tracker-backup-' + new Date().toISOString().split('T')[0] + '.json';
+    a.click();
+  }
+
   async function clearAllData() {
+    await createBackup();
     await base44.entities.Transaction.deleteAll();
     await base44.entities.Budget.deleteAll();
     await base44.entities.Asset.deleteAll();
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setSelectedIds(new Set());
     setConfirmClear(false);
+    setConfirmText('');
   }
 
   async function runMigration() {
@@ -1101,13 +1123,24 @@ export default function Admin() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
             <div className="text-4xl mb-3">⚠️</div>
-            <h2 className="text-lg font-bold mb-2">אפס את כל הנתונים?</h2>
-            <p className="text-gray-500 text-sm mb-6">
-              פעולה זו תמחק את כל ההכנסות וההוצאות לצמיתות.<br />לא ניתן לשחזר אותן.
+            <h2 className="text-lg font-bold mb-2 text-red-600">מחיקת כל הנתונים</h2>
+            <p className="text-gray-500 text-sm mb-2">
+              פעולה זו תמחק את כל העסקאות, התקציבים והנכסים לצמיתות.
             </p>
+            <p className="text-gray-500 text-sm mb-4">
+              גיבוי JSON יורד אוטומטית לפני המחיקה.<br />
+              כדי לאשר הקלד: <strong>מחק הכל</strong>
+            </p>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder='הקלד "מחק הכל" לאישור'
+              className="w-full border rounded-lg px-3 py-2 mb-4 text-right text-sm"
+            />
             <div className="flex gap-3 justify-center">
-              <button onClick={() => setConfirmClear(false)} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">ביטול</button>
-              <button onClick={clearAllData} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">כן, מחק הכל</button>
+              <button onClick={() => { setConfirmClear(false); setConfirmText(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">ביטול</button>
+              <button onClick={clearAllData} disabled={confirmText !== 'מחק הכל'} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-40">מחק הכל</button>
             </div>
           </div>
         </div>
