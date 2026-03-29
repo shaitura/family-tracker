@@ -75,7 +75,7 @@ export default function Reports() {
     };
   }, [transactions, year, month, fullYear, txType]);
   // Income vs Expenses comparison (ignores txType/expClass filters)
-  const { incomeTotal, expenseTotal, balanceByMonth } = useMemo(() => {
+  const { incomeTotal, expenseTotal, balanceByMonth, expCatData } = useMemo(() => {
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
     const periodTxs = transactions.filter((t) => t.date.startsWith(prefix));
     const incomeTotal = periodTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
@@ -85,7 +85,10 @@ export default function Reports() {
       'הכנסות': periodTxs.filter((t) => t.type === 'income' && t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
       'הוצאות': periodTxs.filter((t) => t.type === 'expense' && t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
     }));
-    return { incomeTotal, expenseTotal, balanceByMonth };
+    const catAcc: Record<string, number> = {};
+    periodTxs.filter((t) => t.type === 'expense').forEach((t) => { catAcc[t.category] = (catAcc[t.category] || 0) + t.amount; });
+    const expCatData = Object.entries(catAcc).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+    return { incomeTotal, expenseTotal, balanceByMonth, expCatData };
   }, [transactions, year, month, fullYear, months]);
 
   const exportExcel = async () => {
@@ -377,24 +380,132 @@ export default function Reports() {
           </div>
 
           <div className="flex gap-2">
-            {[{ v: 'expense', l: '💸 הוצאות' }, { v: 'income', l: '💰 הכנסות' }].map(({ v, l }) => (
+            {[{ v: 'expense', l: '💸 הוצאות' }, { v: 'income', l: '💰 הכנסות' }, { v: 'balance', l: '📊 מאזן' }].map(({ v, l }) => (
               <button key={v} onClick={() => setTxType(v)} className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all ${txType === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>{l}</button>
             ))}
           </div>
-          <div className="flex gap-2">
-            {[{ v: '', l: 'הכל' }, { v: 'קבועה', l: 'קבועה' }, { v: 'משתנה', l: 'משתנה' }].map(({ v, l }) => (
-              <button key={v} onClick={() => setExpClass(v)} className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all ${expClass === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>{l}</button>
-            ))}
-          </div>
+          {txType !== 'balance' && (
+            <div className="flex gap-2">
+              {[{ v: '', l: 'הכל' }, { v: 'קבועה', l: 'קבועה' }, { v: 'משתנה', l: 'משתנה' }].map(({ v, l }) => (
+                <button key={v} onClick={() => setExpClass(v)} className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all ${expClass === v ? 'bg-purple-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>{l}</button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Total */}
-      <div className="text-center">
-        <p className="text-xs text-white/50">סה"כ {fullYear ? `${year}` : ''}</p>
-        <p className="text-3xl font-black text-white">{formatCurrency(total)}</p>
-        <p className="text-xs text-white/40">{filtered.length} עסקאות</p>
-      </div>
+      {txType !== 'balance' && (
+        <div className="text-center">
+          <p className="text-xs text-white/50">סה"כ {fullYear ? `${year}` : ''}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(total)}</p>
+          <p className="text-xs text-white/40">{filtered.length} עסקאות</p>
+        </div>
+      )}
+
+      {/* ── Standalone Balance View ── */}
+      {txType === 'balance' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/25 p-4 text-center">
+              <p className="text-xs text-emerald-400 mb-1">💰 הכנסות</p>
+              <p className="text-2xl font-black text-white">{formatCurrency(incomeTotal)}</p>
+            </div>
+            <div className="rounded-2xl bg-rose-500/10 border border-rose-500/25 p-4 text-center">
+              <p className="text-xs text-rose-400 mb-1">💸 הוצאות</p>
+              <p className="text-2xl font-black text-white">{formatCurrency(expenseTotal)}</p>
+            </div>
+            <div className={`rounded-2xl p-4 text-center border ${incomeTotal - expenseTotal >= 0 ? 'bg-cyan-500/10 border-cyan-500/25' : 'bg-orange-500/10 border-orange-500/25'}`}>
+              <p className="text-xs text-white/50 mb-1">📊 מאזן</p>
+              <p className={`text-2xl font-black ${incomeTotal - expenseTotal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(incomeTotal - expenseTotal)}</p>
+            </div>
+            <div className="rounded-2xl bg-violet-500/10 border border-violet-500/25 p-4 text-center">
+              <p className="text-xs text-violet-400 mb-1">🏦 שיעור חיסכון</p>
+              <p className="text-2xl font-black text-white">{incomeTotal > 0 ? Math.round((incomeTotal - expenseTotal) / incomeTotal * 100) : 0}%</p>
+            </div>
+          </div>
+
+          {(incomeTotal > 0 || expenseTotal > 0) && (
+            <Card>
+              <CardContent className="pt-4 space-y-2">
+                <div className="flex rounded-full overflow-hidden h-5">
+                  {incomeTotal > 0 && (
+                    <div className="bg-emerald-500 transition-all flex items-center justify-center text-[10px] text-white font-bold"
+                      style={{ width: `${(incomeTotal / (incomeTotal + expenseTotal)) * 100}%` }}>
+                      {Math.round(incomeTotal / (incomeTotal + expenseTotal) * 100)}%
+                    </div>
+                  )}
+                  {expenseTotal > 0 && (
+                    <div className="bg-rose-500 transition-all flex items-center justify-center text-[10px] text-white font-bold"
+                      style={{ width: `${(expenseTotal / (incomeTotal + expenseTotal)) * 100}%` }}>
+                      {Math.round(expenseTotal / (incomeTotal + expenseTotal) * 100)}%
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-emerald-400">הכנסות</span>
+                  <span className="text-rose-400">הוצאות</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {fullYear && balanceByMonth.some((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0) && (
+            <>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">הכנסות מול הוצאות לפי חודש</CardTitle></CardHeader>
+                <CardContent className="pt-0">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={[...balanceByMonth].reverse()} barSize={14} barGap={2}>
+                      <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                      <Legend formatter={(v) => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{v}</span>} />
+                      <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="הוצאות" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 space-y-1">
+                  <div className="grid grid-cols-4 gap-1 text-[10px] text-white/40 mb-2 px-1">
+                    <span>חודש</span><span className="text-right">הכנסות</span><span className="text-right">הוצאות</span><span className="text-right">מאזן</span>
+                  </div>
+                  {balanceByMonth.filter((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0).map((m) => {
+                    const bal = m['הכנסות'] - m['הוצאות'];
+                    return (
+                      <div key={m.name} className="grid grid-cols-4 gap-1 items-center py-1.5 border-b border-white/5 text-xs">
+                        <span className="text-white/70">{m.name}</span>
+                        <span className="text-emerald-400 text-right tabular-nums">{formatCurrency(m['הכנסות'])}</span>
+                        <span className="text-rose-400 text-right tabular-nums">{formatCurrency(m['הוצאות'])}</span>
+                        <span className={`font-bold text-right tabular-nums ${bal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(bal)}</span>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {!fullYear && expCatData.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">פירוט הוצאות לפי קטגוריה</CardTitle></CardHeader>
+              <CardContent className="pt-0 space-y-2">
+                {expCatData.map(({ name, value }) => (
+                  <div key={name} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: categoryColor(name) }} />
+                    <span className="text-sm text-white flex-1">{name}</span>
+                    <span className="text-sm font-bold text-white">{formatCurrency(value)}</span>
+                    <span className="text-xs text-white/40 w-10 text-left">{expenseTotal ? Math.round(value / expenseTotal * 100) : 0}%</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {incomeTotal === 0 && expenseTotal === 0 && <EmptyState />}
+        </div>
+      )}
 
       <Tabs defaultValue={fullYear ? 'monthly' : 'category'} key={fullYear ? 'year' : 'month'}>
         <TabsList dir="rtl">
@@ -402,7 +513,6 @@ export default function Reports() {
           <TabsTrigger value="category">לפי קטגוריה</TabsTrigger>
           <TabsTrigger value="payer">לפי משלם</TabsTrigger>
           <TabsTrigger value="split">קבועה / משתנה</TabsTrigger>
-          <TabsTrigger value="balance">מאזן</TabsTrigger>
         </TabsList>
 
         {/* Monthly breakdown — full year only */}
@@ -606,88 +716,6 @@ export default function Reports() {
           ) : (
             <EmptyState />
           )}
-        </TabsContent>
-        {/* Income vs Expenses tab */}
-        <TabsContent value="balance">
-          <div className="space-y-4">
-            {/* Three summary cards */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/25 p-3 text-center">
-                <p className="text-[10px] text-emerald-400 mb-1">הכנסות</p>
-                <p className="text-base font-black text-white leading-tight">{formatCurrency(incomeTotal)}</p>
-              </div>
-              <div className="rounded-2xl bg-rose-500/10 border border-rose-500/25 p-3 text-center">
-                <p className="text-[10px] text-rose-400 mb-1">הוצאות</p>
-                <p className="text-base font-black text-white leading-tight">{formatCurrency(expenseTotal)}</p>
-              </div>
-              <div className={`rounded-2xl p-3 text-center border ${incomeTotal - expenseTotal >= 0 ? 'bg-cyan-500/10 border-cyan-500/25' : 'bg-orange-500/10 border-orange-500/25'}`}>
-                <p className="text-[10px] text-white/50 mb-1">מאזן</p>
-                <p className={`text-base font-black leading-tight ${incomeTotal - expenseTotal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(incomeTotal - expenseTotal)}</p>
-              </div>
-            </div>
-
-            {/* Visual ratio bar */}
-            {(incomeTotal > 0 || expenseTotal > 0) && (
-              <Card>
-                <CardContent className="pt-4 space-y-3">
-                  <div className="flex rounded-full overflow-hidden h-4">
-                    {incomeTotal > 0 && (
-                      <div className="bg-emerald-500 transition-all" style={{ width: `${(incomeTotal / (incomeTotal + expenseTotal)) * 100}%` }} />
-                    )}
-                    {expenseTotal > 0 && (
-                      <div className="bg-rose-500 transition-all" style={{ width: `${(expenseTotal / (incomeTotal + expenseTotal)) * 100}%` }} />
-                    )}
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-emerald-400">הכנסות {incomeTotal + expenseTotal > 0 ? Math.round(incomeTotal / (incomeTotal + expenseTotal) * 100) : 0}%</span>
-                    <span className="text-rose-400">הוצאות {incomeTotal + expenseTotal > 0 ? Math.round(expenseTotal / (incomeTotal + expenseTotal) * 100) : 0}%</span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Monthly grouped bar chart — full year only */}
-            {fullYear && balanceByMonth.some((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0) && (
-              <Card>
-                <CardContent className="pt-4">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={[...balanceByMonth].reverse()} barSize={14} barGap={2}>
-                      <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
-                      <Legend formatter={(v) => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{v}</span>} />
-                      <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="הוצאות" fill="#f43f5e" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Month-by-month balance list — full year only */}
-            {fullYear && balanceByMonth.some((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0) && (
-              <Card>
-                <CardContent className="pt-4 space-y-1">
-                  <div className="grid grid-cols-4 gap-1 text-[10px] text-white/40 mb-2 px-1">
-                    <span>חודש</span><span className="text-right">הכנסות</span><span className="text-right">הוצאות</span><span className="text-right">מאזן</span>
-                  </div>
-                  {balanceByMonth.filter((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0).map((m) => {
-                    const bal = m['הכנסות'] - m['הוצאות'];
-                    return (
-                      <div key={m.name} className="grid grid-cols-4 gap-1 items-center py-1 border-b border-white/5 text-xs">
-                        <span className="text-white/70">{m.name}</span>
-                        <span className="text-emerald-400 text-right tabular-nums">{formatCurrency(m['הכנסות'])}</span>
-                        <span className="text-rose-400 text-right tabular-nums">{formatCurrency(m['הוצאות'])}</span>
-                        <span className={`font-bold text-right tabular-nums ${bal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(bal)}</span>
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            )}
-
-            {incomeTotal === 0 && expenseTotal === 0 && <EmptyState />}
-          </div>
         </TabsContent>
 
       </Tabs>
