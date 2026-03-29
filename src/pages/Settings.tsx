@@ -29,6 +29,8 @@ export default function Settings() {
     Object.fromEntries(Object.entries(budget?.category_limits ?? {}).map(([k, v]) => [k, String(v)]))
   );
   const [notifyBudget, setNotifyBudget] = useState(true);
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetText, setResetText] = useState('');
   const [notifyLarge, setNotifyLarge] = useState(true);
   const [notifyMonthly, setNotifyMonthly] = useState(false);
 
@@ -156,17 +158,39 @@ export default function Settings() {
       {/* Data */}
       <Card>
         <CardContent className="pt-4 space-y-2">
-          <button
-            onClick={() => {
-              if (confirm('האם לאפס את כל הנתונים? פעולה זו בלתי הפיכה!')) {
-                ['ft_transaction', 'ft_budget', 'ft_asset', 'ft_initialized'].forEach((k) => localStorage.removeItem(k));
-                window.location.reload();
-              }
-            }}
-            className="w-full py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-sm font-medium hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-2"
-          >
-            <LogOut className="w-4 h-4" /> איפוס כל הנתונים
-          </button>
+          {resetConfirm ? (
+            <div className="space-y-2 p-3 rounded-xl border border-rose-500/30 bg-rose-500/10">
+              <p className="text-rose-400 text-sm text-center">כדי לאשר, הקלד: <strong>אפס הכל</strong></p>
+              <input
+                type="text"
+                value={resetText}
+                onChange={(e) => setResetText(e.target.value)}
+                placeholder='הקלד "אפס הכל" לאישור'
+                className="w-full border border-rose-500/30 rounded-lg px-3 py-2 text-right text-sm bg-transparent text-white"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setResetConfirm(false); setResetText(''); }}
+                  className="flex-1 py-2 rounded-lg border border-white/20 text-white/70 text-sm"
+                >ביטול</button>
+                <button
+                  disabled={resetText !== 'אפס הכל'}
+                  onClick={() => {
+                    ['ft_transaction', 'ft_budget', 'ft_asset', 'ft_initialized'].forEach((k) => localStorage.removeItem(k));
+                    window.location.reload();
+                  }}
+                  className="flex-1 py-2 rounded-lg bg-rose-600 text-white text-sm disabled:opacity-40"
+                >אפס</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setResetConfirm(true)}
+              className="w-full py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-sm font-medium hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-2"
+            >
+              <LogOut className="w-4 h-4" /> אפס כל הנתונים
+            </button>
+          )}
           <p className="text-center text-xs text-white/30">Family Tracker v1.0 · נתונים נשמרים מקומית</p>
         </CardContent>
       </Card>
