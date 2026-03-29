@@ -175,7 +175,14 @@ export default function Settings() {
                 >ביטול</button>
                 <button
                   disabled={resetText !== 'אפס הכל'}
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await Promise.all([
+                        base44.entities.Transaction.deleteAll(),
+                        base44.entities.Budget.deleteAll(),
+                        base44.entities.Asset.deleteAll(),
+                      ]);
+                    } catch(e) { /* ignore */ }
                     ['ft_transaction', 'ft_budget', 'ft_asset', 'ft_initialized'].forEach((k) => localStorage.removeItem(k));
                     window.location.reload();
                   }}
@@ -191,7 +198,7 @@ export default function Settings() {
               <LogOut className="w-4 h-4" /> אפס כל הנתונים
             </button>
           )}
-          <p className="text-center text-xs text-white/30">Family Tracker v1.0 · נתונים נשמרים מקומית</p>
+          <p className="text-center text-xs text-white/30">Family Tracker v1.0 · נתונים נשמרים בענן</p>
         </CardContent>
       </Card>
     </div>
