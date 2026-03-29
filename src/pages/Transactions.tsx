@@ -508,14 +508,18 @@ export default function Transactions() {
   const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
-    setVisibleMonthCount(MONTHS_PER_PAGE);
+    // Current month may be far down the list (e.g. behind future-dated months).
+    // We must render enough months so the ref element actually exists in the DOM.
+    const currentIndex = groupedByMonth.findIndex(([key]) => key === currentMonthKey);
+    const neededCount = currentIndex >= 0 ? Math.max(currentIndex + 1, MONTHS_PER_PAGE) : MONTHS_PER_PAGE;
+    setVisibleMonthCount(neededCount);
     // Wait for render then scroll to current month ref
     setTimeout(() => {
       if (currentMonthRef.current) {
         currentMonthRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
       }
-    }, 100);
-  }, []);
+    }, 150);
+  }, [groupedByMonth, currentMonthKey]);
 
   // On initial data load: scroll to current month before paint (no visible jump)
   useLayoutEffect(() => {
