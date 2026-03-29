@@ -74,6 +74,19 @@ export default function Reports() {
       varCats:   Object.entries(varByCat).sort((a, b) => b[1] - a[1]),
     };
   }, [transactions, year, month, fullYear, txType]);
+  // Income vs Expenses comparison (ignores txType/expClass filters)
+  const { incomeTotal, expenseTotal, balanceByMonth } = useMemo(() => {
+    const prefix = fullYear ? `${year}-` : `${year}-${month}`;
+    const periodTxs = transactions.filter((t) => t.date.startsWith(prefix));
+    const incomeTotal = periodTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expenseTotal = periodTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const balanceByMonth = months.map(({ val, label }) => ({
+      name: label,
+      'הכנסות': periodTxs.filter((t) => t.type === 'income' && t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
+      'הוצאות': periodTxs.filter((t) => t.type === 'expense' && t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
+    }));
+    return { incomeTotal, expenseTotal, balanceByMonth };
+  }, [transactions, year, month, fullYear, months]);
 
   const exportExcel = async () => {
     const { utils, writeFile } = await import('xlsx');
@@ -389,6 +402,7 @@ export default function Reports() {
           <TabsTrigger value="category">לפי קטגוריה</TabsTrigger>
           <TabsTrigger value="payer">לפי משלם</TabsTrigger>
           <TabsTrigger value="split">קבועה / משתנה</TabsTrigger>
+          <TabsTrigger value="balance">מאזן</TabsTrigger>
         </TabsList>
 
         {/* Monthly breakdown — full year only */}
@@ -593,6 +607,89 @@ export default function Reports() {
             <EmptyState />
           )}
         </TabsContent>
+        {/* Income vs Expenses tab */}
+        <TabsContent value="balance">
+          <div className="space-y-4">
+            {/* Three summary cards */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/25 p-3 text-center">
+                <p className="text-[10px] text-emerald-400 mb-1">הכנסות</p>
+                <p className="text-base font-black text-white leading-tight">{formatCurrency(incomeTotal)}</p>
+              </div>
+              <div className="rounded-2xl bg-rose-500/10 border border-rose-500/25 p-3 text-center">
+                <p className="text-[10px] text-rose-400 mb-1">הוצאות</p>
+                <p className="text-base font-black text-white leading-tight">{formatCurrency(expenseTotal)}</p>
+              </div>
+              <div className={`rounded-2xl p-3 text-center border ${incomeTotal - expenseTotal >= 0 ? 'bg-cyan-500/10 border-cyan-500/25' : 'bg-orange-500/10 border-orange-500/25'}`}>
+                <p className="text-[10px] text-white/50 mb-1">מאזן</p>
+                <p className={`text-base font-black leading-tight ${incomeTotal - expenseTotal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(incomeTotal - expenseTotal)}</p>
+              </div>
+            </div>
+
+            {/* Visual ratio bar */}
+            {(incomeTotal > 0 || expenseTotal > 0) && (
+              <Card>
+                <CardContent className="pt-4 space-y-3">
+                  <div className="flex rounded-full overflow-hidden h-4">
+                    {incomeTotal > 0 && (
+                      <div className="bg-emerald-500 transition-all" style={{ width: `${(incomeTotal / (incomeTotal + expenseTotal)) * 100}%` }} />
+                    )}
+                    {expenseTotal > 0 && (
+                      <div className="bg-rose-500 transition-all" style={{ width: `${(expenseTotal / (incomeTotal + expenseTotal)) * 100}%` }} />
+                    )}
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-emerald-400">הכנסות {incomeTotal + expenseTotal > 0 ? Math.round(incomeTotal / (incomeTotal + expenseTotal) * 100) : 0}%</span>
+                    <span className="text-rose-400">הוצאות {incomeTotal + expenseTotal > 0 ? Math.round(expenseTotal / (incomeTotal + expenseTotal) * 100) : 0}%</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Monthly grouped bar chart — full year only */}
+            {fullYear && balanceByMonth.some((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0) && (
+              <Card>
+                <CardContent className="pt-4">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={[...balanceByMonth].reverse()} barSize={14} barGap={2}>
+                      <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                      <Legend formatter={(v) => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{v}</span>} />
+                      <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="הוצאות" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Month-by-month balance list — full year only */}
+            {fullYear && balanceByMonth.some((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0) && (
+              <Card>
+                <CardContent className="pt-4 space-y-1">
+                  <div className="grid grid-cols-4 gap-1 text-[10px] text-white/40 mb-2 px-1">
+                    <span>חודש</span><span className="text-right">הכנסות</span><span className="text-right">הוצאות</span><span className="text-right">מאזן</span>
+                  </div>
+                  {balanceByMonth.filter((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0).map((m) => {
+                    const bal = m['הכנסות'] - m['הוצאות'];
+                    return (
+                      <div key={m.name} className="grid grid-cols-4 gap-1 items-center py-1 border-b border-white/5 text-xs">
+                        <span className="text-white/70">{m.name}</span>
+                        <span className="text-emerald-400 text-right tabular-nums">{formatCurrency(m['הכנסות'])}</span>
+                        <span className="text-rose-400 text-right tabular-nums">{formatCurrency(m['הוצאות'])}</span>
+                        <span className={`font-bold text-right tabular-nums ${bal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(bal)}</span>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
+            {incomeTotal === 0 && expenseTotal === 0 && <EmptyState />}
+          </div>
+        </TabsContent>
+
       </Tabs>
       </div>{/* end reports-content */}
     </div>
