@@ -509,21 +509,11 @@ export default function Transactions() {
     const behavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
     setVisibleMonthCount(MONTHS_PER_PAGE);
     setTimeout(() => {
-      // Find the actual scrolling container by walking up from first month element
-      const firstMonth = document.querySelector<HTMLElement>('[data-month]');
-      let scrollEl: HTMLElement | null = firstMonth?.parentElement ?? null;
-      while (scrollEl) {
-        const { overflowY } = window.getComputedStyle(scrollEl);
-        if ((overflowY === 'auto' || overflowY === 'scroll') && scrollEl.scrollHeight > scrollEl.clientHeight) break;
-        scrollEl = scrollEl.parentElement;
+      const el = document.getElementById('transactions-top');
+      if (el) {
+        el.scrollIntoView({ behavior, block: 'start' });
       }
-      if (scrollEl) {
-        scrollEl.scrollTo({ top: 0, behavior });
-      } else {
-        document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
-        window.scrollTo({ top: 0, behavior });
-      }
-    }, 100);
+    }, 150);
   }, []);
 
   // On initial data load: scroll to current month before paint (no visible jump)
@@ -1157,7 +1147,7 @@ export default function Transactions() {
       </AnimatePresence>
 
       {/* Grouped list */}
-      <div className="space-y-6">
+      <div id="transactions-top" className="space-y-6">
         <AnimatePresence>
           {groupedByMonth.slice(0, visibleMonthCount).map(([monthKey, monthTxs]) => {
             const monthIncome = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
