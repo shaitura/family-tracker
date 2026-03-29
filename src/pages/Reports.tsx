@@ -80,8 +80,9 @@ export default function Reports() {
     const periodTxs = transactions.filter((t) => t.date.startsWith(prefix));
     const incomeTotal = periodTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expenseTotal = periodTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const balanceByMonth = months.map(({ val, label }) => ({
+    const balanceByMonth = months.map(({ val, label }, idx) => ({
       name: label,
+      isCurrent: year === String(new Date().getFullYear()) && idx === new Date().getMonth(),
       'הכנסות': periodTxs.filter((t) => t.type === 'income' && t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
       'הוצאות': periodTxs.filter((t) => t.type === 'expense' && t.date.startsWith(`${year}-${val}`)).reduce((s, t) => s + t.amount, 0),
     }));
@@ -460,8 +461,16 @@ export default function Reports() {
                       <YAxis hide />
                       <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
                       <Legend formatter={(v) => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{v}</span>} />
-                      <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="הוצאות" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]}>
+                        {[...balanceByMonth].reverse().map((m, i) => (
+                          <Cell key={i} fill="#10b981" fillOpacity={m.isCurrent ? 1 : 0.5} stroke={m.isCurrent ? '#fff' : 'none'} strokeWidth={1.5} />
+                        ))}
+                      </Bar>
+                      <Bar dataKey="הוצאות" fill="#f43f5e" radius={[6, 6, 0, 0]}>
+                        {[...balanceByMonth].reverse().map((m, i) => (
+                          <Cell key={i} fill="#f43f5e" fillOpacity={m.isCurrent ? 1 : 0.5} stroke={m.isCurrent ? '#fff' : 'none'} strokeWidth={1.5} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -474,8 +483,8 @@ export default function Reports() {
                   {balanceByMonth.filter((m) => m['הכנסות'] > 0 || m['הוצאות'] > 0).map((m) => {
                     const bal = m['הכנסות'] - m['הוצאות'];
                     return (
-                      <div key={m.name} className="grid grid-cols-4 gap-1 items-center py-1.5 border-b border-white/5 text-xs">
-                        <span className="text-white/70">{m.name}</span>
+                      <div key={m.name} className={`grid grid-cols-4 gap-1 items-center py-1.5 border-b text-xs ${m.isCurrent ? 'bg-cyan-500/10 rounded-lg px-2 -mx-2 border-cyan-500/30 font-semibold' : 'border-white/5'}`}>
+                        <span className={m.isCurrent ? 'text-cyan-300' : 'text-white/70'}>{m.name}{m.isCurrent ? ' ◀' : ''}</span>
                         <span className="text-emerald-400 text-right tabular-nums">{formatCurrency(m['הכנסות'])}</span>
                         <span className="text-rose-400 text-right tabular-nums">{formatCurrency(m['הוצאות'])}</span>
                         <span className={`font-bold text-right tabular-nums ${bal >= 0 ? 'text-cyan-400' : 'text-orange-400'}`}>{formatCurrency(bal)}</span>
