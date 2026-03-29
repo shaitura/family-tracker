@@ -436,22 +436,25 @@ export default function Layout({
                 to={href}
                 onClick={active && isTransactions ? (e) => { e.preventDefault(); navigate(href, { state: { openForm: Date.now() } }); } : undefined}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 flex-1 h-14 rounded-2xl transition-all duration-200',
-                  accent
-                    ? 'bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/30 scale-110 -mt-5 mx-1'
-                    : active
-                    ? 'text-cyan-400'
-                    : 'text-white/40 hover:text-white/70',
+                  'flex flex-col items-center justify-center gap-1 flex-1 h-14 rounded-2xl transition-all duration-200 relative',
+                  active ? 'text-cyan-400' : 'text-white/40 hover:text-white/70',
                 )}
               >
+                {active && (
+                  <span className="absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-cyan-400" />
+                )}
                 <Icon
-                  className={cn('w-6 h-6 ls:w-4 ls:h-4', accent && 'text-white')}
-                  strokeWidth={accent || active ? 2.5 : 1.8}
+                  className={cn(
+                    'w-6 h-6 ls:w-4 ls:h-4 transition-all duration-200',
+                    active ? 'text-cyan-400 scale-110' : 'text-white/40',
+                    accent && !active ? 'text-purple-400' : '',
+                  )}
+                  strokeWidth={active ? 2.5 : 1.8}
                 />
                 <span
                   className={cn(
-                    'text-[10px] font-medium ls:hidden',
-                    accent ? 'text-white' : active ? 'text-cyan-400' : 'text-white/40',
+                    'text-[10px] font-medium ls:hidden transition-colors duration-200',
+                    active ? 'text-cyan-400' : 'text-white/40',
                   )}
                 >
                   {label}
