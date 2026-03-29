@@ -507,6 +507,7 @@ export default function Reports() {
         </div>
       )}
 
+      {txType !== 'balance' && (
       <Tabs defaultValue={fullYear ? 'monthly' : 'category'} key={fullYear ? 'year' : 'month'}>
         <TabsList dir="rtl">
           {fullYear && <TabsTrigger value="monthly">לפי חודש</TabsTrigger>}
@@ -719,6 +720,7 @@ export default function Reports() {
         </TabsContent>
 
       </Tabs>
+      )}
       </div>{/* end reports-content */}
     </div>
   );
