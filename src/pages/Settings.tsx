@@ -34,6 +34,15 @@ export default function Settings() {
   const [notifyLarge, setNotifyLarge] = useState(true);
   const [notifyMonthly, setNotifyMonthly] = useState(false);
 
+
+  // Sync budget form fields when Firestore data loads
+  useEffect(() => {
+    if (!budget) return;
+    setTotalLimit(String(budget.total_limit ?? '20000'));
+    setAlertThreshold(String(budget.alert_threshold ?? '80'));
+    setCatLimits(Object.fromEntries(Object.entries(budget.category_limits ?? {}).map(([k, v]) => [k, String(v)])));
+  }, [budget?.id]);
+
   useEffect(() => {
     getDoc(doc(db, 'settings', 'notifications')).then((snap) => {
       if (snap.exists()) {
@@ -117,8 +126,8 @@ export default function Settings() {
 
         <div>
           <Label className="mb-2 block">תקציב לפי קטגוריה (₪)</Label>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {CATEGORIES.slice(0, 8).map((cat) => (
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {CATEGORIES.map((cat) => (
               <div key={cat} className="flex items-center gap-2">
                 <span className="text-sm text-white/60 w-16 shrink-0">{cat}</span>
                 <Input
