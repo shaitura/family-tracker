@@ -509,31 +509,15 @@ export default function Transactions() {
   const currentMonthRef = useRef<HTMLDivElement>(null);
   const didScrollRef = useRef(false);
 
-  const [scrollTrigger, setScrollTrigger] = useState<{ behavior: ScrollBehavior } | null>(null);
-
   const scrollToCurrentMonth = useCallback((smooth = false) => {
     const behavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
-    const idx = groupedByMonth.findIndex(([k]) => k === currentMonthKey);
-    if (idx >= 0) setVisibleMonthCount((prev) => Math.max(prev, idx + 1));
-    setScrollTrigger({ behavior });
-  }, [groupedByMonth, currentMonthKey]);
-
-  useEffect(() => {
-    if (!scrollTrigger) return;
-    const { behavior } = scrollTrigger;
-    setScrollTrigger(null);
-    const doScroll = () => {
+    // Current month is always first (newest-first sort) — just scroll to top
+    setVisibleMonthCount(MONTHS_PER_PAGE);
+    requestAnimationFrame(() => {
       const main = document.querySelector<HTMLElement>('main');
-      if (currentMonthRef.current && main) {
-        const mainRect = main.getBoundingClientRect();
-        const elRect = currentMonthRef.current.getBoundingClientRect();
-        main.scrollTo({ top: Math.max(0, main.scrollTop + elRect.top - mainRect.top - 110), behavior });
-      } else if (main) {
-        main.scrollTo({ top: 0, behavior });
-      }
-    };
-    requestAnimationFrame(() => requestAnimationFrame(doScroll));
-  }, [scrollTrigger]);
+      main?.scrollTo({ top: 0, behavior });
+    });
+  }, []);
 
   // On initial data load: scroll to current month before paint (no visible jump)
   useLayoutEffect(() => {
