@@ -507,12 +507,23 @@ export default function Transactions() {
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
     const behavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
-    // Current month is always first (newest-first sort) — just scroll to top
     setVisibleMonthCount(MONTHS_PER_PAGE);
-    requestAnimationFrame(() => {
-      const main = document.querySelector<HTMLElement>('main');
-      main?.scrollTo({ top: 0, behavior });
-    });
+    setTimeout(() => {
+      // Find the actual scrolling container by walking up from first month element
+      const firstMonth = document.querySelector<HTMLElement>('[data-month]');
+      let scrollEl: HTMLElement | null = firstMonth?.parentElement ?? null;
+      while (scrollEl) {
+        const { overflowY } = window.getComputedStyle(scrollEl);
+        if ((overflowY === 'auto' || overflowY === 'scroll') && scrollEl.scrollHeight > scrollEl.clientHeight) break;
+        scrollEl = scrollEl.parentElement;
+      }
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 0, behavior });
+      } else {
+        document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
+        window.scrollTo({ top: 0, behavior });
+      }
+    }, 100);
   }, []);
 
   // On initial data load: scroll to current month before paint (no visible jump)
