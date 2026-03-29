@@ -495,9 +495,11 @@ export default function Transactions() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
+    // Always include current month at top even if empty
+    if (!map.has(currentMonthKey)) map.set(currentMonthKey, []);
     // Sort groups by YYYY-MM descending (newest first)
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
+  }, [filtered, currentMonthKey]);
 
   const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
 
@@ -507,14 +509,12 @@ export default function Transactions() {
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
     setVisibleMonthCount(MONTHS_PER_PAGE);
+    // Wait for render then scroll to current month ref
     setTimeout(() => {
-      // Scroll every possible container to top
-      window.scrollTo(0, 0);
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-      const main = document.querySelector<HTMLElement>('main');
-      if (main) main.scrollTop = 0;
-    }, 150);
+      if (currentMonthRef.current) {
+        currentMonthRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
+      }
+    }, 100);
   }, []);
 
   // On initial data load: scroll to current month before paint (no visible jump)
@@ -1174,6 +1174,11 @@ export default function Transactions() {
 
                 {/* Transactions in this month */}
                 <div className="space-y-2">
+                  {monthTxs.length === 0 && (
+                    <div className="text-center py-6 text-white/30 text-sm">
+                      אין עדיין עסקאות בחודש זה
+                    </div>
+                  )}
                   {monthTxs.map((tx) => {
                     const dupKey = `${tx.sub_category ?? ''}|${tx.amount}`;
                     const isDup = (tx.sub_category ?? '') !== '' && monthTxs.filter((t) => `${t.sub_category ?? ''}|${t.amount}` === dupKey).length > 1;
