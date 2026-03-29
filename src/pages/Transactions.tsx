@@ -1083,8 +1083,8 @@ export default function Transactions() {
                   <button onClick={clearFilters} className="text-xs text-rose-400 flex items-center gap-1 px-2">
                     <X className="w-3 h-3" /> נקה הכל
                   </button>
-                  <Button size="sm" onClick={() => setShowFilters(false)} className="flex-1 bg-cyan-500/80 hover:bg-cyan-500 text-white border-0 text-xs h-8">
-                    סגור
+                  <Button size="sm" onClick={() => setShowFilters(false)} className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-white border-0 text-sm font-medium h-9">
+                    החל פילטרים שנבחרו
                   </Button>
                 </div>
               </CardContent>
