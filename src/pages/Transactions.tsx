@@ -506,13 +506,14 @@ export default function Transactions() {
   const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
-    const behavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
     setVisibleMonthCount(MONTHS_PER_PAGE);
     setTimeout(() => {
-      const el = document.getElementById('transactions-top');
-      if (el) {
-        el.scrollIntoView({ behavior, block: 'start' });
-      }
+      // Scroll every possible container to top
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const main = document.querySelector<HTMLElement>('main');
+      if (main) main.scrollTop = 0;
     }, 150);
   }, []);
 
