@@ -493,9 +493,13 @@ export default function Transactions() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
+    // Always include current month even if empty (so "היום" button can scroll to it)
+    if (!map.has(currentMonthKey)) {
+      map.set(currentMonthKey, []);
+    }
     // Sort groups by YYYY-MM descending (newest first)
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
+  }, [filtered, currentMonthKey]);
 
   const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
 
@@ -505,6 +509,11 @@ export default function Transactions() {
   const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
+    // Ensure current month is visible in the list
+    setVisibleMonthCount((prev) => {
+      const idx = groupedByMonth.findIndex(([k]) => k === currentMonthKey);
+      return idx >= 0 ? Math.max(prev, idx + 1) : prev;
+    });
     const behavior = smooth ? 'smooth' : 'instant' as ScrollBehavior;
     // header (h-14 = 56px) + fixed button bar (~54px) = 110px total fixed overhead
     const OFFSET = 110;
