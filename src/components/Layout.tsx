@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, List, ListPlus, BarChart2, Shield, Settings,
-  Database, LogOut, TrendingUp, Maximize2, Minimize2, Camera, X, Mail, Download, Car,
+  Database, LogOut, TrendingUp, Maximize2, Minimize2, Camera, X, Mail, Download, Car, Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createPageUrl } from '@/utils';
@@ -12,7 +12,8 @@ const NAV_ITEMS = [
   { label: 'בית',     icon: Home,       href: createPageUrl('Home') },
   { label: 'הוצאות', icon: ListPlus,   href: createPageUrl('Transactions'), accent: true },
   { label: 'דוחות',  icon: BarChart2,  href: createPageUrl('Reports') },
-  { label: 'שנתי',   icon: TrendingUp, href: '/annual-analysis' },
+  { label: 'שנתי',   icon: TrendingUp,  href: '/annual-analysis' },
+  { label: 'מגמות',  icon: Lightbulb,  href: '/trends' },
   { label: 'נכסים',  icon: Shield,     href: createPageUrl('Assets') },
   { label: 'רכב',    icon: Car,        href: createPageUrl('Mileage') },
   { label: 'Admin',  icon: Database,   href: '/admin', adminOnly: true },
