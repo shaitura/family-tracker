@@ -509,28 +509,31 @@ export default function Transactions() {
   const currentMonthRef = useRef<HTMLDivElement>(null);
   const didScrollRef = useRef(false);
 
-  const [scrollToToday, setScrollToToday] = useState<false | ScrollBehavior>(false);
+  const [scrollTrigger, setScrollTrigger] = useState<{ behavior: ScrollBehavior } | null>(null);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
+    const behavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
     const idx = groupedByMonth.findIndex(([k]) => k === currentMonthKey);
     if (idx >= 0) setVisibleMonthCount((prev) => Math.max(prev, idx + 1));
-    setScrollToToday(smooth ? 'smooth' : 'instant');
+    setScrollTrigger({ behavior });
   }, [groupedByMonth, currentMonthKey]);
 
   useEffect(() => {
-    if (!scrollToToday) return;
-    const behavior = scrollToToday;
-    setScrollToToday(false);
-    setTimeout(() => {
-      if (currentMonthRef.current) {
-        currentMonthRef.current.scrollIntoView({ behavior, block: 'start' });
-        setTimeout(() => window.scrollBy({ top: -110, behavior }), 10);
-      } else {
-        document.querySelector<HTMLElement>('main')?.scrollTo({ top: 0, behavior });
-        window.scrollTo({ top: 0, behavior });
+    if (!scrollTrigger) return;
+    const { behavior } = scrollTrigger;
+    setScrollTrigger(null);
+    const doScroll = () => {
+      const main = document.querySelector<HTMLElement>('main');
+      if (currentMonthRef.current && main) {
+        const mainRect = main.getBoundingClientRect();
+        const elRect = currentMonthRef.current.getBoundingClientRect();
+        main.scrollTo({ top: Math.max(0, main.scrollTop + elRect.top - mainRect.top - 110), behavior });
+      } else if (main) {
+        main.scrollTo({ top: 0, behavior });
       }
-    }, 50);
-  }, [scrollToToday]);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(doScroll));
+  }, [scrollTrigger]);
 
   // On initial data load: scroll to current month before paint (no visible jump)
   useLayoutEffect(() => {
