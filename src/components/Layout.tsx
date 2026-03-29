@@ -5,6 +5,7 @@ import {
   Database, LogOut, TrendingUp, Maximize2, Minimize2, Camera, X, Mail, Download, Car,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { base44 } from '@/lib/base44Client';
 import { createPageUrl } from '@/utils';
 import { UserInfo } from '@/lib/auth';
 
@@ -35,6 +36,32 @@ export default function Layout({
   const [wideView, setWideView] = useState(true);
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+
+  const createBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const [txData, budgetData, assetData] = await Promise.all([
+        base44.entities.Transaction.filter({}),
+        base44.entities.Budget.filter({}),
+        base44.entities.Asset.filter({}),
+      ]);
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        transactions: txData,
+        budgets: budgetData,
+        assets: assetData,
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'family-tracker-backup-' + new Date().toISOString().split('T')[0] + '.json';
+      a.click();
+    } catch (e) {
+      console.error('Backup failed', e);
+    }
+    setBackupLoading(false);
+  };
 
   const takeScreenshot = async () => {
     setScreenshotLoading(true);
@@ -134,6 +161,18 @@ export default function Layout({
           >
             <Settings size={14} />
           </Link>
+
+          {/* Backup button */}
+          <button
+            onClick={createBackup}
+            disabled={backupLoading}
+            className="flex items-center gap-1.5 h-8 rounded-xl border border-white/15 bg-white/5 px-3 text-white/70 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+            title="גיבוי נתונים"
+          >
+            {backupLoading
+              ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              : <Download size={14} />}
+          </button>
 
           {/* Screenshot button */}
           <button
