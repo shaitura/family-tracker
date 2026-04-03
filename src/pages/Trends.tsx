@@ -62,7 +62,7 @@ function ExecutiveSummary({ items }: { items: ExecItem[] }) {
         {items.length === 0
           ? <p className="text-sm text-white/40 text-center py-3">אין מספיק נתונים</p>
           : <div className="space-y-2">
-              {items.slice(0, 3).map((item, i) => (
+              {items.slice(0, 5).map((item, i) => (
                 <div key={i} className={`flex gap-2.5 items-start text-sm leading-relaxed p-3 rounded-xl border ${ls[item.level]}`}>
                   <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
                   <div className="flex-1">
@@ -82,21 +82,40 @@ function ExecutiveSummary({ items }: { items: ExecItem[] }) {
   );
 }
 
-function PeriodFilter({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+function PeriodFilter({ value, onChange, selectedMonth, onMonthChange, monthOptions }: {
+  value: Period;
+  onChange: (p: Period) => void;
+  selectedMonth: string;
+  onMonthChange: (m: string) => void;
+  monthOptions: { ym: string; label: string }[];
+}) {
   const opts: [Period, string][] = [
     ['month', 'חודש'], ['quarter', 'רבעון'], ['year', 'שנה'], ['18m', '18 חודשים'], ['all', 'הכל'],
   ];
   return (
-    <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10 overflow-x-auto">
-      <Calendar className="w-3.5 h-3.5 text-white/30 mr-1 shrink-0" />
-      {opts.map(([key, label]) => (
-        <button key={key} onClick={() => onChange(key)}
-          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-            value === key ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/50 hover:text-white/70'
-          }`}>
-          {label}
-        </button>
-      ))}
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10 overflow-x-auto">
+        <Calendar className="w-3.5 h-3.5 text-white/30 mr-1 shrink-0" />
+        {opts.map(([key, label]) => (
+          <button key={key} onClick={() => onChange(key)}
+            className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              value === key ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/50 hover:text-white/70'
+            }`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {value === 'month' && (
+        <select
+          value={selectedMonth}
+          onChange={e => onMonthChange(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-cyan-500/40"
+        >
+          {monthOptions.map(o => (
+            <option key={o.ym} value={o.ym} className="bg-slate-900 text-white">{o.label}</option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
@@ -113,6 +132,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 export default function Trends() {
   const [tab, setTab] = useState<'trends'|'compare'|'leaks'|'anomalies'|'payers'>('trends');
   const [period, setPeriod] = useState<Period>('18m');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions'],
@@ -122,11 +142,32 @@ export default function Trends() {
   const allExpenses = useMemo(() => transactions.filter(t => t.type === 'expense'), [transactions]);
   const allIncome   = useMemo(() => transactions.filter(t => t.type === 'income'),  [transactions]);
 
-  const periodMonths = useMemo(() => getPeriodMonths(period), [period]);
+  const effectiveMonth = useMemo(() => {
+    if (period !== 'month') return '';
+    if (selectedMonth) return selectedMonth;
+    const now2 = new Date();
+    return `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`;
+  }, [period, selectedMonth]);
+
+  const periodMonths = useMemo(() => {
+    if (period === 'month' && effectiveMonth) return [effectiveMonth];
+    return getPeriodMonths(period);
+  }, [period, effectiveMonth]);
+
   const expenses = useMemo(() =>
     period === 'all' ? allExpenses
       : allExpenses.filter(t => periodMonths.some(ym => t.date.startsWith(ym))),
     [allExpenses, period, periodMonths]);
+
+  const monthOptions = useMemo(() => {
+    const now2 = new Date();
+    return Array.from({ length: 24 }, (_, i) => {
+      const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleString('he', { month: 'long', year: 'numeric' });
+      return { ym, label };
+    });
+  }, []);
 
 
   const last18Months = useMemo(() => {
@@ -308,7 +349,19 @@ export default function Trends() {
         ? { icon: '⚠️', level: 'warn', text: `הוצאות החודש מהוות ${ratio}% מההכנסה` }
         : { icon: '✅', level: 'ok',   text: `יחס הוצאות/הכנסה תקין: ${ratio}%` });
     }
-    return items.slice(0, 3);
+    const incomeTotal = allIncome.filter(t => t.date.startsWith(currentYM)).reduce((s,t)=>s+t.amount,0);
+    if (incomeTotal > 0 && curTotal > 0) {
+      const saved = incomeTotal - curTotal;
+      const savePct = Math.round((saved / incomeTotal) * 100);
+      if (savePct > 20) items.push({ icon: '🏦', level: 'ok', text: `חיסכון החודש: ${fmt(saved)} (${savePct}% מההכנסה)` });
+      else if (savePct < 0) items.push({ icon: '🔴', level: 'bad', text: `גירעון החודש: ${fmt(Math.abs(saved))} — ההוצאות עולות על ההכנסה` });
+    }
+    const fixedAmt = allExpenses.filter(t => t.date.startsWith(currentYM) && t.expense_class === 'קבועה').reduce((s,t)=>s+t.amount,0);
+    if (curTotal > 0 && fixedAmt > 0) {
+      const fixedPct = Math.round((fixedAmt / curTotal) * 100);
+      items.push({ icon: '📋', level: 'info', text: `${fixedPct}% מהוצאות החודש הן קבועות (${fmt(fixedAmt)})` });
+    }
+    return items.slice(0, 5);
   }, [allExpenses, allIncome, anomalies, leaks, currentYM, prevYM]);
 
   const TABS: [typeof tab, string][] = [
@@ -318,9 +371,9 @@ export default function Trends() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 space-y-4" dir="rtl">
       <ExecutiveSummary items={execItems} />
-      <PeriodFilter value={period} onChange={setPeriod} />
+      <PeriodFilter value={period} onChange={setPeriod} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} monthOptions={monthOptions} />
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <StatCard label='סהֳכ הוצאות' value={fmt(periodStats.total)} color="text-rose-400" />
         <StatCard label='ממוצע חודשי' value={fmt(periodStats.monthly)} />
         <StatCard label='קבועות' value={fmt(periodStats.fixed)} sub={`${Math.round((periodStats.fixed/Math.max(1,periodStats.total))*100)}%`} />
@@ -347,7 +400,7 @@ export default function Trends() {
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-3">הוצאות לפי קטגוריה לאורך זמן</div>
-              <ResponsiveContainer width="100%" height={260}>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                   <defs>
                     {topCategories.map((cat, i) => (
@@ -367,13 +420,13 @@ export default function Trends() {
                       stroke={COLORS[i % COLORS.length]} fill={`url(#g${i})`} strokeWidth={1.5} />
                   ))}
                 </AreaChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </CardContent>
           </Card>
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-3">סהֳכ הוצאות חודשי</div>
-              <ResponsiveContainer width="100%" height={200}>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={200}>
                 <BarChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
@@ -381,7 +434,7 @@ export default function Trends() {
                   <Tooltip contentStyle={TT} />
                   <Bar dataKey={topCategories[0] ?? 'total'} fill="#06b6d4" radius={[3,3,0,0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </CardContent>
           </Card>
         </div>
@@ -392,7 +445,7 @@ export default function Trends() {
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-3">השוואה שנה-על-שנה</div>
-              <ResponsiveContainer width="100%" height={260}>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={260}>
                 <BarChart data={yoyData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
@@ -403,13 +456,13 @@ export default function Trends() {
                   <Bar dataKey={currentYear - 1} fill="#22d3ee" radius={[2,2,0,0]} />
                   <Bar dataKey={currentYear}     fill="#10b981" radius={[2,2,0,0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </CardContent>
           </Card>
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-3">שיאים עונתיים</div>
-              <ResponsiveContainer width="100%" height={200}>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={200}>
                 <BarChart data={seasonalPeaks} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
@@ -421,7 +474,7 @@ export default function Trends() {
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
               <div className="mt-2 text-xs text-white/40">אדום = שיא עונתי (20%+ מעל ממוצע), צהוב = מעט גבוה, ירוק = רגיל</div>
             </CardContent>
           </Card>
@@ -435,7 +488,7 @@ export default function Trends() {
                   </div>
                 ))}
               </div>
-              <ResponsiveContainer width="100%" height={200}>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={200}>
                 <BarChart data={paymentMethodData.byMonth} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
@@ -445,7 +498,7 @@ export default function Trends() {
                     <Bar key={m} dataKey={m} stackId="a" fill={METHOD_COLORS[i % METHOD_COLORS.length]} />
                   ))}
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </CardContent>
           </Card>
         </div>
@@ -492,25 +545,31 @@ export default function Trends() {
           </div>
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
-              <div className="text-sm text-white/60 mb-3">פירוט לפי קטגוריה</div>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={payerData.byCat} layout="vertical" margin={{ top: 4, right: 60, bottom: 0, left: 60 }}>
+              <div className="text-sm text-white/60 mb-2">פירוט לפי קטגוריה</div>
+              <div className="flex gap-4 mb-3">
+                {['Shai','Ortal','Joint'].map((p,i) => (
+                  <div key={p} className="flex items-center gap-1.5 text-xs text-white/60">
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background: PAYER_COLORS[i]}} />{p}
+                  </div>
+                ))}
+              </div>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={300}>
+                <BarChart data={payerData.byCat} layout="vertical" margin={{ top: 4, right: 20, bottom: 0, left: 70 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 9, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: '#ffffff70' }} width={58} />
+                  <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: '#ffffff70' }} width={68} />
                   <Tooltip contentStyle={TT} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                   {['Shai','Ortal','Joint'].map((p, i) => (
                     <Bar key={p} dataKey={p} stackId="a" fill={PAYER_COLORS[i]} />
                   ))}
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </CardContent>
           </Card>
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-3">חלוקה כוללת</div>
-              <ResponsiveContainer width="100%" height={200}>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie data={payerData.pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
                     {payerData.pieData.map((_, i) => <Cell key={i} fill={PAYER_COLORS[i]} />)}
@@ -518,7 +577,7 @@ export default function Trends() {
                   <Tooltip formatter={(v: number) => fmt(v)} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                 </PieChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </CardContent>
           </Card>
         </div>
@@ -535,7 +594,7 @@ export default function Trends() {
                 </div>
               </div>
               {leaksByCategory.length > 0 && (
-                <ResponsiveContainer width="100%" height={180}>
+                <div dir="ltr"><ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie data={leaksByCategory} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
                       {leaksByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -543,7 +602,7 @@ export default function Trends() {
                     <Tooltip formatter={(v: number) => `${fmtK(v)} ₪/שנה`} />
                     <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff70' }} />
                   </PieChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer></div>
               )}
             </CardContent>
           </Card>
