@@ -308,8 +308,18 @@ export default function Assets() {
     [allTransactions],
   );
 
-  /** Return transactions whose notes contain at least one meaningful token from the asset provider name */
+  /** Match transactions to asset: by policy number first (precise), fall back to provider name */
   function matchedTxs(asset: Asset): Transaction[] {
+    // 1. Try matching by policy number if set (most precise)
+    if (asset.policy_number && asset.policy_number.trim().length >= 4) {
+      const byPolicy = insuranceTxs
+        .filter((t) => (t.notes ?? '').includes(asset.policy_number!.trim()))
+        .sort((a, b) => b.date.localeCompare(a.date));
+      if (byPolicy.length > 0) return byPolicy;
+    }
+    // 2. Fall back to provider name tokens — only show if monthly_premium > 0
+    //    to avoid false matches for employer-paid or zero-cost policies
+    if (!asset.monthly_premium || asset.monthly_premium <= 0) return [];
     const tokens = asset.provider
       .toLowerCase()
       .split(/[\s\-\/]+/)
@@ -619,7 +629,7 @@ export default function Assets() {
                                     <div className="mt-3 pt-2.5 border-t border-white/8 space-y-1">
                                       <div className="flex items-center justify-between mb-1.5">
                                         <div className="flex items-center gap-1">
-                                          {avgActual != null && a.monthly_premium != null && (
+                                          {avgActual != null && a.monthly_premium != null && a.monthly_premium > 0 && (
                                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${Math.abs(avgActual - a.monthly_premium) / a.monthly_premium < 0.05 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
                                               ממוצע בפועל: {formatCurrency(avgActual)}
                                             </span>
