@@ -13,7 +13,7 @@ import { Transaction } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 
 function fmt(n: number) { return `₪${Math.round(n).toLocaleString('he')}`; }
-function fmtK(n: number) { return n >= 1000 ? `₪${(n / 1000).toFixed(1)}k` : fmt(n); }
+function fmtK(n: number) { return `₪${Math.round(n).toLocaleString('en-US')}`; }
 
 function formatMonthLabel(ym: string) {
   const [y, m] = ym.split('-');
@@ -207,7 +207,7 @@ export default function Trends() {
       for (const cat of topCategories)
         row[cat] = allExpenses.filter(t => t.date.startsWith(ym) && t.category === cat).reduce((s, t) => s + t.amount, 0);
       return row;
-    }), [chartMonths, allExpenses, topCategories]);
+    }).reverse(), [chartMonths, allExpenses, topCategories]);
   const yoyData = useMemo(() =>
     Array.from({ length: 12 }, (_, i) => {
       const m = String(i + 1).padStart(2, "0");
@@ -218,7 +218,7 @@ export default function Trends() {
         [currentYear - 1]: Math.round(sum(currentYear - 1)),
         [currentYear]:     Math.round(sum(currentYear)),
       };
-    }), [allExpenses, currentYear]);
+    }).reverse(), [allExpenses, currentYear]);
 
   const seasonalPeaks = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -253,15 +253,24 @@ export default function Trends() {
   }, [allExpenses, currentYM, now]);
 
   const payerData = useMemo(() => {
-    const payers = ["Shai", "Ortal", "Joint"];
+    const payers = ["Shi", "Ortal", "Joint"];
+    const payerLabels: Record<string, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
+    const matchPayer = (t: Transaction, p: string) => {
+      if (p === 'Shi')   return t.payer === 'Shi'   || (t.payer as string) === 'שי';
+      if (p === 'Ortal') return t.payer === 'Ortal' || (t.payer as string) === 'אורטל';
+      if (p === 'Joint') return t.payer === 'Joint' || (t.payer as string) === 'משותף';
+      return false;
+    };
     const byCat = Array.from(new Set(expenses.map(t => t.category))).map(cat => {
       const row: Record<string, number|string> = { category: cat };
-      for (const p of payers) row[p] = expenses.filter(t => t.category === cat && t.payer === p).reduce((s, t) => s + t.amount, 0);
+      for (const p of payers) row[p] = expenses.filter(t => t.category === cat && matchPayer(t, p)).reduce((s, t) => s + t.amount, 0);
       return row;
-    }).sort((a, b) => ((b["Shai"] as number)+(b["Ortal"] as number)+(b["Joint"] as number)) - ((a["Shai"] as number)+(a["Ortal"] as number)+(a["Joint"] as number))).slice(0, 10);
-    const totals: Record<string, number> = { Shai: 0, Ortal: 0, Joint: 0 };
-    for (const t of expenses) if (payers.includes(t.payer)) totals[t.payer] = (totals[t.payer] || 0) + t.amount;
-    return { byCat, pieData: payers.map(p => ({ name: p, value: Math.round(totals[p] || 0) })).filter(x => x.value > 0) };
+    }).sort((a, b) => ((b["Shi"] as number)+(b["Ortal"] as number)+(b["Joint"] as number)) - ((a["Shi"] as number)+(a["Ortal"] as number)+(a["Joint"] as number))).slice(0, 10);
+    const totals: Record<string, number> = { Shi: 0, Ortal: 0, Joint: 0 };
+    for (const t of expenses) {
+      for (const p of payers) if (matchPayer(t, p)) { totals[p] = (totals[p] || 0) + t.amount; break; }
+    }
+    return { byCat, payerLabels, pieData: payers.map(p => ({ name: payerLabels[p], value: Math.round(totals[p] || 0) })).filter(x => x.value > 0) };
   }, [expenses]);
   const paymentMethodData = useMemo(() => {
     const methods = ["אשראי","מזומן","ביט","העברה","הוראת קבע","צ'ק"];
@@ -269,7 +278,7 @@ export default function Trends() {
       const row: Record<string, number|string> = { month: formatMonthLabel(ym) };
       for (const m of methods) row[m] = allExpenses.filter(t => t.date.startsWith(ym) && t.payment_method === m).reduce((s, t) => s + t.amount, 0);
       return row;
-    });
+    }).reverse();
     const totals: Record<string, number> = {};
     for (const t of expenses) totals[t.payment_method] = (totals[t.payment_method] || 0) + t.amount;
     const grand = Object.values(totals).reduce((s, v) => s + v, 0);
@@ -547,7 +556,7 @@ export default function Trends() {
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-2">פירוט לפי קטגוריה</div>
               <div className="flex gap-4 mb-3">
-                {['Shai','Ortal','Joint'].map((p,i) => (
+                {['Shi','Ortal','Joint'].map((p,i) => (
                   <div key={p} className="flex items-center gap-1.5 text-xs text-white/60">
                     <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background: PAYER_COLORS[i]}} />{p}
                   </div>
@@ -559,7 +568,7 @@ export default function Trends() {
                   <XAxis type="number" tick={{ fontSize: 9, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
                   <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: '#ffffff70' }} width={68} />
                   <Tooltip contentStyle={TT} />
-                  {['Shai','Ortal','Joint'].map((p, i) => (
+                  {['Shi','Ortal','Joint'].map((p, i) => (
                     <Bar key={p} dataKey={p} stackId="a" fill={PAYER_COLORS[i]} />
                   ))}
                 </BarChart>
