@@ -212,6 +212,18 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { name:
   );
 }
 
+// Types that typically have annual expiry and should warn if end_date is missing
+const EXPIRY_RELEVANT_TYPES = new Set(['רכב - חובה', 'רכב - מקיף', 'רכב - צד שלישי', 'מבנה', 'תכולה', 'מבנה + תכולה', 'בריאות', 'שיניים', 'סיעוד', 'חיים', 'ריסק', 'אובדן כושר עבודה', 'מחלות קשות']);
+
+const INSURANCE_GROUPS: { key: string; label: string; icon: string; types: string[] }[] = [
+  { key: 'pension', label: 'חיסכון פנסיוני',            icon: '🏦', types: ['פנסיה', 'מנהלים'] },
+  { key: 'life',    label: 'ביטוחי חיים ואובדן כושר',   icon: '💼', types: ['חיים', 'ריסק', 'אובדן כושר עבודה', 'מחלות קשות'] },
+  { key: 'health',  label: 'ביטוחי בריאות',             icon: '🏥', types: ['בריאות', 'שיניים', 'סיעוד', 'קופת חולים', 'אבחון מהיר באסותא'] },
+  { key: 'home',    label: 'ביטוחי דירה',               icon: '🏠', types: ['מבנה', 'תכולה', 'מבנה + תכולה', 'משכנתא'] },
+  { key: 'car',     label: 'ביטוחי רכב',                icon: '🚗', types: ['רכב - חובה', 'רכב - מקיף', 'רכב - צד שלישי'] },
+  { key: 'other',   label: 'אחר',                       icon: '📋', types: ['כללי'] },
+];
+
 type ExpiryStatus = 'expired' | 'critical' | 'warning' | 'ok' | 'none';
 
 function expiryStatus(endDate: string | undefined): { status: ExpiryStatus; daysLeft: number } {
@@ -232,17 +244,27 @@ function expiryCardBorder(status: ExpiryStatus): string {
   return 'border-cyan-500/10';
 }
 
-function ExpiryBadge({ status, daysLeft, endDate }: { status: ExpiryStatus; daysLeft: number; endDate: string }) {
-  if (status === 'none' || status === 'ok') return null;
+function ExpiryBadge({ status, daysLeft, endDate, assetType }: { status: ExpiryStatus; daysLeft: number; endDate?: string; assetType: string }) {
+  if (status === 'none') {
+    if (EXPIRY_RELEVANT_TYPES.has(assetType)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border bg-slate-500/20 text-slate-400 border-slate-500/30 font-medium">
+          ⚪ אין תאריך סיום
+        </span>
+      );
+    }
+    return null;
+  }
+  if (status === 'ok') return null;
   const cfg = {
-    expired:  { cls: 'bg-red-500/20 text-red-300 border-red-500/40',    icon: '🔴', label: `פג תוקף לפני ${Math.abs(daysLeft)} ימים` },
+    expired:  { cls: 'bg-red-500/20 text-red-300 border-red-500/40',         icon: '🔴', label: `פג תוקף לפני ${Math.abs(daysLeft)} ימים` },
     critical: { cls: 'bg-orange-500/20 text-orange-300 border-orange-500/40', icon: '🟠', label: `פג בעוד ${daysLeft} ימים` },
-    warning:  { cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40',   icon: '🟡', label: `מתחדש בעוד ${daysLeft} ימים` },
+    warning:  { cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40',    icon: '🟡', label: `מתחדש בעוד ${daysLeft} ימים` },
   }[status];
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${cfg.cls}`}>
       {cfg.icon} {cfg.label}
-      <span className="opacity-60">({endDate})</span>
+      {endDate && <span className="opacity-60">({endDate})</span>}
     </span>
   );
 }
@@ -497,19 +519,18 @@ export default function Assets() {
           )}
 
           {insuranceAssets.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {investmentAssets.length > 0 && <p className="text-xs font-semibold text-cyan-400/80 px-1 mt-2">🛡️ ביטוחים וקרנות</p>}
 
-              {/* Expiry alert banner */}
+              {/* ── Expiry alert banner ── */}
               {(() => {
                 const expiring = insuranceAssets
                   .map(a => ({ a, ...expiryStatus(a.end_date) }))
                   .filter(x => x.status === 'expired' || x.status === 'critical' || x.status === 'warning')
                   .sort((x, y) => x.daysLeft - y.daysLeft);
                 if (!expiring.length) return null;
-                const expired  = expiring.filter(x => x.status === 'expired');
-                const critical = expiring.filter(x => x.status === 'critical');
-                const warning  = expiring.filter(x => x.status === 'warning');
+                const expiredCount  = expiring.filter(x => x.status === 'expired').length;
+                const criticalCount = expiring.filter(x => x.status === 'critical').length;
                 return (
                   <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-2">
                     <div className="flex items-center gap-2">
@@ -518,16 +539,9 @@ export default function Assets() {
                       <span className="mr-auto text-xs text-white/40">{expiring.length} פוליסות</span>
                     </div>
                     {expiring.map(({ a, status, daysLeft }) => {
-                      const rowCls =
-                        status === 'expired'  ? 'text-red-300'    :
-                        status === 'critical' ? 'text-orange-300' : 'text-amber-300';
-                      const icon =
-                        status === 'expired'  ? '🔴' :
-                        status === 'critical' ? '🟠' : '🟡';
-                      const label =
-                        status === 'expired'  ? `פג לפני ${Math.abs(daysLeft)} ימים` :
-                        status === 'critical' ? `פג בעוד ${daysLeft} ימים` :
-                                               `מתחדש בעוד ${daysLeft} ימים`;
+                      const rowCls = status === 'expired' ? 'text-red-300' : status === 'critical' ? 'text-orange-300' : 'text-amber-300';
+                      const icon   = status === 'expired' ? '🔴' : status === 'critical' ? '🟠' : '🟡';
+                      const label  = status === 'expired' ? `פג לפני ${Math.abs(daysLeft)} ימים` : status === 'critical' ? `פג בעוד ${daysLeft} ימים` : `מתחדש בעוד ${daysLeft} ימים`;
                       return (
                         <div key={a.id} className="flex items-center justify-between gap-2 text-xs">
                           <span className={`font-medium ${rowCls}`}>{icon} {a.product_name || a.type}</span>
@@ -538,94 +552,100 @@ export default function Assets() {
                         </div>
                       );
                     })}
-                    {(expired.length > 0 || critical.length > 0) && (
+                    {(expiredCount > 0 || criticalCount > 0) && (
                       <p className="text-[10px] text-white/30 pt-1 border-t border-white/10">
-                        💡 {expired.length > 0 ? `${expired.length} פוליסות פגו תוקף` : ''}{expired.length > 0 && critical.length > 0 ? ' · ' : ''}{critical.length > 0 ? `${critical.length} פוגות בפחות מ-30 יום` : ''} — יש לחדש בהקדם
+                        💡 {expiredCount > 0 ? `${expiredCount} פוליסות פגו תוקף` : ''}{expiredCount > 0 && criticalCount > 0 ? ' · ' : ''}{criticalCount > 0 ? `${criticalCount} פוגות בפחות מ-30 יום` : ''} — יש לחדש בהקדם
                       </p>
                     )}
                   </div>
                 );
               })()}
 
-              {insuranceAssets.map((a, i) => {
-                const txs = matchedTxs(a);
-                const recentTxs = txs.slice(0, 3);
-                const avgActual = txs.length
-                  ? Math.round(txs.slice(0, 12).reduce((s, t) => s + t.amount, 0) / Math.min(txs.length, 12))
-                  : null;
-                const { status: expStatus, daysLeft } = expiryStatus(a.end_date);
+              {/* ── Grouped insurance cards ── */}
+              {INSURANCE_GROUPS.map(group => {
+                const groupAssets = insuranceAssets.filter(a => group.types.includes(a.type));
+                if (!groupAssets.length) return null;
+                const groupTotal = groupAssets.reduce((s, a) => s + (a.monthly_premium ?? 0), 0);
+                const hasUrgent  = groupAssets.some(a => { const s = expiryStatus(a.end_date).status; return s === 'expired' || s === 'critical'; });
+                const hasWarning = groupAssets.some(a => expiryStatus(a.end_date).status === 'warning');
                 return (
-                  <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                    <Card className={`border ${expiryCardBorder(expStatus)}`}>
-                      <CardContent className="py-4 px-4">
-                        <div className="flex gap-3 items-center">
-                          {/* Provider logo / initials */}
-                          <ProviderAvatar provider={a.provider} isInvestment={false} />
+                  <div key={group.key} className="space-y-2">
+                    {/* Group header */}
+                    <div className={`flex items-center justify-between px-1 py-1.5 rounded-lg ${hasUrgent ? 'bg-red-500/10' : hasWarning ? 'bg-amber-500/10' : 'bg-white/3'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{group.icon}</span>
+                        <span className={`text-xs font-bold ${hasUrgent ? 'text-red-300' : hasWarning ? 'text-amber-300' : 'text-white/70'}`}>{group.label}</span>
+                        {hasUrgent  && <AlertTriangle className="w-3 h-3 text-red-400" />}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-white/30">{groupAssets.length} פוליסות</span>
+                        {groupTotal > 0 && <span className="text-xs font-semibold text-cyan-400">{formatCurrency(groupTotal)}/חודש</span>}
+                      </div>
+                    </div>
 
-                          {/* Content */}
-                          <div className="flex-1 min-w-0 text-right">
-                            {/* Top row: product name + premium */}
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="text-left shrink-0">
-                                {a.monthly_premium != null && (
-                                  <p className="text-base font-bold text-cyan-400 leading-tight">{formatCurrency(a.monthly_premium)}<span className="text-xs font-normal text-white/40">/חודש</span></p>
-                                )}
-                              </div>
-                              <p className="text-base font-semibold text-white leading-tight truncate">{a.product_name}</p>
-                            </div>
-
-                            {/* Provider name + owner */}
-                            <div className="flex items-center justify-end gap-1.5 mb-2">
-                              <span className="text-sm text-white/60 font-medium">{a.provider}</span>
-                              <span className="text-white/25">·</span>
-                              <span className="text-xs text-white/40">{OWNER_LABELS[a.owner] || a.owner}</span>
-                            </div>
-
-                            {/* Badges row */}
-                            <div className="flex gap-1.5 flex-wrap justify-end">
-                              <Badge className={`text-xs gap-1 ${typeColorClass(a.type)}`}>
-                                <span>{assetIcon(a.type)}</span>{a.type}
-                              </Badge>
-                              {a.policy_number && <Badge variant="outline" className="text-xs">#{a.policy_number}</Badge>}
-                              {a.start_date && <Badge variant="outline" className="text-xs">{a.start_date}</Badge>}
-                              {a.end_date && <ExpiryBadge status={expStatus} daysLeft={daysLeft} endDate={a.end_date} />}
-                            </div>
-
-                            {/* Actual payments from transactions */}
-                            {recentTxs.length > 0 && (
-                              <div className="mt-3 pt-2.5 border-t border-white/8 space-y-1">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <div className="flex items-center gap-1">
-                                    {avgActual != null && a.monthly_premium != null && (
-                                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-                                        Math.abs(avgActual - a.monthly_premium) / a.monthly_premium < 0.05
-                                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                          : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                      }`}>
-                                        ממוצע בפועל: {formatCurrency(avgActual)}
-                                      </span>
-                                    )}
+                    {/* Cards in group */}
+                    {groupAssets.map((a, i) => {
+                      const txs       = matchedTxs(a);
+                      const recentTxs = txs.slice(0, 3);
+                      const avgActual = txs.length ? Math.round(txs.slice(0, 12).reduce((s, t) => s + t.amount, 0) / Math.min(txs.length, 12)) : null;
+                      const { status: expStatus, daysLeft } = expiryStatus(a.end_date);
+                      return (
+                        <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                          <Card className={`border ${expiryCardBorder(expStatus)}`}>
+                            <CardContent className="py-4 px-4">
+                              <div className="flex gap-3 items-center">
+                                <ProviderAvatar provider={a.provider} isInvestment={false} />
+                                <div className="flex-1 min-w-0 text-right">
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <div className="text-left shrink-0">
+                                      {a.monthly_premium != null && (
+                                        <p className="text-base font-bold text-cyan-400 leading-tight">{formatCurrency(a.monthly_premium)}<span className="text-xs font-normal text-white/40">/חודש</span></p>
+                                      )}
+                                    </div>
+                                    <p className="text-base font-semibold text-white leading-tight truncate">{a.product_name}</p>
                                   </div>
-                                  <span className="text-[10px] text-white/30">{txs.length} תשלומים</span>
+                                  <div className="flex items-center justify-end gap-1.5 mb-2">
+                                    <span className="text-sm text-white/60 font-medium">{a.provider}</span>
+                                    <span className="text-white/25">·</span>
+                                    <span className="text-xs text-white/40">{OWNER_LABELS[a.owner] || a.owner}</span>
+                                  </div>
+                                  <div className="flex gap-1.5 flex-wrap justify-end">
+                                    <Badge className={`text-xs gap-1 ${typeColorClass(a.type)}`}><span>{assetIcon(a.type)}</span>{a.type}</Badge>
+                                    {a.policy_number && <Badge variant="outline" className="text-xs">#{a.policy_number}</Badge>}
+                                    {a.start_date && <Badge variant="outline" className="text-xs">{a.start_date}</Badge>}
+                                    <ExpiryBadge status={expStatus} daysLeft={daysLeft} endDate={a.end_date} assetType={a.type} />
+                                  </div>
+                                  {recentTxs.length > 0 && (
+                                    <div className="mt-3 pt-2.5 border-t border-white/8 space-y-1">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-1">
+                                          {avgActual != null && a.monthly_premium != null && (
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${Math.abs(avgActual - a.monthly_premium) / a.monthly_premium < 0.05 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                                              ממוצע בפועל: {formatCurrency(avgActual)}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="text-[10px] text-white/30">{txs.length} תשלומים</span>
+                                      </div>
+                                      {recentTxs.map((t) => (
+                                        <div key={t.id} className="flex items-center justify-between text-xs">
+                                          <span className="text-emerald-400 font-medium">{formatCurrency(t.amount)}</span>
+                                          <span className="text-white/30">{t.date.slice(0, 7)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                                {recentTxs.map((t) => (
-                                  <div key={t.id} className="flex items-center justify-between text-xs">
-                                    <span className="text-emerald-400 font-medium">{formatCurrency(t.amount)}</span>
-                                    <span className="text-white/30">{t.date.slice(0, 7)}</span>
-                                  </div>
-                                ))}
+                                <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                            )}
-                          </div>
-
-                          {/* Edit button */}
-                          <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
                 );
               })}
             </div>
