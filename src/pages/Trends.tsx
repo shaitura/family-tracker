@@ -130,10 +130,16 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
     </div>
   );
 }
+const prevMonthYM = (() => {
+  const d = new Date();
+  const p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}`;
+})();
+
 export default function Trends() {
   const [tab, setTab] = useState<'trends'|'compare'|'leaks'|'anomalies'|'payers'>('trends');
-  const [period, setPeriod] = useState<Period>('18m');
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [period, setPeriod] = useState<Period>('month');
+  const [selectedMonth, setSelectedMonth] = useState<string>(prevMonthYM);
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions'],
@@ -145,9 +151,7 @@ export default function Trends() {
 
   const effectiveMonth = useMemo(() => {
     if (period !== 'month') return '';
-    if (selectedMonth) return selectedMonth;
-    const now2 = new Date();
-    return `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`;
+    return selectedMonth || prevMonthYM;
   }, [period, selectedMonth]);
 
   const periodMonths = useMemo(() => {
