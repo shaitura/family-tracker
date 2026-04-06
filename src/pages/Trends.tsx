@@ -575,20 +575,20 @@ export default function Trends() {
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-2">פירוט לפי קטגוריה</div>
               <div className="flex gap-4 mb-3">
-                {['Shi','Ortal','Joint'].map((p,i) => (
+                {(['Shi','Ortal','Joint'] as const).map((p,i) => (
                   <div key={p} className="flex items-center gap-1.5 text-xs text-white/60">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background: PAYER_COLORS[i]}} />{p}
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background: PAYER_COLORS[i]}} />{payerData.payerLabels[p]}
                   </div>
                 ))}
               </div>
               <div dir="ltr"><ResponsiveContainer width="100%" height={300}>
-                <BarChart data={payerData.byCat} layout="vertical" margin={{ top: 4, right: 20, bottom: 0, left: 70 }}>
+                <BarChart data={payerData.byCat} layout="vertical" margin={{ top: 4, right: 75, bottom: 0, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 9, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: '#ffffff70' }} width={68} />
+                  <XAxis type="number" reversed tick={{ fontSize: 9, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
+                  <YAxis type="category" dataKey="category" orientation="right" tick={{ fontSize: 10, fill: '#ffffff70' }} width={70} />
                   <Tooltip contentStyle={TT} formatter={ttFmt} />
-                  {['Shi','Ortal','Joint'].map((p, i) => (
-                    <Bar key={p} dataKey={p} stackId="a" fill={PAYER_COLORS[i]} />
+                  {(['Shi','Ortal','Joint'] as const).map((p, i) => (
+                    <Bar key={p} dataKey={p} name={payerData.payerLabels[p]} stackId="a" fill={PAYER_COLORS[i]} />
                   ))}
                 </BarChart>
               </ResponsiveContainer></div>
