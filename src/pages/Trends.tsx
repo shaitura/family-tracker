@@ -46,7 +46,7 @@ const ttFmt = (v: number | string, name: string): [string, string] => [fmt(typeo
 
 interface ExecItem { icon: string; text: string; level: 'ok' | 'warn' | 'bad' | 'info'; saving?: number }
 
-function ExecutiveSummary({ items }: { items: ExecItem[] }) {
+function ExecutiveSummary({ items, title }: { items: ExecItem[]; title: string }) {
   const ls: Record<string, string> = {
     ok: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300',
     warn: 'border-amber-500/30 bg-amber-500/5 text-amber-300',
@@ -58,7 +58,7 @@ function ExecutiveSummary({ items }: { items: ExecItem[] }) {
       <CardContent className="pt-4">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles className="w-4 h-4 text-cyan-400" />
-          <span className="text-sm font-bold text-white">סיכום מנהלים — החודש</span>
+          <span className="text-sm font-bold text-white">{title}</span>
         </div>
         {items.length === 0
           ? <p className="text-sm text-white/40 text-center py-3">אין מספיק נתונים</p>
@@ -160,6 +160,29 @@ export default function Trends() {
       : allExpenses.filter(t => periodMonths.some(ym => t.date.startsWith(ym))),
     [allExpenses, period, periodMonths]);
 
+  const priorMonths = useMemo(() => {
+    if (period === 'all' || periodMonths.length === 0) return [];
+    const [fy, fm] = periodMonths[0].split('-').map(Number);
+    const len = periodMonths.length;
+    return Array.from({ length: len }, (_, i) => {
+      const d = new Date(fy, fm - 1 - len + i, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    });
+  }, [period, periodMonths]);
+
+  const periodLabel = useMemo(() => {
+    if (period === 'month') {
+      const n = new Date();
+      const ym = effectiveMonth || `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+      const [y, m] = ym.split('-');
+      return new Date(Number(y), Number(m)-1).toLocaleString('he', { month: 'long', year: 'numeric' });
+    }
+    if (period === 'quarter') return 'רבעון אחרון';
+    if (period === 'year')    return 'שנה אחרונה';
+    if (period === '18m')     return '18 חודשים אחרונים';
+    return 'כל הזמנים';
+  }, [period, effectiveMonth]);
+
   const monthOptions = useMemo(() => {
     const now2 = new Date();
     return Array.from({ length: 24 }, (_, i) => {
@@ -189,11 +212,6 @@ export default function Trends() {
   }, [period, allExpenses, last18Months, periodMonths]);
 
   const now = new Date();
-  const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prevYM = (() => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  })();
   const currentYear = now.getFullYear();
 
   const topCategories = useMemo(() => {
@@ -238,20 +256,20 @@ export default function Trends() {
   }, [allExpenses, currentYear]);
 
   const anomalies = useMemo(() => {
+    if (period === 'all' || periodMonths.length === 0) return [];
     const results: { category: string; currentAmount: number; movingAvg: number; deviation: number; level: "warn"|"bad" }[] = [];
-    const prev3 = Array.from({ length: 3 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (3 - i), 1);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    });
+    const len = periodMonths.length;
     for (const cat of Array.from(new Set(allExpenses.map(t => t.category)))) {
-      const cur = allExpenses.filter(t => t.date.startsWith(currentYM) && t.category === cat).reduce((s, t) => s + t.amount, 0);
-      const avg = prev3.map(ym => allExpenses.filter(t => t.date.startsWith(ym) && t.category === cat).reduce((s, t) => s + t.amount, 0)).reduce((s, v) => s + v, 0) / 3;
-      if (avg < 200 || cur < 100) continue;
-      const dev = Math.round(((cur - avg) / avg) * 100);
-      if (dev >= 30) results.push({ category: cat, currentAmount: Math.round(cur), movingAvg: Math.round(avg), deviation: dev, level: dev >= 60 ? "bad" : "warn" });
+      const curMonthly = expenses.filter(t => t.category === cat).reduce((s, t) => s + t.amount, 0) / len;
+      const priorMonthly = priorMonths.length > 0
+        ? allExpenses.filter(t => priorMonths.some(ym => t.date.startsWith(ym)) && t.category === cat).reduce((s, t) => s + t.amount, 0) / priorMonths.length
+        : 0;
+      if (priorMonthly < 200 || curMonthly < 100) continue;
+      const dev = Math.round(((curMonthly - priorMonthly) / priorMonthly) * 100);
+      if (dev >= 30) results.push({ category: cat, currentAmount: Math.round(curMonthly * len), movingAvg: Math.round(priorMonthly * len), deviation: dev, level: dev >= 60 ? "bad" : "warn" });
     }
     return results.sort((a, b) => b.deviation - a.deviation);
-  }, [allExpenses, currentYM, now]);
+  }, [allExpenses, expenses, period, periodMonths, priorMonths]);
 
   const payerData = useMemo(() => {
     const payers = ["Shi", "Ortal", "Joint"];
@@ -324,55 +342,51 @@ export default function Trends() {
   }, [expenses, allExpenses, allIncome, period, periodMonths]);
   const execItems = useMemo((): ExecItem[] => {
     const items: ExecItem[] = [];
-    if (!allExpenses.length) return items;
-    const cur  = allExpenses.filter(t => t.date.startsWith(currentYM));
-    const prev = allExpenses.filter(t => t.date.startsWith(prevYM));
-    const curTotal  = cur.reduce((s, t) => s + t.amount, 0);
-    const prevTotal = prev.reduce((s, t) => s + t.amount, 0);
-    if (prevTotal > 0) {
-      const pct = Math.round(((curTotal - prevTotal) / prevTotal) * 100);
+    if (!expenses.length) return items;
+    const curTotal = expenses.reduce((s, t) => s + t.amount, 0);
+    const priorTotal = priorMonths.length > 0
+      ? allExpenses.filter(t => priorMonths.some(ym => t.date.startsWith(ym))).reduce((s, t) => s + t.amount, 0)
+      : 0;
+    if (priorTotal > 0) {
+      const pct = Math.round(((curTotal - priorTotal) / priorTotal) * 100);
       items.push(pct > 10
-        ? { icon: '📈', level: 'bad',  text: `הוצאות החודש גבוהות ב-${pct}% לעומת חודש שעבר (${fmt(curTotal)} לעומת ${fmt(prevTotal)})` }
+        ? { icon: '📈', level: 'bad',  text: `הוצאות בתקופה גבוהות ב-${pct}% לעומת התקופה הקודמת (${fmt(curTotal)} לעומת ${fmt(priorTotal)})` }
         : pct < -10
-        ? { icon: '📉', level: 'ok',   text: `הוצאות החודש נמוכות ב-${Math.abs(pct)}% לעומת חודש שעבר (${fmt(curTotal)})` }
-        : { icon: '⚖️', level: 'info', text: `הוצאות החודש יציבות: ${fmt(curTotal)} (שינוי של ${pct > 0 ? '+' : ''}${pct}%)` });
+        ? { icon: '📉', level: 'ok',   text: `הוצאות בתקופה נמוכות ב-${Math.abs(pct)}% לעומת התקופה הקודמת (${fmt(curTotal)})` }
+        : { icon: '⚖️', level: 'info', text: `הוצאות יציבות: ${fmt(curTotal)} (שינוי של ${pct > 0 ? '+' : ''}${pct}%)` });
     }
     if (anomalies.length > 0) {
       const top = anomalies[0];
-      items.push({ icon: '⚠️', level: top.level, text: `חריגה בקטגוריית ${top.category}: ${fmt(top.currentAmount)} לעומת ממוצע ${fmt(top.movingAvg)} (+${top.deviation}%)` });
+      items.push({ icon: '⚠️', level: top.level, text: `חריגה בקטגוריית ${top.category}: ${fmt(top.currentAmount)} לעומת ${fmt(top.movingAvg)} בתקופה הקודמת (+${top.deviation}%)` });
     }
     const topCat = Object.entries(
-      allExpenses.filter(t => t.date.startsWith(currentYM))
-        .reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string,number>)
+      expenses.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string,number>)
     ).sort((a,b) => b[1]-a[1])[0];
-    if (topCat) items.push({ icon: '🎯', level: 'info', text: `קטגוריה מובילת החודש: ${topCat[0]} — ${fmt(topCat[1])}` });
+    if (topCat) items.push({ icon: '🎯', level: 'info', text: `קטגוריה מובילת: ${topCat[0]} — ${fmt(topCat[1])}` });
     if (leaks.length > 0) {
       const totalLeak = leaks.reduce((s,l) => s + l.yearlyEstimate, 0);
       items.push({ icon: '💸', level: 'warn', text: `זוהו ${leaks.length} הוצאות קבועות בסך ${fmtK(totalLeak)} ש"ח/שנה` });
     }
-    const incCur = allIncome.filter(t => t.date.startsWith(currentYM)).reduce((s,t) => s+t.amount,0);
-    if (incCur > 0 && curTotal > 0) {
-      const ratio = Math.round((curTotal / incCur) * 100);
-      items.push(ratio > 90
-        ? { icon: '🚨', level: 'bad',  text: `הוצאות החודש מהוות ${ratio}% מההכנסה — סכנת גירעון!` }
-        : ratio > 70
-        ? { icon: '⚠️', level: 'warn', text: `הוצאות החודש מהוות ${ratio}% מההכנסה` }
-        : { icon: '✅', level: 'ok',   text: `יחס הוצאות/הכנסה תקין: ${ratio}%` });
-    }
-    const incomeTotal = allIncome.filter(t => t.date.startsWith(currentYM)).reduce((s,t)=>s+t.amount,0);
+    const incomeTotal = periodStats.income;
     if (incomeTotal > 0 && curTotal > 0) {
+      const ratio = Math.round((curTotal / incomeTotal) * 100);
+      items.push(ratio > 90
+        ? { icon: '🚨', level: 'bad',  text: `הוצאות מהוות ${ratio}% מההכנסה — סכנת גירעון!` }
+        : ratio > 70
+        ? { icon: '⚠️', level: 'warn', text: `הוצאות מהוות ${ratio}% מההכנסה` }
+        : { icon: '✅', level: 'ok',   text: `יחס הוצאות/הכנסה תקין: ${ratio}%` });
       const saved = incomeTotal - curTotal;
       const savePct = Math.round((saved / incomeTotal) * 100);
-      if (savePct > 20) items.push({ icon: '🏦', level: 'ok', text: `חיסכון החודש: ${fmt(saved)} (${savePct}% מההכנסה)` });
-      else if (savePct < 0) items.push({ icon: '🔴', level: 'bad', text: `גירעון החודש: ${fmt(Math.abs(saved))} — ההוצאות עולות על ההכנסה` });
+      if (savePct > 20) items.push({ icon: '🏦', level: 'ok', text: `חיסכון בתקופה: ${fmt(saved)} (${savePct}% מההכנסה)` });
+      else if (savePct < 0) items.push({ icon: '🔴', level: 'bad', text: `גירעון בתקופה: ${fmt(Math.abs(saved))} — ההוצאות עולות על ההכנסה` });
     }
-    const fixedAmt = allExpenses.filter(t => t.date.startsWith(currentYM) && t.expense_class === 'קבועה').reduce((s,t)=>s+t.amount,0);
+    const fixedAmt = expenses.filter(t => t.expense_class === 'קבועה').reduce((s,t)=>s+t.amount,0);
     if (curTotal > 0 && fixedAmt > 0) {
       const fixedPct = Math.round((fixedAmt / curTotal) * 100);
-      items.push({ icon: '📋', level: 'info', text: `${fixedPct}% מהוצאות החודש הן קבועות (${fmt(fixedAmt)})` });
+      items.push({ icon: '📋', level: 'info', text: `${fixedPct}% מהוצאות הן קבועות (${fmt(fixedAmt)})` });
     }
     return items.slice(0, 5);
-  }, [allExpenses, allIncome, anomalies, leaks, currentYM, prevYM]);
+  }, [expenses, allExpenses, priorMonths, anomalies, leaks, periodStats]);
 
   const TABS: [typeof tab, string][] = [
     ['trends','מגמות'], ['compare','השוואה'], ['anomalies','חריגות'], ['payers','משלמים'], ['leaks','דליפות'],
@@ -380,8 +394,8 @@ export default function Trends() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 space-y-4" dir="rtl">
-      <ExecutiveSummary items={execItems} />
       <PeriodFilter value={period} onChange={setPeriod} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} monthOptions={monthOptions} />
+      <ExecutiveSummary items={execItems} title={`סיכום מנהלים — ${periodLabel}`} />
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <StatCard label='סהֳכ הוצאות' value={fmt(periodStats.total)} color="text-rose-400" />
@@ -518,11 +532,11 @@ export default function Trends() {
         <div className="space-y-3">
           {anomalies.length === 0 ? (
             <Card className="bg-white/5 border-white/10">
-              <CardContent className="py-8 text-center text-white/40">✅ לא נמצאו חריגות משמעותיות החודש</CardContent>
+              <CardContent className="py-8 text-center text-white/40">✅ לא נמצאו חריגות משמעותיות בתקופה זו</CardContent>
             </Card>
           ) : (
             <>
-              <div className="text-xs text-white/40 px-1">חריגות מחושבות ביחס לממוצע נע של 3 חודשים</div>
+              <div className="text-xs text-white/40 px-1">חריגות ביחס לתקופה המקבילה הקודמת — {periodLabel}</div>
               {anomalies.map(a => (
                 <Card key={a.category} className={`border ${a.level === 'bad' ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}>
                   <CardContent className="py-3 flex items-center justify-between gap-3">
