@@ -42,6 +42,7 @@ function getPeriodMonths(period: Period): string[] {
 }
 
 const TT = { background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 };
+const ttFmt = (v: number | string) => fmt(typeof v === 'number' ? Math.round(v) : Number(v));
 
 interface ExecItem { icon: string; text: string; level: 'ok' | 'warn' | 'bad' | 'info'; saving?: number }
 
@@ -422,7 +423,7 @@ export default function Trends() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <Tooltip contentStyle={TT} />
+                  <Tooltip contentStyle={TT} formatter={ttFmt} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                   {topCategories.map((cat, i) => (
                     <Area key={cat} type="monotone" dataKey={cat} stackId="1"
@@ -440,7 +441,7 @@ export default function Trends() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <Tooltip contentStyle={TT} />
+                  <Tooltip contentStyle={TT} formatter={ttFmt} />
                   <Bar dataKey={topCategories[0] ?? 'total'} fill="#06b6d4" radius={[3,3,0,0]} />
                 </BarChart>
               </ResponsiveContainer></div>
@@ -459,7 +460,7 @@ export default function Trends() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <Tooltip contentStyle={TT} />
+                  <Tooltip contentStyle={TT} formatter={ttFmt} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                   <Bar dataKey={currentYear - 2} fill="#6366f1" radius={[2,2,0,0]} />
                   <Bar dataKey={currentYear - 1} fill="#22d3ee" radius={[2,2,0,0]} />
@@ -476,7 +477,7 @@ export default function Trends() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <Tooltip contentStyle={TT} />
+                  <Tooltip contentStyle={TT} formatter={ttFmt} />
                   <Bar dataKey="avg" fill="#f59e0b" radius={[3,3,0,0]}>
                     {seasonalPeaks.map((e, i) => (
                       <Cell key={i} fill={e.ratio > 1.2 ? '#ef4444' : e.ratio > 1.05 ? '#f59e0b' : '#10b981'} />
@@ -502,7 +503,7 @@ export default function Trends() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
-                  <Tooltip contentStyle={TT} />
+                  <Tooltip contentStyle={TT} formatter={ttFmt} />
                   {paymentMethodData.methods.map((m, i) => (
                     <Bar key={m} dataKey={m} stackId="a" fill={METHOD_COLORS[i % METHOD_COLORS.length]} />
                   ))}
@@ -567,7 +568,7 @@ export default function Trends() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 9, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
                   <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: '#ffffff70' }} width={68} />
-                  <Tooltip contentStyle={TT} />
+                  <Tooltip contentStyle={TT} formatter={ttFmt} />
                   {['Shi','Ortal','Joint'].map((p, i) => (
                     <Bar key={p} dataKey={p} stackId="a" fill={PAYER_COLORS[i]} />
                   ))}
@@ -608,7 +609,7 @@ export default function Trends() {
                     <Pie data={leaksByCategory} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
                       {leaksByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => `${fmtK(v)} ₪/שנה`} />
+                    <Tooltip formatter={(v: number) => fmt(Math.round(v)) + ' /שנה'} />
                     <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff70' }} />
                   </PieChart>
                 </ResponsiveContainer></div>
