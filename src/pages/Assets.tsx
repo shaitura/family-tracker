@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil } from 'lucide-react';
+import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -209,6 +209,41 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { name:
       <p className="text-white font-medium mb-0.5">{payload[0].name}</p>
       <p className="text-emerald-400 font-bold">{payload[0].value.toLocaleString('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })}</p>
     </div>
+  );
+}
+
+type ExpiryStatus = 'expired' | 'critical' | 'warning' | 'ok' | 'none';
+
+function expiryStatus(endDate: string | undefined): { status: ExpiryStatus; daysLeft: number } {
+  if (!endDate) return { status: 'none', daysLeft: Infinity };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const end = new Date(endDate); end.setHours(0, 0, 0, 0);
+  const daysLeft = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysLeft < 0)   return { status: 'expired',  daysLeft };
+  if (daysLeft <= 30) return { status: 'critical',  daysLeft };
+  if (daysLeft <= 90) return { status: 'warning',   daysLeft };
+  return { status: 'ok', daysLeft };
+}
+
+function expiryCardBorder(status: ExpiryStatus): string {
+  if (status === 'expired')  return 'border-red-500/50 bg-red-500/5';
+  if (status === 'critical') return 'border-orange-500/50 bg-orange-500/5';
+  if (status === 'warning')  return 'border-amber-500/35 bg-amber-500/5';
+  return 'border-cyan-500/10';
+}
+
+function ExpiryBadge({ status, daysLeft, endDate }: { status: ExpiryStatus; daysLeft: number; endDate: string }) {
+  if (status === 'none' || status === 'ok') return null;
+  const cfg = {
+    expired:  { cls: 'bg-red-500/20 text-red-300 border-red-500/40',    icon: '🔴', label: `פג תוקף לפני ${Math.abs(daysLeft)} ימים` },
+    critical: { cls: 'bg-orange-500/20 text-orange-300 border-orange-500/40', icon: '🟠', label: `פג בעוד ${daysLeft} ימים` },
+    warning:  { cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40',   icon: '🟡', label: `מתחדש בעוד ${daysLeft} ימים` },
+  }[status];
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${cfg.cls}`}>
+      {cfg.icon} {cfg.label}
+      <span className="opacity-60">({endDate})</span>
+    </span>
   );
 }
 
@@ -464,15 +499,64 @@ export default function Assets() {
           {insuranceAssets.length > 0 && (
             <div className="space-y-3">
               {investmentAssets.length > 0 && <p className="text-xs font-semibold text-cyan-400/80 px-1 mt-2">🛡️ ביטוחים וקרנות</p>}
+
+              {/* Expiry alert banner */}
+              {(() => {
+                const expiring = insuranceAssets
+                  .map(a => ({ a, ...expiryStatus(a.end_date) }))
+                  .filter(x => x.status === 'expired' || x.status === 'critical' || x.status === 'warning')
+                  .sort((x, y) => x.daysLeft - y.daysLeft);
+                if (!expiring.length) return null;
+                const expired  = expiring.filter(x => x.status === 'expired');
+                const critical = expiring.filter(x => x.status === 'critical');
+                const warning  = expiring.filter(x => x.status === 'warning');
+                return (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                      <span className="text-sm font-bold text-red-300">ביטוחים הדורשים טיפול</span>
+                      <span className="mr-auto text-xs text-white/40">{expiring.length} פוליסות</span>
+                    </div>
+                    {expiring.map(({ a, status, daysLeft }) => {
+                      const rowCls =
+                        status === 'expired'  ? 'text-red-300'    :
+                        status === 'critical' ? 'text-orange-300' : 'text-amber-300';
+                      const icon =
+                        status === 'expired'  ? '🔴' :
+                        status === 'critical' ? '🟠' : '🟡';
+                      const label =
+                        status === 'expired'  ? `פג לפני ${Math.abs(daysLeft)} ימים` :
+                        status === 'critical' ? `פג בעוד ${daysLeft} ימים` :
+                                               `מתחדש בעוד ${daysLeft} ימים`;
+                      return (
+                        <div key={a.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className={`font-medium ${rowCls}`}>{icon} {a.product_name || a.type}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-white/40">{a.provider}</span>
+                            <span className={`font-semibold ${rowCls}`}>{label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(expired.length > 0 || critical.length > 0) && (
+                      <p className="text-[10px] text-white/30 pt-1 border-t border-white/10">
+                        💡 {expired.length > 0 ? `${expired.length} פוליסות פגו תוקף` : ''}{expired.length > 0 && critical.length > 0 ? ' · ' : ''}{critical.length > 0 ? `${critical.length} פוגות בפחות מ-30 יום` : ''} — יש לחדש בהקדם
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
               {insuranceAssets.map((a, i) => {
                 const txs = matchedTxs(a);
                 const recentTxs = txs.slice(0, 3);
                 const avgActual = txs.length
                   ? Math.round(txs.slice(0, 12).reduce((s, t) => s + t.amount, 0) / Math.min(txs.length, 12))
                   : null;
+                const { status: expStatus, daysLeft } = expiryStatus(a.end_date);
                 return (
                   <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                    <Card className="border border-cyan-500/10">
+                    <Card className={`border ${expiryCardBorder(expStatus)}`}>
                       <CardContent className="py-4 px-4">
                         <div className="flex gap-3 items-center">
                           {/* Provider logo / initials */}
@@ -504,6 +588,7 @@ export default function Assets() {
                               </Badge>
                               {a.policy_number && <Badge variant="outline" className="text-xs">#{a.policy_number}</Badge>}
                               {a.start_date && <Badge variant="outline" className="text-xs">{a.start_date}</Badge>}
+                              {a.end_date && <ExpiryBadge status={expStatus} daysLeft={daysLeft} endDate={a.end_date} />}
                             </div>
 
                             {/* Actual payments from transactions */}
