@@ -278,6 +278,7 @@ export default function Trends() {
   const payerData = useMemo(() => {
     const payers = ["Shi", "Ortal", "Joint"];
     const payerLabels: Record<string, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
+    const HE = ['שי', 'אורטל', 'משותף'];
     const matchPayer = (t: Transaction, p: string) => {
       if (p === 'Shi')   return t.payer === 'Shi'   || (t.payer as string) === 'שי';
       if (p === 'Ortal') return t.payer === 'Ortal' || (t.payer as string) === 'אורטל';
@@ -286,14 +287,15 @@ export default function Trends() {
     };
     const byCat = Array.from(new Set(expenses.map(t => t.category))).map(cat => {
       const row: Record<string, number|string> = { category: cat };
-      for (const p of payers) row[p] = expenses.filter(t => t.category === cat && matchPayer(t, p)).reduce((s, t) => s + t.amount, 0);
+      for (let i = 0; i < payers.length; i++)
+        row[HE[i]] = expenses.filter(t => t.category === cat && matchPayer(t, payers[i])).reduce((s, t) => s + t.amount, 0);
       return row;
-    }).sort((a, b) => ((b["Shi"] as number)+(b["Ortal"] as number)+(b["Joint"] as number)) - ((a["Shi"] as number)+(a["Ortal"] as number)+(a["Joint"] as number))).slice(0, 10);
+    }).sort((a, b) => ((b['שי'] as number)+(b['אורטל'] as number)+(b['משותף'] as number)) - ((a['שי'] as number)+(a['אורטל'] as number)+(a['משותף'] as number))).slice(0, 10);
     const totals: Record<string, number> = { Shi: 0, Ortal: 0, Joint: 0 };
     for (const t of expenses) {
       for (const p of payers) if (matchPayer(t, p)) { totals[p] = (totals[p] || 0) + t.amount; break; }
     }
-    return { byCat, payerLabels, pieData: payers.map(p => ({ name: payerLabels[p], value: Math.round(totals[p] || 0) })).filter(x => x.value > 0) };
+    return { byCat, payerLabels, heKeys: HE, pieData: payers.map(p => ({ name: payerLabels[p], value: Math.round(totals[p] || 0) })).filter(x => x.value > 0) };
   }, [expenses]);
   const paymentMethodData = useMemo(() => {
     const methods = ["אשראי","מזומן","ביט","העברה","הוראת קבע","צ'ק"];
@@ -575,9 +577,9 @@ export default function Trends() {
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-2">פירוט לפי קטגוריה</div>
               <div className="flex gap-4 mb-3">
-                {(['Shi','Ortal','Joint'] as const).map((p,i) => (
-                  <div key={p} className="flex items-center gap-1.5 text-xs text-white/60">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background: PAYER_COLORS[i]}} />{payerData.payerLabels[p]}
+                {payerData.heKeys.map((he, i) => (
+                  <div key={he} className="flex items-center gap-1.5 text-xs text-white/60">
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{background: PAYER_COLORS[i]}} />{he}
                   </div>
                 ))}
               </div>
@@ -587,8 +589,8 @@ export default function Trends() {
                   <XAxis type="number" reversed tick={{ fontSize: 9, fill: '#ffffff50' }} tickFormatter={v => fmtK(v as number)} />
                   <YAxis type="category" dataKey="category" orientation="right" tick={{ fontSize: 10, fill: '#ffffff70' }} width={70} />
                   <Tooltip contentStyle={TT} formatter={ttFmt} />
-                  {(['Shi','Ortal','Joint'] as const).map((p, i) => (
-                    <Bar key={p} dataKey={p} name={payerData.payerLabels[p]} stackId="a" fill={PAYER_COLORS[i]} />
+                  {payerData.heKeys.map((he, i) => (
+                    <Bar key={he} dataKey={he} stackId="a" fill={PAYER_COLORS[i]} />
                   ))}
                 </BarChart>
               </ResponsiveContainer></div>
