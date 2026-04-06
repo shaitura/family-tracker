@@ -42,7 +42,7 @@ function getPeriodMonths(period: Period): string[] {
 }
 
 const TT = { background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 };
-const ttFmt = (v: number | string) => fmt(typeof v === 'number' ? Math.round(v) : Number(v));
+const ttFmt = (v: number | string, name: string): [string, string] => [fmt(typeof v === 'number' ? Math.round(v) : Number(v)), String(name)];
 
 interface ExecItem { icon: string; text: string; level: 'ok' | 'warn' | 'bad' | 'info'; saving?: number }
 
@@ -584,7 +584,7 @@ export default function Trends() {
                   <Pie data={payerData.pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
                     {payerData.pieData.map((_, i) => <Cell key={i} fill={PAYER_COLORS[i]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => fmt(v)} />
+                  <Tooltip formatter={(v: number, name: string): [string, string] => [fmt(v), String(name)]} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                 </PieChart>
               </ResponsiveContainer></div>
@@ -609,7 +609,7 @@ export default function Trends() {
                     <Pie data={leaksByCategory} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
                       {leaksByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => fmt(Math.round(v)) + ' /שנה'} />
+                    <Tooltip formatter={(v: number, name: string): [string, string] => [fmt(Math.round(v)) + ' /שנה', String(name)]} />
                     <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff70' }} />
                   </PieChart>
                 </ResponsiveContainer></div>
