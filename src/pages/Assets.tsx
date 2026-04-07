@@ -399,6 +399,9 @@ export default function Assets() {
 
   // Investment summary
   const totalInvestmentBalance = investmentAssets.reduce((s, a) => s + (a.balance ?? 0), 0);
+  const REAL_ESTATE_TYPES = new Set(['נדל"ן', 'קרקע']);
+  const totalRealEstate   = investmentAssets.filter(a => REAL_ESTATE_TYPES.has(a.type)).reduce((s, a) => s + (a.balance ?? 0), 0);
+  const totalFinancial    = totalInvestmentBalance - totalRealEstate;
   const byInvOwner: Record<string, { balance: number; count: number }> = {};
   investmentAssets.forEach((a) => {
     if (!byInvOwner[a.owner]) byInvOwner[a.owner] = { balance: 0, count: 0 };
@@ -672,13 +675,42 @@ export default function Assets() {
 
             {/* Investments sub-tab */}
             <TabsContent value="investments" className="space-y-4 mt-3">
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <TrendingUp className="w-6 h-6 mx-auto mb-1 text-emerald-400" />
-                  <p className="text-lg font-bold text-emerald-400">{formatCurrency(totalInvestmentBalance)}</p>
-                  <p className="text-[11px] text-white/40 mt-0.5">סה"כ יתרות השקעה</p>
-                </CardContent>
-              </Card>
+              {/* KPI row: total + real-estate + financial */}
+              <div className="grid grid-cols-3 gap-2">
+                <Card className="col-span-3">
+                  <CardContent className="pt-3 pb-3 flex items-center justify-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="text-center">
+                      <p className="text-lg font-bold text-emerald-400 leading-tight">{formatCurrency(totalInvestmentBalance)}</p>
+                      <p className="text-[10px] text-white/40">סה"כ יתרות השקעה</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                {totalRealEstate > 0 && (
+                  <Card className="col-span-3 sm:col-span-1 border-orange-500/20">
+                    <CardContent className="pt-3 pb-3 text-center">
+                      <p className="text-sm">🏠</p>
+                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{formatCurrency(totalRealEstate)}</p>
+                      <p className="text-[10px] text-white/40 mt-0.5">
+                        נדל"ן וקרקעות
+                        <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalRealEstate / totalInvestmentBalance) * 100) : 0}%)</span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+                {totalFinancial > 0 && (
+                  <Card className={`border-emerald-500/20 ${totalRealEstate > 0 ? 'col-span-3 sm:col-span-2' : 'col-span-3'}`}>
+                    <CardContent className="pt-3 pb-3 text-center">
+                      <p className="text-sm">📈</p>
+                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{formatCurrency(totalFinancial)}</p>
+                      <p className="text-[10px] text-white/40 mt-0.5">
+                        השקעות פיננסיות
+                        <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalFinancial / totalInvestmentBalance) * 100) : 0}%)</span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
 
               {invTypeChartData.length > 0 && (
                 <Card>
