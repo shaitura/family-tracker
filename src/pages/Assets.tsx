@@ -828,6 +828,164 @@ export default function Assets() {
               {insuranceAssets.length === 0 && (
                 <p className="text-center text-white/30 py-8 text-sm">אין ביטוחים/קרנות</p>
               )}
+
+              {/* ── Coverage matrix ── */}
+              {insuranceAssets.length > 0 && (() => {
+                const PERSONS = ['Shi','Ortal','Yuval','Aviv','Ziv','Joint'] as const;
+                const activePersons = PERSONS.filter(p => insuranceAssets.some(a => a.owner === p));
+                if (!activePersons.length) return null;
+
+                // Best status for a list of assets (worst wins: expired > critical > warning > ok > none)
+                function worstStatus(assets: Asset[]): ExpiryStatus {
+                  const statuses = assets.map(a => expiryStatus(a.end_date).status);
+                  if (statuses.includes('expired'))  return 'expired';
+                  if (statuses.includes('critical')) return 'critical';
+                  if (statuses.includes('warning'))  return 'warning';
+                  if (statuses.includes('ok'))       return 'ok';
+                  return 'none';
+                }
+
+                const cellCls = (status: ExpiryStatus, hasAssets: boolean) => {
+                  if (!hasAssets) return 'text-white/15 bg-transparent';
+                  if (status === 'expired')  return 'text-red-300    bg-red-500/15    border-red-500/30';
+                  if (status === 'critical') return 'text-orange-300 bg-orange-500/15 border-orange-500/30';
+                  if (status === 'warning')  return 'text-amber-300  bg-amber-500/15  border-amber-500/30';
+                  return 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25';
+                };
+                const cellIcon = (status: ExpiryStatus, hasAssets: boolean, count: number) => {
+                  if (!hasAssets) return <span className="text-white/15">—</span>;
+                  const dot = status === 'expired' ? '🔴' : status === 'critical' ? '🟠' : status === 'warning' ? '🟡' : '✅';
+                  return <span>{dot}{count > 1 && <sup className="text-[9px] ml-0.5">{count}</sup>}</span>;
+                };
+
+                return (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">מפת כיסוי ביטוחי — לפי אדם וקטגוריה</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 overflow-x-auto">
+                      <table className="w-full text-xs border-collapse" dir="rtl">
+                        <thead>
+                          <tr>
+                            <th className="text-right pr-1 pb-2 text-white/40 font-normal w-16">אדם</th>
+                            {INSURANCE_GROUPS.map(g => (
+                              <th key={g.key} className="text-center pb-2 text-white/50 font-normal px-1 whitespace-nowrap">
+                                <span className="text-sm">{g.icon}</span>
+                                <div className="text-[9px] text-white/30 leading-tight mt-0.5">{g.label.replace('ביטוחי ','').replace('חיסכון ','')}</div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activePersons.map(person => (
+                            <tr key={person} className="border-t border-white/5">
+                              <td className="py-2 pr-1 font-semibold text-white/80 whitespace-nowrap">
+                                {OWNER_LABELS[person] || person}
+                              </td>
+                              {INSURANCE_GROUPS.map(g => {
+                                const cells = insuranceAssets.filter(a => a.owner === person && g.types.includes(a.type));
+                                const ws = worstStatus(cells);
+                                return (
+                                  <td key={g.key} className="py-2 text-center px-1">
+                                    <span className={`inline-flex items-center justify-center w-8 h-7 rounded-lg border text-sm ${cellCls(ws, cells.length > 0)}`}>
+                                      {cellIcon(ws, cells.length > 0, cells.length)}
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="flex gap-3 mt-3 pt-2 border-t border-white/5 flex-wrap">
+                        {[['✅','בתוקף','text-emerald-400'],['🟡','פג בעוד 90 יום','text-amber-400'],['🟠','פג בעוד 30 יום','text-orange-400'],['🔴','פג/לא בתוקף','text-red-400'],['—','אין כיסוי','text-white/30']].map(([icon, label, cls]) => (
+                          <span key={label} className={`flex items-center gap-1 text-[10px] ${cls}`}>{icon} {label}</span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* ── Per-person coverage cards ── */}
+              {insuranceAssets.length > 0 && (() => {
+                const PERSONS = ['Shi','Ortal','Yuval','Aviv','Ziv','Joint'] as const;
+                const activePersons = PERSONS.filter(p => insuranceAssets.some(a => a.owner === p));
+                if (!activePersons.length) return null;
+                const PERSON_COLORS: Record<string, string> = {
+                  Shi: '#06b6d4', Ortal: '#ec4899', Yuval: '#a855f7',
+                  Aviv: '#10b981', Ziv: '#f59e0b', Joint: '#6366f1',
+                };
+                return (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-white/50 px-1">כיסוי ביטוחי לפי אדם</p>
+                    {activePersons.map(person => {
+                      const personAssets = insuranceAssets.filter(a => a.owner === person);
+                      const color = PERSON_COLORS[person] || '#6b7280';
+                      const totalPremium = personAssets.reduce((s, a) => s + (a.monthly_premium ?? 0), 0);
+                      return (
+                        <Card key={person} className="border border-white/8">
+                          <CardContent className="pt-3 pb-3 px-4">
+                            {/* Person header */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: color }}>
+                                  {(OWNER_LABELS[person] || person)[0]}
+                                </div>
+                                <span className="font-bold text-sm text-white">{OWNER_LABELS[person] || person}</span>
+                                <span className="text-xs text-white/30">{personAssets.length} פוליסות</span>
+                              </div>
+                              {totalPremium > 0 && (
+                                <span className="text-xs font-semibold" style={{ color }}>{formatCurrency(totalPremium)}/חודש</span>
+                              )}
+                            </div>
+                            {/* Policy list */}
+                            <div className="space-y-1.5">
+                              {personAssets.map(a => {
+                                const { status, daysLeft } = expiryStatus(a.end_date);
+                                const rowBg =
+                                  status === 'expired'  ? 'bg-red-500/10 border-red-500/25' :
+                                  status === 'critical' ? 'bg-orange-500/10 border-orange-500/25' :
+                                  status === 'warning'  ? 'bg-amber-500/10 border-amber-500/20' :
+                                  'bg-white/3 border-white/8';
+                                const statusIcon =
+                                  status === 'expired'  ? '🔴' :
+                                  status === 'critical' ? '🟠' :
+                                  status === 'warning'  ? '🟡' : '✅';
+                                const statusText =
+                                  status === 'expired'  ? `פג לפני ${Math.abs(daysLeft)}י` :
+                                  status === 'critical' ? `${daysLeft} ימים` :
+                                  status === 'warning'  ? `${daysLeft} ימים` :
+                                  status === 'ok'       ? 'בתוקף' : '';
+                                return (
+                                  <div key={a.id} className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border ${rowBg}`}>
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="text-sm shrink-0">{assetIcon(a.type)}</span>
+                                      <span className="text-xs text-white/80 truncate">{a.product_name || a.type}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {a.monthly_premium != null && a.monthly_premium > 0 && (
+                                        <span className="text-[10px] text-white/40">{formatCurrency(a.monthly_premium)}</span>
+                                      )}
+                                      {a.end_date || status !== 'none' ? (
+                                        <span className="text-[10px] font-medium">
+                                          {statusIcon} {statusText && <span className={status === 'expired' ? 'text-red-300' : status === 'critical' ? 'text-orange-300' : status === 'warning' ? 'text-amber-300' : 'text-emerald-400'}>{statusText}</span>}
+                                        </span>
+                                      ) : (
+                                        EXPIRY_RELEVANT_TYPES.has(a.type) && <span className="text-[10px] text-white/25">⚪ אין תאריך</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </TabsContent>
           </Tabs>
         </TabsContent>
