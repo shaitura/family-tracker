@@ -75,11 +75,15 @@ export default function Reports() {
     };
   }, [transactions, year, month, fullYear, txType]);
   // Income vs Expenses comparison (ignores txType/expClass filters)
-  const { incomeTotal, expenseTotal, balanceByMonth, expCatData } = useMemo(() => {
+  const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
+  const isInvCat = (cat: string) => INVESTMENT_CATS.some(k => cat.includes(k));
+
+  const { incomeTotal, expenseTotal, investmentTotal, balanceByMonth, expCatData } = useMemo(() => {
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
     const periodTxs = transactions.filter((t) => t.date.startsWith(prefix));
     const incomeTotal = periodTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expenseTotal = periodTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const investmentTotal = periodTxs.filter((t) => t.type === 'expense' && isInvCat(t.category)).reduce((s, t) => s + t.amount, 0);
     const balanceByMonth = months.map(({ val, label }, idx) => ({
       name: label,
       isCurrent: year === String(new Date().getFullYear()) && idx === new Date().getMonth(),
@@ -89,7 +93,7 @@ export default function Reports() {
     const catAcc: Record<string, number> = {};
     periodTxs.filter((t) => t.type === 'expense').forEach((t) => { catAcc[t.category] = (catAcc[t.category] || 0) + t.amount; });
     const expCatData = Object.entries(catAcc).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
-    return { incomeTotal, expenseTotal, balanceByMonth, expCatData };
+    return { incomeTotal, expenseTotal, investmentTotal, balanceByMonth, expCatData };
   }, [transactions, year, month, fullYear, months]);
 
   const exportExcel = async () => {
@@ -424,6 +428,26 @@ export default function Reports() {
               <p className="text-2xl font-black text-white">{incomeTotal > 0 ? Math.round((incomeTotal - expenseTotal) / incomeTotal * 100) : 0}%</p>
             </div>
           </div>
+          {/* Ratio KPIs */}
+          {incomeTotal > 0 && (() => {
+            const expRatio = Math.round((expenseTotal / incomeTotal) * 100);
+            const invRatio = Math.round((investmentTotal / incomeTotal) * 100);
+            const expColor = expRatio > 90 ? 'text-red-400' : expRatio > 70 ? 'text-amber-400' : 'text-emerald-400';
+            return (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-center">
+                  <p className="text-xs text-white/50 mb-1">📊 יחס הוצאה / הכנסה</p>
+                  <p className={`text-2xl font-black ${expColor}`}>{expRatio}%</p>
+                  <p className="text-[11px] text-white/30 mt-1">{expRatio > 90 ? '⚠️ סכנת גירעון' : expRatio > 70 ? 'גבוה' : '✅ תקין'}</p>
+                </div>
+                <div className="rounded-2xl bg-purple-500/10 border border-purple-500/25 p-4 text-center">
+                  <p className="text-xs text-purple-400 mb-1">📈 לאפיקי השקעה</p>
+                  <p className="text-2xl font-black text-purple-300">{invRatio}%</p>
+                  <p className="text-[11px] text-white/30 mt-1">{investmentTotal > 0 ? formatCurrency(investmentTotal) : 'לא מזוהה'}</p>
+                </div>
+              </div>
+            );
+          })()}
 
           {(incomeTotal > 0 || expenseTotal > 0) && (
             <Card>
