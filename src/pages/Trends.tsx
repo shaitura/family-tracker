@@ -421,35 +421,37 @@ export default function Trends() {
         const invRatio = periodStats.income > 0 ? Math.round((periodStats.investment / periodStats.income) * 100) : null;
         const expColor = expRatio == null ? 'text-white/40' : expRatio > 90 ? 'text-red-400' : expRatio > 70 ? 'text-amber-400' : 'text-emerald-400';
         return (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-3 rounded-xl bg-white/5 border border-white/8 relative">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[10px] text-white/40">יחס הוצאה / הכנסה</div>
-                <button onClick={() => setShowExpTooltip(v => !v)} className="text-white/25 hover:text-white/60 transition-colors">
-                  <HelpCircle size={12} />
-                </button>
-              </div>
-              {showExpTooltip && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-white/10 bg-slate-900/95 backdrop-blur p-3 text-[10px] leading-relaxed text-white/70 shadow-xl">
-                  <div className="font-semibold text-white/90 mb-1.5">יחס הוצאה / הכנסה</div>
-                  <div className="mb-2">כמה אחוז מההכנסה החודשית הולך להוצאות שוטפות. ככל שנמוך יותר — טוב יותר.</div>
-                  <div className="space-y-1 border-t border-white/10 pt-2">
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><span className="text-emerald-400">פחות מ-70%</span><span className="text-white/40">— תקין</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><span className="text-amber-400">70%–90%</span><span className="text-white/40">— גבוה, מצריך תשומת לב</span></div>
-                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-400 shrink-0" /><span className="text-red-400">מעל 90%</span><span className="text-white/40">— סכנת גירעון</span></div>
-                  </div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl bg-white/5 border border-white/8">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[10px] text-white/40">יחס הוצאה / הכנסה</div>
+                  <button onClick={() => setShowExpTooltip(v => !v)} className={`transition-colors ${showExpTooltip ? 'text-cyan-400' : 'text-white/25 hover:text-white/60'}`}>
+                    <HelpCircle size={12} />
+                  </button>
                 </div>
-              )}
-              <div className={`text-xl font-black ${expColor}`}>{expRatio != null ? `${expRatio}%` : '—'}</div>
-              <div className="text-[10px] text-white/30 mt-0.5">
-                {expRatio != null && (expRatio > 90 ? '⚠️ סכנת גירעון' : expRatio > 70 ? 'גבוה' : '✅ תקין')}
+                <div className={`text-xl font-black ${expColor}`}>{expRatio != null ? `${expRatio}%` : '—'}</div>
+                <div className="text-[10px] text-white/30 mt-0.5">
+                  {expRatio != null && (expRatio > 90 ? '⚠️ סכנת גירעון' : expRatio > 70 ? 'גבוה' : '✅ תקין')}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-white/5 border border-white/8">
+                <div className="text-[10px] text-white/40 mb-1">יחס הוצאה לאפיקי השקעה</div>
+                <div className="text-xl font-black text-purple-400">{invRatio != null ? `${invRatio}%` : '—'}</div>
+                <div className="text-[10px] text-white/30 mt-0.5">{periodStats.investment > 0 ? fmt(periodStats.investment) : 'לא מזוהה'}</div>
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-white/5 border border-white/8">
-              <div className="text-[10px] text-white/40 mb-1">יחס הוצאה לאפיקי השקעה</div>
-              <div className="text-xl font-black text-purple-400">{invRatio != null ? `${invRatio}%` : '—'}</div>
-              <div className="text-[10px] text-white/30 mt-0.5">{periodStats.investment > 0 ? fmt(periodStats.investment) : 'לא מזוהה'}</div>
-            </div>
+            {showExpTooltip && (
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/30 p-3 text-[11px] leading-relaxed text-white/70">
+                <div className="font-semibold text-white/90 mb-1.5">יחס הוצאה / הכנסה — איך זה עובד?</div>
+                <div className="mb-2.5">כמה אחוז מההכנסה החודשית הולך להוצאות שוטפות. ככל שנמוך יותר — טוב יותר.</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><span className="text-emerald-400 font-medium">פחות מ-70%</span><span className="text-white/40">— תקין</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><span className="text-amber-400 font-medium">70%–90%</span><span className="text-white/40">— גבוה, מצריך תשומת לב</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-400 shrink-0" /><span className="text-red-400 font-medium">מעל 90%</span><span className="text-white/40">— סכנת גירעון</span></div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
