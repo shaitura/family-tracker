@@ -12,6 +12,9 @@ import { base44 } from '@/lib/base44Client';
 import { Transaction } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 
+const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
+function isInvestmentCat(cat: string) { return INVESTMENT_CATS.some(k => cat.includes(k)); }
+
 function fmt(n: number) { return `₪${Math.round(n).toLocaleString('he')}`; }
 function fmtK(n: number) { return `₪${Math.round(n).toLocaleString('en-US')}`; }
 
@@ -342,8 +345,9 @@ export default function Trends() {
     const income = period === "all" ? allIncome.reduce((s, t) => s + t.amount, 0) : allIncome.filter(t => periodMonths.some(ym => t.date.startsWith(ym))).reduce((s, t) => s + t.amount, 0);
     return {
       total, monthly: total / months, income,
-      fixed:    expenses.filter(t => t.expense_class === "קבועה").reduce((s, t) => s + t.amount, 0),
-      variable: expenses.filter(t => t.expense_class === "משתנה").reduce((s, t) => s + t.amount, 0),
+      fixed:      expenses.filter(t => t.expense_class === "קבועה").reduce((s, t) => s + t.amount, 0),
+      variable:   expenses.filter(t => t.expense_class === "משתנה").reduce((s, t) => s + t.amount, 0),
+      investment: expenses.filter(t => isInvestmentCat(t.category)).reduce((s, t) => s + t.amount, 0),
     };
   }, [expenses, allExpenses, allIncome, period, periodMonths]);
   const execItems = useMemo((): ExecItem[] => {
@@ -410,6 +414,28 @@ export default function Trends() {
         <StatCard label='משתנות' value={fmt(periodStats.variable)} sub={`${Math.round((periodStats.variable/Math.max(1,periodStats.total))*100)}%`} />
         <StatCard label='הכנסות' value={fmt(periodStats.income)} color="text-emerald-400" />
       </div>
+      {/* Ratio KPIs */}
+      {(() => {
+        const expRatio = periodStats.income > 0 ? Math.round((periodStats.total / periodStats.income) * 100) : null;
+        const invRatio = periodStats.income > 0 ? Math.round((periodStats.investment / periodStats.income) * 100) : null;
+        const expColor = expRatio == null ? 'text-white/40' : expRatio > 90 ? 'text-red-400' : expRatio > 70 ? 'text-amber-400' : 'text-emerald-400';
+        return (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-3 rounded-xl bg-white/5 border border-white/8">
+              <div className="text-[10px] text-white/40 mb-1">יחס הוצאה / הכנסה</div>
+              <div className={`text-xl font-black ${expColor}`}>{expRatio != null ? `${expRatio}%` : '—'}</div>
+              <div className="text-[10px] text-white/30 mt-0.5">
+                {expRatio != null && (expRatio > 90 ? '⚠️ סכנת גירעון' : expRatio > 70 ? 'גבוה' : '✅ תקין')}
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/8">
+              <div className="text-[10px] text-white/40 mb-1">יחס הוצאה לאפיקי השקעה</div>
+              <div className="text-xl font-black text-purple-400">{invRatio != null ? `${invRatio}%` : '—'}</div>
+              <div className="text-[10px] text-white/30 mt-0.5">{periodStats.investment > 0 ? fmt(periodStats.investment) : 'לא מזוהה'}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {TABS.map(([key, label]) => (

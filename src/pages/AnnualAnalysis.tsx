@@ -392,16 +392,23 @@ function IncomeDistributionTab({ incomes }: { incomes: Transaction[] }) {
 }
 
 // ── Net Profit Tab ────────────────────────────────────────────────────────────
+const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
+const isInvCat = (cat: string) => INVESTMENT_CATS.some(k => cat.includes(k));
+
 function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes: Transaction[] }) {
   const monthData = MONTHS.map((m, i) => {
     const income = incomes.filter((t) => t.date.slice(5, 7) === m).reduce((s, t) => s + t.amount, 0);
     const expense = expenses.filter((t) => t.date.slice(5, 7) === m).reduce((s, t) => s + t.amount, 0);
-    return { month: MONTH_NAMES[i], income, expense, net: income - expense };
+    const expRatio = income > 0 ? Math.round((expense / income) * 100) : null;
+    return { month: MONTH_NAMES[i], income, expense, net: income - expense, expRatio };
   });
 
   const totalIncome = incomes.reduce((s, t) => s + t.amount, 0);
   const totalExpense = expenses.reduce((s, t) => s + t.amount, 0);
   const totalNet = totalIncome - totalExpense;
+  const totalInvestment = expenses.filter(t => isInvCat(t.category)).reduce((s, t) => s + t.amount, 0);
+  const annualExpRatio = totalIncome > 0 ? Math.round((totalExpense / totalIncome) * 100) : null;
+  const annualInvRatio = totalIncome > 0 ? Math.round((totalInvestment / totalIncome) * 100) : null;
   const activeMonths = monthData.filter((m) => m.income > 0 || m.expense > 0).length || 1;
   const avgNet = totalNet / activeMonths;
   const avgIncome = totalIncome / activeMonths;
@@ -426,6 +433,26 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
           </Card>
         ))}
       </div>
+
+      {/* Ratio KPIs */}
+      {annualExpRatio !== null && (
+        <div className="grid grid-cols-2 gap-2" dir="rtl">
+          <Card className={annualExpRatio > 90 ? 'border-red-500/30 bg-red-500/5' : annualExpRatio > 70 ? 'border-amber-500/30 bg-amber-500/5' : 'border-emerald-500/20 bg-emerald-500/5'}>
+            <CardContent className="pt-3 pb-2 text-center">
+              <p className="text-[10px] text-white/40 mb-0.5">📊 יחס הוצאה / הכנסה</p>
+              <p className={`text-2xl font-black ${annualExpRatio > 90 ? 'text-red-400' : annualExpRatio > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>{annualExpRatio}%</p>
+              <p className="text-[10px] text-white/30">{annualExpRatio > 90 ? '⚠️ סכנת גירעון' : annualExpRatio > 70 ? 'גבוה' : '✅ תקין'}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-purple-500/20 bg-purple-500/5">
+            <CardContent className="pt-3 pb-2 text-center">
+              <p className="text-[10px] text-white/40 mb-0.5">📈 לאפיקי השקעה</p>
+              <p className="text-2xl font-black text-purple-400">{annualInvRatio ?? 0}%</p>
+              <p className="text-[10px] text-white/30">{totalInvestment > 0 ? formatCurrency(totalInvestment) : 'לא מזוהה'}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Avg net profit + Annual net */}
       <div className="grid grid-cols-2 gap-2" dir="rtl">
@@ -480,6 +507,7 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
                 <th className="text-center py-1.5 text-green-400/70">הכנסות</th>
                 <th className="text-center py-1.5 text-red-400/70">הוצאות</th>
                 <th className="text-center py-1.5">רווח נקי</th>
+                <th className="text-center py-1.5 text-purple-400/70">הוצ׳/הכנ׳</th>
               </tr>
             </thead>
             <tbody>
@@ -494,6 +522,9 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
                     <td className={`text-center py-1.5 font-bold ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {m.net < 0 ? '-' : ''}{formatCurrency(Math.abs(m.net))}
                     </td>
+                    <td className={`text-center py-1.5 font-semibold ${m.expRatio == null ? 'text-white/20' : m.expRatio > 90 ? 'text-red-400' : m.expRatio > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {m.expRatio != null ? `${m.expRatio}%` : '—'}
+                    </td>
                   </tr>
                 );
               })}
@@ -504,6 +535,9 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
                 <td className={`text-center py-2 ${totalNet >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {totalNet < 0 ? '-' : ''}{formatCurrency(Math.abs(totalNet))}
                 </td>
+                <td className={`text-center py-2 ${annualExpRatio == null ? 'text-white/20' : annualExpRatio > 90 ? 'text-red-300' : annualExpRatio > 70 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  {annualExpRatio != null ? `${annualExpRatio}%` : '—'}
+                </td>
               </tr>
               <tr className="text-white/50">
                 <td className="py-1.5">ממוצע חודשי</td>
@@ -512,6 +546,7 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
                 <td className={`text-center py-1.5 ${avgNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {avgNet < 0 ? '-' : ''}{formatCurrency(Math.abs(avgNet))}
                 </td>
+                <td />
               </tr>
             </tbody>
           </table>
