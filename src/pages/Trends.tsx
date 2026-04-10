@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Sparkles, Droplets, AlertTriangle,
-  CreditCard, Calendar, ChevronRight,
+  CreditCard, Calendar, ChevronRight, HelpCircle,
 } from 'lucide-react';
 import { base44 } from '@/lib/base44Client';
 import { Transaction } from '@/types';
@@ -143,6 +143,7 @@ export default function Trends() {
   const [tab, setTab] = useState<'trends'|'compare'|'leaks'|'anomalies'|'payers'>('trends');
   const [period, setPeriod] = useState<Period>('month');
   const [selectedMonth, setSelectedMonth] = useState<string>(prevMonthYM);
+  const [showExpTooltip, setShowExpTooltip] = useState(false);
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions'],
@@ -421,16 +422,27 @@ export default function Trends() {
         const expColor = expRatio == null ? 'text-white/40' : expRatio > 90 ? 'text-red-400' : expRatio > 70 ? 'text-amber-400' : 'text-emerald-400';
         return (
           <div className="grid grid-cols-2 gap-2">
-            <div className="p-3 rounded-xl bg-white/5 border border-white/8">
-              <div className="text-[10px] text-white/40 mb-1">יחס הוצאה / הכנסה</div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/8 relative">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[10px] text-white/40">יחס הוצאה / הכנסה</div>
+                <button onClick={() => setShowExpTooltip(v => !v)} className="text-white/25 hover:text-white/60 transition-colors">
+                  <HelpCircle size={12} />
+                </button>
+              </div>
+              {showExpTooltip && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-white/10 bg-slate-900/95 backdrop-blur p-3 text-[10px] leading-relaxed text-white/70 shadow-xl">
+                  <div className="font-semibold text-white/90 mb-1.5">יחס הוצאה / הכנסה</div>
+                  <div className="mb-2">כמה אחוז מההכנסה החודשית הולך להוצאות שוטפות. ככל שנמוך יותר — טוב יותר.</div>
+                  <div className="space-y-1 border-t border-white/10 pt-2">
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" /><span className="text-emerald-400">פחות מ-70%</span><span className="text-white/40">— תקין</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><span className="text-amber-400">70%–90%</span><span className="text-white/40">— גבוה, מצריך תשומת לב</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-400 shrink-0" /><span className="text-red-400">מעל 90%</span><span className="text-white/40">— סכנת גירעון</span></div>
+                  </div>
+                </div>
+              )}
               <div className={`text-xl font-black ${expColor}`}>{expRatio != null ? `${expRatio}%` : '—'}</div>
               <div className="text-[10px] text-white/30 mt-0.5">
                 {expRatio != null && (expRatio > 90 ? '⚠️ סכנת גירעון' : expRatio > 70 ? 'גבוה' : '✅ תקין')}
-              </div>
-              <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
-                <span className="flex items-center gap-1 text-[9px] text-emerald-400/70"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />&lt;70%</span>
-                <span className="flex items-center gap-1 text-[9px] text-amber-400/70"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />70–90%</span>
-                <span className="flex items-center gap-1 text-[9px] text-red-400/70"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />&gt;90%</span>
               </div>
             </div>
             <div className="p-3 rounded-xl bg-white/5 border border-white/8">
