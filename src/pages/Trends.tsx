@@ -427,6 +427,11 @@ export default function Trends() {
               <div className="text-[10px] text-white/30 mt-0.5">
                 {expRatio != null && (expRatio > 90 ? '⚠️ סכנת גירעון' : expRatio > 70 ? 'גבוה' : '✅ תקין')}
               </div>
+              <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
+                <span className="flex items-center gap-1 text-[9px] text-emerald-400/70"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />&lt;70%</span>
+                <span className="flex items-center gap-1 text-[9px] text-amber-400/70"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />70–90%</span>
+                <span className="flex items-center gap-1 text-[9px] text-red-400/70"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />&gt;90%</span>
+              </div>
             </div>
             <div className="p-3 rounded-xl bg-white/5 border border-white/8">
               <div className="text-[10px] text-white/40 mb-1">יחס הוצאה לאפיקי השקעה</div>
