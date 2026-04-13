@@ -7,6 +7,22 @@ import { Subscription, SUB_CATEGORIES, SubCategory } from '@/types';
 
 const fmt = (n: number) => `₪${Math.round(n).toLocaleString('he')}`;
 
+type PayType = 'none' | 'monthly' | 'onetime';
+const PAY_LABELS: Record<PayType, string> = { none: 'ללא תשלום', monthly: 'חודשי', onetime: 'חד-פעמי' };
+
+/** Backward-compat: treat missing payment_type as monthly if fee>0, else none */
+function payType(s: Pick<Subscription, 'payment_type' | 'monthly_fee'>): PayType {
+  if (s.payment_type) return s.payment_type;
+  return (s.monthly_fee ?? 0) > 0 ? 'monthly' : 'none';
+}
+
+function feeLabel(s: Subscription): string {
+  const pt = payType(s);
+  if (pt === 'none') return 'ללא תשלום';
+  if (pt === 'monthly') return `${fmt(s.monthly_fee)}/חודש`;
+  return `${fmt(s.monthly_fee)} חד-פעמי`;
+}
+
 const OWNER_META = {
   Shi:   { label: 'שי',    cls: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
   Ortal: { label: 'אורטל', cls: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
@@ -28,7 +44,7 @@ const CAT_META: Record<SubCategory, { emoji: string }> = {
 function renewalBadge(date?: string) {
   if (!date) return null;
   const days = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
-  if (days < 0)   return { text: 'פג תוקף',            cls: 'text-red-400 bg-red-400/10 border-red-400/20' };
+  if (days < 0)   return { text: 'פג תוקף',             cls: 'text-red-400 bg-red-400/10 border-red-400/20' };
   if (days <= 30) return { text: `חידוש בעוד ${days}י׳`, cls: 'text-orange-400 bg-orange-400/10 border-orange-400/20' };
   if (days <= 90) return { text: `חידוש בעוד ${days}י׳`, cls: 'text-amber-400 bg-amber-400/10 border-amber-400/20' };
   const d = new Date(date);
@@ -40,7 +56,8 @@ function renewalBadge(date?: string) {
 
 const EMPTY: Omit<Subscription, 'id'> = {
   name: '', provider: '', category: 'אחר', owner: 'Joint',
-  monthly_fee: 0, renewal_date: '', card_number: '', image_url: '', notes: '', is_active: true,
+  payment_type: 'monthly', monthly_fee: 0,
+  renewal_date: '', card_number: '', image_url: '', notes: '', is_active: true,
 };
 
 export default function Subscriptions() {
@@ -83,7 +100,7 @@ export default function Subscriptions() {
   function openAdd() { setForm(EMPTY); setEditId(null); setDialog('add'); }
   function openEdit(s: Subscription) {
     const { id, ...rest } = s;
-    setForm(rest);
+    setForm({ ...EMPTY, ...rest, payment_type: payType(s) });
     setEditId(id);
     setDialog('edit');
   }
@@ -96,8 +113,14 @@ export default function Subscriptions() {
     reader.readAsDataURL(file);
   }
 
+  function setPaymentType(pt: PayType) {
+    setForm(f => ({ ...f, payment_type: pt, monthly_fee: pt === 'none' ? 0 : f.monthly_fee }));
+  }
+
   const activeSubs   = useMemo(() => subs.filter(s => s.is_active), [subs]);
-  const monthlyTotal = useMemo(() => activeSubs.reduce((s, x) => s + (x.monthly_fee || 0), 0), [activeSubs]);
+  const monthlyTotal = useMemo(() =>
+    activeSubs.filter(s => payType(s) === 'monthly').reduce((acc, s) => acc + (s.monthly_fee || 0), 0),
+  [activeSubs]);
 
   const filtered = useMemo(() => {
     let list = subs.filter(s => s.is_active);
@@ -114,14 +137,17 @@ export default function Subscriptions() {
     const cats = catFilter !== 'all'
       ? [catFilter]
       : SUB_CATEGORIES.filter(c => filtered.some(s => s.category === c));
-    return cats.map(cat => ({
-      cat,
-      items: filtered.filter(s => s.category === cat),
-      total: filtered.filter(s => s.category === cat).reduce((s, x) => s + (x.monthly_fee || 0), 0),
-    }));
+    return cats.map(cat => {
+      const items = filtered.filter(s => s.category === cat);
+      const monthlySum = items.filter(s => payType(s) === 'monthly').reduce((acc, s) => acc + (s.monthly_fee || 0), 0);
+      const onetimeCount = items.filter(s => payType(s) === 'onetime').length;
+      return { cat, items, monthlySum, onetimeCount };
+    });
   }, [filtered, catFilter]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const currentPT = form.payment_type ?? 'monthly';
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 pb-24 space-y-4">
 
@@ -166,13 +192,11 @@ export default function Subscriptions() {
       </div>
 
       {/* Category filter chips */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {(['all', ...SUB_CATEGORIES] as const).map(c => (
           <button key={c} onClick={() => setCatFilter(c)}
             className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-              catFilter === c
-                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-                : 'text-white/40 border-transparent hover:text-white/60'
+              catFilter === c ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'text-white/40 border-transparent hover:text-white/60'
             }`}>
             {c === 'all' ? 'הכל' : `${CAT_META[c].emoji} ${c}`}
           </button>
@@ -210,21 +234,26 @@ export default function Subscriptions() {
 
       {/* Grouped list */}
       <div className="space-y-5">
-        {grouped.map(({ cat, items, total }) => (
+        {grouped.map(({ cat, items, monthlySum, onetimeCount }) => (
           <div key={cat} className="space-y-2">
 
             {/* Category header */}
-            <div className="flex items-center justify-between px-1 py-0.5 border-b border-white/5 pb-2">
+            <div className="flex items-center justify-between px-1 border-b border-white/5 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-base">{CAT_META[cat].emoji}</span>
                 <span className="text-sm font-semibold text-white/80">{cat}</span>
                 <span className="text-xs text-white/25">{items.length} מנויים</span>
               </div>
-              <div className="text-left">
-                {total > 0
-                  ? <span className="text-xs font-medium text-emerald-400">{fmt(total)}<span className="text-white/30">/חודש</span></span>
-                  : <span className="text-xs text-white/25">ללא תשלום</span>
-                }
+              <div className="flex items-center gap-2 text-left">
+                {monthlySum > 0 && (
+                  <span className="text-xs font-medium text-emerald-400">{fmt(monthlySum)}<span className="text-white/30">/חודש</span></span>
+                )}
+                {onetimeCount > 0 && (
+                  <span className="text-xs text-amber-400/70">{onetimeCount} חד-פעמי</span>
+                )}
+                {monthlySum === 0 && onetimeCount === 0 && (
+                  <span className="text-xs text-white/25">ללא תשלום</span>
+                )}
               </div>
             </div>
 
@@ -232,6 +261,7 @@ export default function Subscriptions() {
             {items.map(sub => {
               const rb = renewalBadge(sub.renewal_date);
               const om = OWNER_META[sub.owner as keyof typeof OWNER_META] ?? OWNER_META.Joint;
+              const pt = payType(sub);
               return (
                 <div key={sub.id} className="flex gap-3 p-3 rounded-xl bg-white/5 border border-white/8 active:bg-white/10 transition-colors">
 
@@ -263,9 +293,11 @@ export default function Subscriptions() {
 
                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${om.cls}`}>{om.label}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-white/50">
-                        {sub.monthly_fee > 0 ? `${fmt(sub.monthly_fee)}/חודש` : 'ללא דמי מנוי'}
-                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${
+                        pt === 'monthly' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                        pt === 'onetime' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                        'bg-white/5 border-white/10 text-white/40'
+                      }`}>{feeLabel(sub)}</span>
                       {rb && <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${rb.cls}`}>{rb.text}</span>}
                     </div>
 
@@ -278,7 +310,7 @@ export default function Subscriptions() {
         ))}
       </div>
 
-      {/* ── Add / Edit Dialog ─────────────────────────────────────────────── */}
+      {/* ── Add / Edit Dialog ──────────────────────────────────────────────── */}
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) setDialog(null); }}>
@@ -290,6 +322,7 @@ export default function Subscriptions() {
             </div>
 
             <div className="space-y-3">
+
               {/* Name */}
               <div>
                 <label className="text-xs text-white/50 block mb-1">שם המנוי *</label>
@@ -334,21 +367,52 @@ export default function Subscriptions() {
                 </div>
               </div>
 
-              {/* Fee + Renewal date */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-white/50 block mb-1">דמי מנוי חודשיים (₪)</label>
-                  <input type="number" min="0" value={form.monthly_fee}
-                    onChange={e => setForm(f => ({ ...f, monthly_fee: Number(e.target.value) }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-sm text-white outline-none focus:border-cyan-500/40" />
+              {/* Payment type segmented control */}
+              <div>
+                <label className="text-xs text-white/50 block mb-1.5">סוג תשלום</label>
+                <div className="flex rounded-xl border border-white/10 overflow-hidden">
+                  {(['none', 'monthly', 'onetime'] as const).map(pt => (
+                    <button key={pt} onClick={() => setPaymentType(pt)}
+                      className={`flex-1 py-2.5 text-xs font-medium transition-colors border-l border-white/10 last:border-l-0 ${
+                        currentPT === pt ? 'bg-cyan-500/20 text-cyan-300' : 'text-white/40 hover:text-white/60 bg-white/2'
+                      }`}>
+                      {PAY_LABELS[pt]}
+                    </button>
+                  ))}
                 </div>
+              </div>
+
+              {/* Fee amount — only when monthly or onetime */}
+              {currentPT !== 'none' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-white/50 block mb-1">
+                      {currentPT === 'monthly' ? 'סכום חודשי (₪)' : 'סכום תשלום (₪)'}
+                    </label>
+                    <input type="number" min="0" value={form.monthly_fee}
+                      onChange={e => setForm(f => ({ ...f, monthly_fee: Number(e.target.value) }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-sm text-white outline-none focus:border-cyan-500/40" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/50 block mb-1">
+                      {currentPT === 'monthly' ? 'תאריך חידוש' : 'תאריך תשלום'}
+                    </label>
+                    <input type="date" value={form.renewal_date || ''}
+                      onChange={e => setForm(f => ({ ...f, renewal_date: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-sm text-white outline-none focus:border-cyan-500/40" />
+                  </div>
+                </div>
+              )}
+
+              {/* Renewal date only — when payment is none */}
+              {currentPT === 'none' && (
                 <div>
-                  <label className="text-xs text-white/50 block mb-1">תאריך חידוש</label>
+                  <label className="text-xs text-white/50 block mb-1">תאריך חידוש (אופציונלי)</label>
                   <input type="date" value={form.renewal_date || ''}
                     onChange={e => setForm(f => ({ ...f, renewal_date: e.target.value }))}
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-sm text-white outline-none focus:border-cyan-500/40" />
                 </div>
-              </div>
+              )}
 
               {/* Notes */}
               <div>

@@ -118,6 +118,7 @@ export interface Subscription {
   provider: string;
   category: SubCategory;
   owner: 'Shi' | 'Ortal' | 'Joint';
+  payment_type?: 'none' | 'monthly' | 'onetime';
   monthly_fee: number;
   renewal_date?: string;
   card_number?: string;
