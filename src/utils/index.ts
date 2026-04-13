@@ -13,6 +13,7 @@ const PAGE_ROUTES: Record<string, string> = {
   Settings: '/settings',
   Transactions: '/transactions',
   Mileage: '/mileage',
+  Subscriptions: '/subscriptions',
 };
 
 export function createPageUrl(page: string): string {

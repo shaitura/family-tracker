@@ -98,3 +98,31 @@ export interface Asset {
   balance?: number;
   risk_level?: RiskLevel;
 }
+
+export const SUB_CATEGORIES = [
+  'חנויות ולקוחות',
+  'פנאי וטבע',
+  'בידור ומדיה',
+  'בריאות וספורט',
+  'מזון ומשלוחים',
+  'רכב ותחבורה',
+  'חינוך',
+  'שירותים',
+  'אחר',
+] as const;
+export type SubCategory = typeof SUB_CATEGORIES[number];
+
+export interface Subscription {
+  id: string;
+  name: string;
+  provider: string;
+  category: SubCategory;
+  owner: 'Shi' | 'Ortal' | 'Joint';
+  monthly_fee: number;
+  renewal_date?: string;
+  card_number?: string;
+  image_url?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at?: number;
+}

@@ -3,7 +3,7 @@ import {
   query, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Transaction, Budget, Asset, MileageSettings, MileageReading, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
+import { Transaction, Budget, Asset, MileageSettings, MileageReading, Subscription, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Firestore entity factory  (same public API as the old localStorage version)
@@ -497,6 +497,7 @@ export const base44 = {
     Asset:           makeEntity<Asset>('assets'),
     MileageSettings: makeEntity<MileageSettings>('mileage_settings'),
     MileageReading:  makeEntity<MileageReading>('mileage_readings'),
+    Subscription:    makeEntity<Subscription>('subscriptions'),
   },
   integrations: {
     Core: {
