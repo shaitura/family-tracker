@@ -120,7 +120,10 @@ export interface Subscription {
   owner: 'Shi' | 'Ortal' | 'Joint';
   payment_type?: 'none' | 'monthly' | 'onetime';
   monthly_fee: number;
-  renewal_date?: string;
+  payment_date?: string;   // מועד תשלום (חודשי: תשלום הבא; חד-פעמי: מועד התשלום)
+  expiry_date?: string;    // תוקף הכרטיס/מנוי
+  start_date?: string;     // תחילת מנוי (לתרחיש ללא עלות)
+  renewal_date?: string;   // deprecated — לתאימות לאחור
   card_number?: string;
   image_url?: string;
   notes?: string;
