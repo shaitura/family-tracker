@@ -18,6 +18,7 @@ import Admin from '@/pages/Admin';
 import AnnualAnalysis from '@/pages/AnnualAnalysis';
 import Mileage from '@/pages/Mileage';
 import Trends from '@/pages/Trends';
+import Subscriptions from '@/pages/Subscriptions';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, gcTime: 1000 * 60 * 15, retry: false, refetchOnWindowFocus: false } },
@@ -68,6 +69,7 @@ export default function App() {
               <Route path="/annual-analysis"   element={<AnnualAnalysis />} />
               <Route path="/trends"            element={<Trends />} />
               <Route path="/mileage"           element={<Mileage />} />
+              <Route path="/subscriptions"    element={<Subscriptions />} />
               <Route path="/admin"             element={<Admin />} />
             </Routes>
           </Layout>
