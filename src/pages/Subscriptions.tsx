@@ -395,7 +395,7 @@ export default function Subscriptions() {
                   </div>
                   <div>
                     <label className="text-xs text-white/50 block mb-1">
-                      {currentPT === 'monthly' ? 'תאריך חידוש' : 'תאריך תשלום'}
+                      {currentPT === 'monthly' ? 'תאריך חידוש' : 'תוקף הכרטיס/מנוי'}
                     </label>
                     <input type="date" value={form.renewal_date || ''}
                       onChange={e => setForm(f => ({ ...f, renewal_date: e.target.value }))}
