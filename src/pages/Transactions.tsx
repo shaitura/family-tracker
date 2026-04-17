@@ -783,14 +783,14 @@ export default function Transactions() {
                     </div>
 
                     {/* Date & Amount */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       <div>
                         <Label className="mb-0.5 block text-xs">תאריך</Label>
-                        <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} className="h-9" />
+                        <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} className="h-10 w-full" />
                       </div>
                       <div>
                         <Label className="mb-0.5 block text-xs">סכום (₪)</Label>
-                        <Input type="number" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)} min="0" step="0.01" className="h-9" />
+                        <Input type="number" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)} min="0" step="0.01" className="h-10 w-full" />
                       </div>
                     </div>
 
