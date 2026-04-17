@@ -426,8 +426,9 @@ export default function Layout({
       )}
 
       {/* ── Bottom nav — mobile only ────────────────────────────────────── */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 h-[4.5rem] ls:h-11 glass-dark border-t border-white/10 md:hidden">
-        <div className="h-full flex items-center justify-around px-1">
+      <nav className="fixed bottom-0 inset-x-0 z-40 h-[4.5rem] ls:h-11 glass-dark border-t border-white/10 md:hidden"
+        style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="h-full flex items-center justify-around">
           {NAV_ITEMS.map(({ label, icon: Icon, href, accent, adminOnly, headerOnly }) => {
             if (adminOnly || headerOnly) return null;
             const active = location.pathname === href;
@@ -438,7 +439,7 @@ export default function Layout({
                 to={href}
                 onClick={active && isTransactions ? (e) => { e.preventDefault(); navigate(href, { state: { openForm: Date.now() } }); } : undefined}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 flex-1 h-14 rounded-2xl transition-all duration-200 relative',
+                  'flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-all duration-200 relative',
                   active ? 'text-cyan-400' : 'text-white/40 hover:text-white/70',
                 )}
               >
@@ -447,7 +448,7 @@ export default function Layout({
                 )}
                 <Icon
                   className={cn(
-                    'w-6 h-6 ls:w-4 ls:h-4 transition-all duration-200',
+                    'w-5 h-5 ls:w-4 ls:h-4 transition-all duration-200',
                     active ? 'text-cyan-400 scale-110' : 'text-white/40',
                     accent && !active ? 'text-purple-400' : '',
                   )}
@@ -455,7 +456,7 @@ export default function Layout({
                 />
                 <span
                   className={cn(
-                    'text-[10px] font-medium ls:hidden transition-colors duration-200',
+                    'text-[9px] font-medium ls:hidden transition-colors duration-200 leading-none',
                     active ? 'text-cyan-400' : 'text-white/40',
                   )}
                 >
