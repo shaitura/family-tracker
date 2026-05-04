@@ -506,15 +506,11 @@ export default function Transactions() {
 
   // ── Scroll to current month ───────────────────────────────────────────────
   const currentMonthRef = useRef<HTMLDivElement>(null);
-  const didScrollRef = useRef(false);
 
   const scrollToCurrentMonth = useCallback((smooth = false) => {
-    // Current month may be far down the list (e.g. behind future-dated months).
-    // We must render enough months so the ref element actually exists in the DOM.
     const currentIndex = groupedByMonth.findIndex(([key]) => key === currentMonthKey);
     const neededCount = currentIndex >= 0 ? Math.max(currentIndex + 1, MONTHS_PER_PAGE) : MONTHS_PER_PAGE;
     setVisibleMonthCount(neededCount);
-    // Wait for render then scroll to current month ref
     setTimeout(() => {
       if (currentMonthRef.current) {
         currentMonthRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
@@ -522,34 +518,35 @@ export default function Transactions() {
     }, 150);
   }, [groupedByMonth, currentMonthKey]);
 
-  // On initial data load: scroll to current month before paint (no visible jump)
-  useLayoutEffect(() => {
-    if (didScrollRef.current) return;
-    if (transactions.length === 0) return;
-    didScrollRef.current = true;
-    scrollToCurrentMonth(false);
-  }, [transactions.length, scrollToCurrentMonth]);
+  // Scroll to current month on every navigation to this page
+  const scrollFnRef = useRef(scrollToCurrentMonth);
+  useEffect(() => { scrollFnRef.current = scrollToCurrentMonth; }, [scrollToCurrentMonth]);
 
-  // ── Scroll indicator: track which month is currently visible ─────────────
+  useEffect(() => {
+    if (transactions.length === 0) return;
+    scrollFnRef.current(false);
+  }, [location.key, transactions.length]); // re-fires on each navigation + initial load
+
+  // ── Scroll indicator: track which month header has passed the top bar ───────
   const [scrollMonth, setScrollMonth] = useState<string | null>(null);
 
   useEffect(() => {
     if (groupedByMonth.length === 0) return;
-    const elements = document.querySelectorAll('[data-month]');
-    if (elements.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible.length > 0) {
-          setScrollMonth(visible[0].target.getAttribute('data-month'));
+    const HEADER_HEIGHT = 130; // fixed top bar + action bar
+    const handler = () => {
+      const elements = document.querySelectorAll<HTMLElement>('[data-month]');
+      let current: string | null = null;
+      for (const el of elements) {
+        // Pick the last header whose top has passed (or is at) the fixed bar
+        if (el.getBoundingClientRect().top <= HEADER_HEIGHT) {
+          current = el.getAttribute('data-month');
         }
-      },
-      { rootMargin: '-80px 0px -50% 0px', threshold: 0 }
-    );
-    elements.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+      }
+      if (current) setScrollMonth(current);
+    };
+    window.addEventListener('scroll', handler, { passive: true });
+    handler(); // set initial value
+    return () => window.removeEventListener('scroll', handler);
   }, [groupedByMonth, visibleMonthCount]);
 
   // ── Reset visible months when filters change ──────────────────────────────
