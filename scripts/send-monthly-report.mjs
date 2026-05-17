@@ -168,7 +168,7 @@ const html = `<!DOCTYPE html>
     <tbody>${txRows}</tbody>
   </table>
 
-  <div class="footer">דו"ח זה נשלח אוטומטית ב-1 לחודש · Family Tracker</div>
+  <div class="footer">דו"ח זה נשלח אוטומטית ב-12 לחודש · Family Tracker</div>
 </body>
 </html>`;
 
@@ -201,7 +201,7 @@ const { error } = await resend.emails.send({
       <li>💸 הוצאות: <strong style="color:#dc2626">${fmt(totalExpense)}</strong></li>
       <li>${balance >= 0 ? '✅' : '⚠️'} מאזן: <strong style="color:${balanceColor}">${balance >= 0 ? '+' : ''}${fmt(balance)}</strong></li>
     </ul>
-    <p style="color:#6b7280;font-size:12px">דו"ח זה נשלח אוטומטית ב-1 לכל חודש.</p>
+    <p style="color:#6b7280;font-size:12px">דו"ח זה נשלח אוטומטית ב-12 לכל חודש.</p>
   </div>`,
   attachments: [{
     filename: `family-tracker-${prefix}.pdf`,
@@ -214,4 +214,45 @@ if (error) {
   process.exit(1);
 }
 
-console.log(`✅ דו"ח ${monthLabel} נשלח בהצלחה!`);
+console.log(`✅ מייל ${monthLabel} נשלח בהצלחה!`);
+
+// ─── Send PDF via WhatsApp (WAHA) ─────────────────────────────────────────────
+const wahaUrl  = process.env.WAHA_URL;
+const wahaKey  = process.env.WAHA_API_KEY;
+const shaiPhone = process.env.SHAI_PHONE;
+
+if (wahaUrl && wahaKey && shaiPhone) {
+  try {
+    console.log('📱 שולח PDF לוואטסאפ…');
+    const chatId = `${shaiPhone}@c.us`;
+    const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
+
+    const resp = await fetch(`${wahaUrl}/api/sendFile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': wahaKey },
+      body: JSON.stringify({
+        session: 'default',
+        chatId,
+        file: {
+          mimetype: 'application/pdf',
+          filename: `family-tracker-${prefix}.pdf`,
+          data: pdfBase64,
+        },
+        caption: `📊 דו"ח חודשי — ${monthLabel}`,
+      }),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error(`⚠️  WhatsApp שגיאה (${resp.status}): ${body}`);
+    } else {
+      console.log('✅ PDF נשלח לוואטסאפ!');
+    }
+  } catch (waErr) {
+    console.error('⚠️  WhatsApp שגיאה:', waErr.message);
+  }
+} else {
+  console.log('ℹ️  WAHA_URL/WAHA_API_KEY/SHAI_PHONE לא הוגדרו — מדלג על וואטסאפ');
+}
+
+console.log(`✅ דו"ח ${monthLabel} הושלם!`);

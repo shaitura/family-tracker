@@ -1,9 +1,7 @@
 name: Monthly Financial Report
 
 on:
-  schedule:
-    - cron: '0 6 1 * *'  # ראשון לחודש ב-06:00 UTC (08:00 שעון ישראל)
-  workflow_dispatch:       # אפשרות להריץ ידנית מ-GitHub לצורך בדיקה
+  workflow_dispatch:  # ידני בלבד — הדו"ח החודשי מופק כעת על ידי shared-brain-app (NAS)
 
 jobs:
   send-report:
@@ -31,4 +29,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          WAHA_URL: ${{ secrets.WAHA_URL }}
+          WAHA_API_KEY: ${{ secrets.WAHA_API_KEY }}
+          SHAI_PHONE: ${{ secrets.SHAI_PHONE }}
         run: node send-monthly-report.mjs
