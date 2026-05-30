@@ -567,6 +567,9 @@ export default function Admin() {
     if (isEditing) {
       // Custom dropdown for select columns
       if (col.type === 'select' && 'options' in col) {
+        const cellOptions: readonly string[] = col.key === 'category'
+          ? (row.type === 'income' ? INCOME_CATEGORIES : CATEGORIES)
+          : (col.options as readonly string[]);
         return (
           <div data-cell className="relative h-full" style={{ zIndex: 200 }}>
             {/* Current value bar */}
@@ -576,7 +579,7 @@ export default function Admin() {
             {/* Options list */}
             <div className="absolute top-full right-0 bg-white border border-gray-300 rounded shadow-xl"
                  style={{ minWidth: '130px', zIndex: 9999 }}>
-              {(col.options as readonly string[]).map((opt) => (
+              {cellOptions.map((opt) => (
                 <div
                   key={opt}
                   className={[
