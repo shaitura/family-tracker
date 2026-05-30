@@ -300,6 +300,16 @@ export default function Admin() {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
   }
 
+  async function runBulkCategoryChange() {
+    if (!bulkCatTarget || selectedIds.size === 0) return;
+    for (const id of selectedIds) {
+      await base44.entities.Transaction.update(id, { category: bulkCatTarget as Category });
+    }
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    setBulkCatOpen(false);
+    setBulkCatTarget('');
+  }
+
   async function createBackup() {
     const [txData, budgetData, assetData] = await Promise.all([
       base44.entities.Transaction.filter({}),
@@ -467,6 +477,8 @@ export default function Admin() {
   }
 
   const [annualError, setAnnualError] = useState('');
+  const [bulkCatOpen, setBulkCatOpen] = useState(false);
+  const [bulkCatTarget, setBulkCatTarget] = useState('');
 
   async function importAnnualData() {
     setAnnualLoading(true);
@@ -662,6 +674,11 @@ export default function Admin() {
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
           <button onClick={openPasteDialog}  className="bg-blue-500  text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600">📋 הדבק מאקסל</button>
           <button onClick={() => { setAnnualPreview([]); setAnnualSheetNames([]); setAnnualDiag([]); setAnnualOpen(true); }} className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700">📂 יבא קובץ שנתי</button>
+          {selectedIds.size > 0 && (
+            <button onClick={() => { setBulkCatTarget(''); setBulkCatOpen(true); }} className="bg-indigo-500 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-600">
+              🏷 שנה קטגוריה ({selectedIds.size})
+            </button>
+          )}
           {selectedIds.size > 0 && (
             <button onClick={deleteSelected} className="bg-red-500   text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
               🗑 מחק נבחרים ({selectedIds.size})
@@ -1141,6 +1158,40 @@ export default function Admin() {
             <div className="flex gap-3 justify-center">
               <button onClick={() => { setConfirmClear(false); setConfirmText(''); }} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">ביטול</button>
               <button onClick={clearAllData} disabled={confirmText !== 'מחק הכל'} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-40">מחק הכל</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Category Change Dialog ── */}
+      {bulkCatOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center" dir="rtl">
+            <div className="text-3xl mb-3">🏷</div>
+            <h2 className="text-lg font-bold mb-1">שנה קטגוריה לנבחרים</h2>
+            <p className="text-gray-500 text-sm mb-4">{selectedIds.size} שורות נבחרו</p>
+            <select
+              value={bulkCatTarget}
+              onChange={(e) => setBulkCatTarget(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 mb-4 text-right text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">בחר קטגוריה…</option>
+              <optgroup label="הוצאות">
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
+              <optgroup label="הכנסות">
+                {INCOME_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
+            </select>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setBulkCatOpen(false)} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">ביטול</button>
+              <button
+                onClick={runBulkCategoryChange}
+                disabled={!bulkCatTarget}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium disabled:opacity-40"
+              >
+                החל על {selectedIds.size} שורות →
+              </button>
             </div>
           </div>
         </div>
