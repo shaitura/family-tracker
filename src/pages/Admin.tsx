@@ -222,6 +222,7 @@ export default function Admin() {
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [showColFilters, setShowColFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastCheckedIdx = useRef<number | null>(null);
   const [pasteOpen, setPasteOpen]         = useState(false);
   const [confirmClear, setConfirmClear]   = useState(false);
   const [confirmText, setConfirmText]     = useState('');
@@ -713,9 +714,10 @@ export default function Admin() {
                 <input
                   type="checkbox"
                   checked={selectedIds.size === rows.length && rows.length > 0}
-                  onChange={(e) =>
-                    setSelectedIds(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())
-                  }
+                  onChange={(e) => {
+                    setSelectedIds(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set());
+                    lastCheckedIdx.current = null;
+                  }}
                 />
               </th>
               <th className="w-10 px-2 py-2 text-center border-b border-l bg-gray-100 text-gray-400">#</th>
@@ -787,13 +789,25 @@ export default function Admin() {
                   <input
                     type="checkbox"
                     checked={selectedIds.has(row.id)}
-                    onChange={(e) =>
-                      setSelectedIds((prev) => {
-                        const n = new Set(prev);
-                        e.target.checked ? n.add(row.id) : n.delete(row.id);
-                        return n;
-                      })
-                    }
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && lastCheckedIdx.current !== null) {
+                        const from = Math.min(lastCheckedIdx.current, idx);
+                        const to   = Math.max(lastCheckedIdx.current, idx);
+                        setSelectedIds((prev) => {
+                          const n = new Set(prev);
+                          rows.slice(from, to + 1).forEach((r) => checked ? n.add(r.id) : n.delete(r.id));
+                          return n;
+                        });
+                      } else {
+                        setSelectedIds((prev) => {
+                          const n = new Set(prev);
+                          checked ? n.add(row.id) : n.delete(row.id);
+                          return n;
+                        });
+                      }
+                      lastCheckedIdx.current = idx;
+                    }}
                   />
                 </td>
                 <td className="px-2 text-center border-l text-gray-400 text-xs">{idx + 1}</td>
