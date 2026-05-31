@@ -667,7 +667,7 @@ export default function Admin() {
   const [showReviewOnly, setShowReviewOnly] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('ft_review_ids', JSON.stringify([...reviewIds]));
+    try { localStorage.setItem('ft_review_ids', JSON.stringify([...reviewIds])); } catch { /* ignore */ }
   }, [reviewIds]);
 
   async function importAnnualData() {
