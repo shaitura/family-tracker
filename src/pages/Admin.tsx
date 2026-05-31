@@ -301,6 +301,12 @@ function parseAnnualExcel(workbook: XLSX.WorkBook, year: number): MonthPreview[]
 
 // ────────────────────────────────────────────────────────────────────────────
 
+function getWizardOptions(field: string): string[] {
+  if (field === 'category') return [...CATEGORIES, ...INCOME_CATEGORIES];
+  const col = COLUMNS.find(c => c.key === field);
+  return col && 'options' in col ? [...(col.options as readonly string[])] : [];
+}
+
 function matchesAllFields(t: Transaction, q: string): boolean {
   const s = q.toLowerCase();
   return [
@@ -404,46 +410,51 @@ export default function Admin() {
   function openWizard() {
     setWizardOpen(true);
     setWizardAnomalies([]);
-    setWizardFixStatus('');
-    setWizardExpanded(new Set());
-    setWizardSelected(new Set());
+    setWizardStep(0);
+    setWizardFixed(0);
+    setWizardCustomValue('');
+  }
+
+  function closeWizard() {
+    setWizardOpen(false);
+    setWizardAnomalies([]);
+    setWizardStep(0);
+    setWizardCustomValue('');
   }
 
   function runWizardScan() {
     setWizardLoading(true);
-    setWizardFixStatus('');
-    setWizardExpanded(new Set());
+    setWizardStep(0);
+    setWizardFixed(0);
+    setWizardCustomValue('');
     setTimeout(() => {
       const anomalies = scanForAnomalies(transactions);
       setWizardAnomalies(anomalies);
-      setWizardSelected(new Set(anomalies.filter(a => !a.isAmount).map(a => a.id)));
       setWizardLoading(false);
     }, 10);
   }
 
-  async function runWizardFix() {
-    const toFix = wizardAnomalies.filter(a => !a.isAmount && wizardSelected.has(a.id));
-    if (!toFix.length) return;
+  async function applyWizardFix(targetValue: string) {
+    const anomaly = wizardAnomalies[wizardStep];
+    if (!anomaly || anomaly.isAmount) return;
     setWizardFixing(true);
-    setWizardFixStatus('');
-    const total = toFix.reduce((s, a) => s + a.outlierRows.length, 0);
-    let done = 0;
     try {
-      for (const anomaly of toFix) {
-        for (const row of anomaly.outlierRows) {
-          await base44.entities.Transaction.update(row.id, { [anomaly.field]: anomaly.fixValue } as Partial<Transaction>);
-          done++;
-          if (done % 5 === 0 || done === total) setWizardFixStatus(`מתקן… ${done}/${total}`);
-        }
+      for (const row of anomaly.outlierRows) {
+        await base44.entities.Transaction.update(row.id, { [anomaly.field]: targetValue } as Partial<Transaction>);
       }
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      setWizardFixStatus(`✅ תוקנו ${total} שורות`);
-      setWizardAnomalies([]);
-      setWizardSelected(new Set());
+      setWizardFixed(f => f + 1);
     } catch (e) {
-      setWizardFixStatus(`❌ שגיאה: ${String(e)}`);
+      console.error('[WIZARD]', e);
     }
     setWizardFixing(false);
+    setWizardCustomValue('');
+    setWizardStep(s => s + 1);
+  }
+
+  function skipCurrent() {
+    setWizardCustomValue('');
+    setWizardStep(s => s + 1);
   }
 
   async function runBulkCategoryChange() {
@@ -625,13 +636,13 @@ export default function Admin() {
   const [annualError, setAnnualError] = useState('');
   const [bulkCatOpen, setBulkCatOpen] = useState(false);
   const [bulkCatTarget, setBulkCatTarget] = useState('');
-  const [wizardOpen, setWizardOpen]           = useState(false);
-  const [wizardAnomalies, setWizardAnomalies] = useState<WizardAnomaly[]>([]);
-  const [wizardLoading, setWizardLoading]     = useState(false);
-  const [wizardSelected, setWizardSelected]   = useState<Set<string>>(new Set());
-  const [wizardFixing, setWizardFixing]       = useState(false);
-  const [wizardFixStatus, setWizardFixStatus] = useState('');
-  const [wizardExpanded, setWizardExpanded]   = useState<Set<string>>(new Set());
+  const [wizardOpen, setWizardOpen]               = useState(false);
+  const [wizardAnomalies, setWizardAnomalies]     = useState<WizardAnomaly[]>([]);
+  const [wizardLoading, setWizardLoading]         = useState(false);
+  const [wizardStep, setWizardStep]               = useState(0);
+  const [wizardCustomValue, setWizardCustomValue] = useState('');
+  const [wizardFixing, setWizardFixing]           = useState(false);
+  const [wizardFixed, setWizardFixed]             = useState(0);
 
   async function importAnnualData() {
     setAnnualLoading(true);
@@ -926,7 +937,12 @@ export default function Admin() {
           </thead>
 
           <tbody>
-            {rows.map((row, idx) => (
+            {rows.length > 500 && (
+              <tr><td colSpan={COLUMNS.length + 3} className="text-center py-2 text-xs text-amber-700 bg-amber-50 border-b">
+                מציג 500 מתוך {rows.length} שורות — הוסף פילטר לצמצום התוצאות
+              </td></tr>
+            )}
+            {rows.slice(0, 500).map((row, idx) => (
               <tr
                 key={row.id}
                 style={{ height: 36 }}
@@ -1334,209 +1350,171 @@ export default function Admin() {
       )}
 
       {/* ── Finetune Wizard Dialog ── */}
-      {wizardOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" dir="rtl">
+      {wizardOpen && (() => {
+        const isScanned  = wizardAnomalies.length > 0;
+        const isDone     = isScanned && wizardStep >= wizardAnomalies.length;
+        const anomaly    = isScanned && !isDone ? wizardAnomalies[wizardStep] : null;
+        const fieldOpts  = anomaly ? getWizardOptions(anomaly.field) : [];
+        const fixValue   = wizardCustomValue || (anomaly?.fixValue ?? '');
 
+        const outlierCounts: Record<string, number> = {};
+        if (anomaly) {
+          for (const r of anomaly.outlierRows) {
+            const v = String((r as unknown as Record<string, unknown>)[anomaly.field] ?? '');
+            outlierCounts[v] = (outlierCounts[v] ?? 0) + 1;
+          }
+        }
+        const sortedOutliers = Object.entries(outlierCounts).sort((a, b) => b[1] - a[1]);
+
+        return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col" dir="rtl">
+
+            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <div>
                 <h2 className="text-lg font-bold">🔬 Finetune Wizard</h2>
-                <p className="text-xs text-gray-500 mt-0.5">איתור חריגים והצעת תיקונים על בסיס נורמות בית עסק</p>
+                {isScanned && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {isDone ? 'הסתיים' : `חריג ${wizardStep + 1} מתוך ${wizardAnomalies.length}`}
+                  </p>
+                )}
               </div>
-              <button onClick={() => { setWizardOpen(false); setWizardAnomalies([]); setWizardFixStatus(''); }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+              <button onClick={closeWizard} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
             </div>
 
-            <div className="flex-1 overflow-auto p-5">
-              {wizardAnomalies.length === 0 && !wizardFixStatus ? (
-                <div className="text-center py-12">
+            {/* Progress bar */}
+            {isScanned && (
+              <div className="h-1.5 bg-gray-100">
+                <div className="h-1.5 bg-violet-500 transition-all duration-300"
+                  style={{ width: `${(wizardStep / wizardAnomalies.length) * 100}%` }} />
+              </div>
+            )}
+
+            {/* Body */}
+            <div className="p-6 min-h-[320px]">
+              {!isScanned ? (
+                <div className="text-center py-8">
                   <div className="text-5xl mb-4">🔬</div>
-                  <p className="text-gray-600 mb-2 text-sm">
-                    הוויזארד יסרוק את <strong>{transactions.length}</strong> העסקאות ויאתר<br/>
-                    חריגים ביחס לנורמות המזוהות לכל בית עסק
-                  </p>
-                  <p className="text-gray-400 text-xs mb-6">מינימום 4 עסקאות לבית עסק · סף דומיננטיות 60%</p>
-                  <button
-                    onClick={runWizardScan}
-                    disabled={wizardLoading}
-                    className="px-6 py-2.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 font-medium text-sm disabled:opacity-60"
-                  >
+                  <p className="text-gray-600 mb-1 text-sm">יסרוק <strong>{transactions.length}</strong> עסקאות ויאתר חריגים לפי בית עסק</p>
+                  <p className="text-gray-400 text-xs mb-6">מינימום 4 עסקאות · סף דומיננטיות 60%</p>
+                  <button onClick={runWizardScan} disabled={wizardLoading}
+                    className="px-6 py-2.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 font-medium text-sm disabled:opacity-60">
                     {wizardLoading ? '⏳ סורק…' : '🔍 התחל סריקה'}
                   </button>
                 </div>
-              ) : wizardFixStatus.startsWith('✅') ? (
-                <div className="text-center py-16">
-                  <div className="text-5xl mb-4">✅</div>
-                  <p className="text-green-700 font-semibold text-lg">{wizardFixStatus}</p>
-                  <button onClick={runWizardScan} className="mt-6 px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium">סרוק שוב</button>
+              ) : isDone ? (
+                <div className="text-center py-8">
+                  <div className="text-5xl mb-3">✅</div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-1">הוויזארד הסתיים!</h3>
+                  <p className="text-gray-500 text-sm mb-6">
+                    {wizardFixed} חריגים תוקנו · {wizardAnomalies.length - wizardFixed} דולגו
+                  </p>
+                  <button onClick={runWizardScan} className="px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium">
+                    סרוק שוב
+                  </button>
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-gray-700">
-                      נמצאו <strong>{wizardAnomalies.length}</strong> חריגים ב-
-                      <strong>{new Set(wizardAnomalies.map(a => a.merchant)).size}</strong> בתי עסק
+              ) : anomaly ? (
+                <div>
+                  {/* Merchant + field */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-800">{anomaly.merchant}</h3>
+                      <p className="text-sm text-gray-400 mt-0.5">{anomaly.totalCount} עסקאות סה״כ</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${{
+                      high: 'bg-red-100 text-red-700', medium: 'bg-yellow-100 text-yellow-700', low: 'bg-gray-100 text-gray-600'
+                    }[anomaly.priority]}`}>{anomaly.fieldLabel}</span>
+                  </div>
+
+                  {/* Dominant */}
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs font-semibold text-green-600 mb-1">
+                      ✅ ערך דומיננטי — {Math.round(anomaly.dominantCount / anomaly.totalCount * 100)}% מהעסקאות
                     </p>
-                    <div className="flex gap-3 text-xs">
-                      <button onClick={() => setWizardSelected(new Set(wizardAnomalies.filter(a => !a.isAmount).map(a => a.id)))} className="text-violet-600 hover:underline">בחר הכל</button>
-                      <span className="text-gray-300">|</span>
-                      <button onClick={() => setWizardSelected(new Set())} className="text-gray-500 hover:underline">נקה בחירה</button>
+                    <p className="text-base font-bold text-green-800">
+                      {displayLabel(anomaly.field, anomaly.dominant)}
+                      <span className="text-green-500 font-normal text-sm mr-2">({anomaly.dominantCount} שורות)</span>
+                    </p>
+                  </div>
+
+                  {/* Outliers */}
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                    <p className="text-xs font-semibold text-red-600 mb-2">❌ חריגים — {anomaly.outlierRows.length} שורות</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sortedOutliers.map(([val, count]) => (
+                        <span key={val} className="bg-white border border-red-200 rounded-full px-2.5 py-0.5 text-sm text-red-700 font-medium">
+                          {displayLabel(anomaly.field, val)} <span className="text-red-400 font-normal">×{count}</span>
+                        </span>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="border rounded-lg overflow-hidden text-sm">
-                    <table className="w-full border-collapse">
-                      <thead className="bg-gray-50 sticky top-0 z-10">
-                        <tr>
-                          <th className="w-8 px-3 py-2 border-b text-center">
-                            <input type="checkbox"
-                              checked={wizardSelected.size === wizardAnomalies.filter(a => !a.isAmount).length && wizardAnomalies.filter(a => !a.isAmount).length > 0}
-                              onChange={e => e.target.checked
-                                ? setWizardSelected(new Set(wizardAnomalies.filter(a => !a.isAmount).map(a => a.id)))
-                                : setWizardSelected(new Set())}
-                            />
-                          </th>
-                          <th className="px-3 py-2 border-b text-right font-medium text-gray-600">עסק</th>
-                          <th className="px-3 py-2 border-b text-right font-medium text-gray-600">שדה</th>
-                          <th className="px-3 py-2 border-b text-right font-medium text-gray-600">ערך דומיננטי</th>
-                          <th className="px-3 py-2 border-b text-right font-medium text-gray-600">חריגים</th>
-                          <th className="w-10 px-3 py-2 border-b" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {wizardAnomalies.map((a) => {
-                          const isExpanded = wizardExpanded.has(a.id);
-                          const priorityBadge = {
-                            high:   'bg-red-100 text-red-700',
-                            medium: 'bg-yellow-100 text-yellow-700',
-                            low:    'bg-gray-100 text-gray-500',
-                          }[a.priority];
-                          return (
-                            <Fragment key={a.id}>
-                              <tr className={`border-b transition-colors ${isExpanded ? 'bg-violet-50' : 'hover:bg-gray-50'}`}>
-                                <td className="px-3 py-2 text-center">
-                                  {a.isAmount ? (
-                                    <span className="text-gray-400 text-base">👁</span>
-                                  ) : (
-                                    <input type="checkbox"
-                                      checked={wizardSelected.has(a.id)}
-                                      onChange={e => setWizardSelected(prev => {
-                                        const n = new Set(prev);
-                                        e.target.checked ? n.add(a.id) : n.delete(a.id);
-                                        return n;
-                                      })}
-                                    />
-                                  )}
-                                </td>
-                                <td className="px-3 py-2 font-medium text-gray-800">
-                                  {a.merchant}
-                                  <span className="mr-1 text-gray-400 text-xs font-normal">({a.totalCount})</span>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${priorityBadge}`}>{a.fieldLabel}</span>
-                                </td>
-                                <td className="px-3 py-2 text-gray-700">
-                                  {displayLabel(a.field, a.dominant)}
-                                  <span className="text-gray-400 text-xs mr-1">({a.dominantCount})</span>
-                                </td>
-                                <td className="px-3 py-2">
-                                  {a.outlierRows.map((r, i) => (
-                                    <span key={r.id}>
-                                      <span className="text-red-600 font-medium text-xs">
-                                        {displayLabel(a.field, String((r as unknown as Record<string, unknown>)[a.field] ?? ''))}
-                                      </span>
-                                      {i < a.outlierRows.length - 1 && <span className="text-gray-300 mx-0.5">,</span>}
-                                    </span>
-                                  ))}
-                                  <span className="text-gray-400 text-xs mr-1">(×{a.outlierRows.length})</span>
-                                </td>
-                                <td className="px-3 py-2 text-center">
-                                  <button
-                                    onClick={() => setWizardExpanded(prev => {
-                                      const n = new Set(prev);
-                                      n.has(a.id) ? n.delete(a.id) : n.add(a.id);
-                                      return n;
-                                    })}
-                                    className="text-gray-400 hover:text-violet-600 text-sm"
-                                  >
-                                    {isExpanded ? '▲' : '▼'}
-                                  </button>
-                                </td>
-                              </tr>
-
-                              {isExpanded && (
-                                <tr className="bg-violet-50 border-b">
-                                  <td colSpan={6} className="px-4 py-2">
-                                    <div className="bg-white rounded border text-xs overflow-auto max-h-48">
-                                      <table className="w-full border-collapse">
-                                        <thead className="bg-gray-50">
-                                          <tr>
-                                            <th className="px-2 py-1 border-b text-right text-gray-500 font-medium">תאריך</th>
-                                            <th className="px-2 py-1 border-b text-right text-gray-500 font-medium">סכום</th>
-                                            <th className="px-2 py-1 border-b text-right text-gray-500 font-medium">ערך נוכחי</th>
-                                            {!a.isAmount && <th className="px-2 py-1 border-b text-right text-gray-500 font-medium">→ יעודכן ל</th>}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {a.outlierRows.map(r => (
-                                            <tr key={r.id} className="border-b last:border-0">
-                                              <td className="px-2 py-1 text-gray-500">{r.date}</td>
-                                              <td className="px-2 py-1 font-medium">₪{r.amount.toLocaleString()}</td>
-                                              <td className="px-2 py-1 text-red-600 font-medium">
-                                                {displayLabel(a.field, String((r as unknown as Record<string, unknown>)[a.field] ?? ''))}
-                                              </td>
-                                              {!a.isAmount && (
-                                                <td className="px-2 py-1 text-green-700 font-medium">
-                                                  {displayLabel(a.field, a.fixValue)}
-                                                </td>
-                                              )}
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {wizardFixStatus && !wizardFixStatus.startsWith('✅') && (
-                    <p className={`mt-3 text-sm font-medium text-center rounded-lg px-3 py-2 ${wizardFixStatus.startsWith('❌') ? 'bg-red-50 text-red-700' : 'bg-violet-50 text-violet-700'}`}>
-                      {wizardFixStatus}
-                    </p>
+                  {/* Fix */}
+                  {!anomaly.isAmount ? (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        💡 שנה את {anomaly.outlierRows.length} החריגים ל:
+                      </p>
+                      <select
+                        value={fixValue}
+                        onChange={e => setWizardCustomValue(e.target.value)}
+                        className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      >
+                        {fieldOpts.map(opt => (
+                          <option key={opt} value={opt}>{displayLabel(anomaly.field, opt)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-700 font-medium mb-1">👁 חריג סכום — סקירה ידנית</p>
+                      <p className="text-xs text-blue-600 mb-2">טווח רגיל: <strong>{anomaly.dominant}</strong></p>
+                      <div className="flex flex-wrap gap-1">
+                        {anomaly.outlierRows.map(r => (
+                          <span key={r.id} className="bg-white border border-blue-200 rounded px-2 py-0.5 text-xs text-blue-800">
+                            ₪{r.amount.toLocaleString()} · {r.date}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </>
-              )}
+                </div>
+              ) : null}
             </div>
 
-            <div className="flex items-center justify-between p-4 border-t">
-              <button onClick={() => { setWizardOpen(false); setWizardAnomalies([]); setWizardFixStatus(''); setWizardExpanded(new Set()); }} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm">סגור</button>
-              {wizardAnomalies.length > 0 && !wizardFixStatus.startsWith('✅') && (
+            {/* Footer */}
+            {isScanned && !isDone && anomaly && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <button onClick={skipCurrent} disabled={wizardFixing}
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm text-gray-600 disabled:opacity-50">
+                  דלג ←
+                </button>
                 <div className="flex items-center gap-3">
-                  <button onClick={runWizardScan} disabled={wizardLoading || wizardFixing} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm text-gray-600 disabled:opacity-50">
-                    🔄 סרוק מחדש
-                  </button>
-                  {wizardSelected.size > 0 && (
-                    <button
-                      onClick={runWizardFix}
-                      disabled={wizardFixing}
-                      className="px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium disabled:opacity-60"
-                    >
-                      {wizardFixing
-                        ? wizardFixStatus || 'מתקן…'
-                        : `✅ תקן ${wizardSelected.size} חריגים (${wizardAnomalies.filter(a => wizardSelected.has(a.id)).reduce((s, a) => s + a.outlierRows.length, 0)} שורות) →`}
+                  <span className="text-xs text-gray-400">{wizardStep + 1} / {wizardAnomalies.length}</span>
+                  {!anomaly.isAmount ? (
+                    <button onClick={() => applyWizardFix(fixValue)} disabled={wizardFixing || !fixValue}
+                      className="px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium disabled:opacity-60">
+                      {wizardFixing ? 'מתקן…' : `תקן ${anomaly.outlierRows.length} שורות ✅`}
+                    </button>
+                  ) : (
+                    <button onClick={skipCurrent}
+                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                      הבנתי, הבא ←
                     </button>
                   )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+            {isDone && (
+              <div className="flex justify-center p-4 border-t">
+                <button onClick={closeWizard} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">סגור</button>
+              </div>
+            )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Bulk Category Change Dialog ── */}
       {bulkCatOpen && (
