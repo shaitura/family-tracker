@@ -82,14 +82,14 @@ function scanForAnomalies(txs: Transaction[]): WizardAnomaly[] {
     for (const { key, label, priority } of WIZARD_FIELDS) {
       const counts: Record<string, number> = {};
       for (const tx of group) {
-        const v = String((tx as Record<string, unknown>)[key] ?? '');
+        const v = String((tx as unknown as Record<string, unknown>)[key] ?? '');
         counts[v] = (counts[v] ?? 0) + 1;
       }
       const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
       if (sorted.length < 2) continue;
       const [dom, domCount] = sorted[0];
       if (domCount / group.length < DOMINANCE) continue;
-      const outliers = group.filter(tx => String((tx as Record<string, unknown>)[key] ?? '') !== dom);
+      const outliers = group.filter(tx => String((tx as unknown as Record<string, unknown>)[key] ?? '') !== dom);
       if (!outliers.length) continue;
       anomalies.push({
         id: `${merchantDisplay}::${key}`,
@@ -1442,7 +1442,7 @@ export default function Admin() {
                                   {a.outlierRows.map((r, i) => (
                                     <span key={r.id}>
                                       <span className="text-red-600 font-medium text-xs">
-                                        {displayLabel(a.field, String((r as Record<string, unknown>)[a.field] ?? ''))}
+                                        {displayLabel(a.field, String((r as unknown as Record<string, unknown>)[a.field] ?? ''))}
                                       </span>
                                       {i < a.outlierRows.length - 1 && <span className="text-gray-300 mx-0.5">,</span>}
                                     </span>
@@ -1482,7 +1482,7 @@ export default function Admin() {
                                               <td className="px-2 py-1 text-gray-500">{r.date}</td>
                                               <td className="px-2 py-1 font-medium">₪{r.amount.toLocaleString()}</td>
                                               <td className="px-2 py-1 text-red-600 font-medium">
-                                                {displayLabel(a.field, String((r as Record<string, unknown>)[a.field] ?? ''))}
+                                                {displayLabel(a.field, String((r as unknown as Record<string, unknown>)[a.field] ?? ''))}
                                               </td>
                                               {!a.isAmount && (
                                                 <td className="px-2 py-1 text-green-700 font-medium">
