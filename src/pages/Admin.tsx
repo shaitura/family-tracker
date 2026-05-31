@@ -360,6 +360,15 @@ export default function Admin() {
   });
 
   const activeColFilters = Object.values(colFilters).filter(Boolean).length;
+  const [reviewIds, setReviewIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ft_review_ids') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [showReviewOnly, setShowReviewOnly] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem('ft_review_ids', JSON.stringify([...reviewIds])); } catch { /* ignore */ }
+  }, [reviewIds]);
 
   // ── filtered + sorted rows ──────────────────────────────────────────────
   const rows = [...transactions]
@@ -660,15 +669,6 @@ export default function Admin() {
   const [wizardFixing, setWizardFixing]           = useState(false);
   const [wizardFixed, setWizardFixed]             = useState(0);
   const [wizardMarkReview, setWizardMarkReview]   = useState(false);
-  const [reviewIds, setReviewIds] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('ft_review_ids') || '[]')); }
-    catch { return new Set(); }
-  });
-  const [showReviewOnly, setShowReviewOnly] = useState(false);
-
-  useEffect(() => {
-    try { localStorage.setItem('ft_review_ids', JSON.stringify([...reviewIds])); } catch { /* ignore */ }
-  }, [reviewIds]);
 
   async function importAnnualData() {
     setAnnualLoading(true);
