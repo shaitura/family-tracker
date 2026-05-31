@@ -364,6 +364,7 @@ export default function Admin() {
   // ── filtered + sorted rows ──────────────────────────────────────────────
   const rows = [...transactions]
     .filter((t) => {
+      if (showReviewOnly && !reviewIds.has(t.id)) return false;
       if (search && !matchesAllFields(t, search)) return false;
       for (const [key, val] of Object.entries(colFilters)) {
         if (!val) continue;
@@ -444,15 +445,30 @@ export default function Admin() {
       }
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setWizardFixed(f => f + 1);
+      setReviewIds(prev => {
+        const n = new Set(prev);
+        anomaly.outlierRows.forEach(r => n.delete(r.id));
+        return n;
+      });
     } catch (e) {
       console.error('[WIZARD]', e);
     }
     setWizardFixing(false);
+    setWizardMarkReview(false);
     setWizardCustomValue('');
     setWizardStep(s => s + 1);
   }
 
-  function skipCurrent() {
+  function skipCurrent(markReview = false) {
+    const anomaly = wizardAnomalies[wizardStep];
+    if (markReview && anomaly) {
+      setReviewIds(prev => {
+        const n = new Set(prev);
+        anomaly.outlierRows.forEach(r => n.add(r.id));
+        return n;
+      });
+    }
+    setWizardMarkReview(false);
     setWizardCustomValue('');
     setWizardStep(s => s + 1);
   }
@@ -643,6 +659,16 @@ export default function Admin() {
   const [wizardCustomValue, setWizardCustomValue] = useState('');
   const [wizardFixing, setWizardFixing]           = useState(false);
   const [wizardFixed, setWizardFixed]             = useState(0);
+  const [wizardMarkReview, setWizardMarkReview]   = useState(false);
+  const [reviewIds, setReviewIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ft_review_ids') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [showReviewOnly, setShowReviewOnly] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('ft_review_ids', JSON.stringify([...reviewIds]));
+  }, [reviewIds]);
 
   async function importAnnualData() {
     setAnnualLoading(true);
@@ -836,6 +862,14 @@ export default function Admin() {
         {activeColFilters > 0 && (
           <button onClick={() => setColFilters({})} className="text-xs text-red-500 hover:underline">✕ נקה פילטרים</button>
         )}
+        {reviewIds.size > 0 && (
+          <button
+            onClick={() => setShowReviewOnly(v => !v)}
+            className={`px-3 py-1.5 rounded text-sm border transition-all ${showReviewOnly ? 'bg-amber-500 text-white border-amber-500' : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'}`}
+          >
+            🔖 בחינה בהמשך ({reviewIds.size})
+          </button>
+        )}
 
         <div className="flex gap-2 mr-auto flex-wrap">
           <button onClick={addRow}           className="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600">+ שורה חדשה</button>
@@ -945,10 +979,11 @@ export default function Admin() {
             {rows.slice(0, 500).map((row, idx) => (
               <tr
                 key={row.id}
-                style={{ height: 36 }}
+                style={{ height: 36, borderLeft: reviewIds.has(row.id) ? '4px solid #f59e0b' : undefined }}
                 className={[
                   'border-b',
                   selectedIds.has(row.id)    ? 'bg-blue-50'  :
+                  reviewIds.has(row.id)      ? 'bg-amber-50' :
                   row.type === 'income'      ? 'bg-green-50' :
                   idx % 2 === 0              ? 'bg-white'    : 'bg-gray-50',
                   'hover:brightness-95',
@@ -1485,24 +1520,35 @@ export default function Admin() {
 
             {/* Footer */}
             {isScanned && !isDone && anomaly && (
-              <div className="flex items-center justify-between p-4 border-t">
-                <button onClick={skipCurrent} disabled={wizardFixing}
-                  className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm text-gray-600 disabled:opacity-50">
-                  דלג ←
-                </button>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400">{wizardStep + 1} / {wizardAnomalies.length}</span>
-                  {!anomaly.isAmount ? (
-                    <button onClick={() => applyWizardFix(fixValue)} disabled={wizardFixing || !fixValue}
-                      className="px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium disabled:opacity-60">
-                      {wizardFixing ? 'מתקן…' : `תקן ${anomaly.outlierRows.length} שורות ✅`}
-                    </button>
-                  ) : (
-                    <button onClick={skipCurrent}
-                      className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                      הבנתי, הבא ←
-                    </button>
-                  )}
+              <div className="flex flex-col gap-2 p-4 border-t">
+                <label className="flex items-center gap-2 text-sm text-amber-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={wizardMarkReview}
+                    onChange={e => setWizardMarkReview(e.target.checked)}
+                    className="rounded"
+                  />
+                  🔖 סמן לבחינה בהמשך
+                </label>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => skipCurrent(wizardMarkReview)} disabled={wizardFixing}
+                    className={`px-4 py-2 border rounded-lg text-sm disabled:opacity-50 transition-colors ${wizardMarkReview ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'hover:bg-gray-50 text-gray-600'}`}>
+                    {wizardMarkReview ? '🔖 סמן ודלג ←' : 'דלג ←'}
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{wizardStep + 1} / {wizardAnomalies.length}</span>
+                    {!anomaly.isAmount ? (
+                      <button onClick={() => applyWizardFix(fixValue)} disabled={wizardFixing || !fixValue}
+                        className="px-5 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium disabled:opacity-60">
+                        {wizardFixing ? 'מתקן…' : `תקן ${anomaly.outlierRows.length} שורות ✅`}
+                      </button>
+                    ) : (
+                      <button onClick={() => skipCurrent(wizardMarkReview)}
+                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                        הבנתי, הבא ←
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
