@@ -5,9 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { useTransactions } from '@/hooks/useTransactions';
-import { formatCurrency, categoryColor, PAYER_LABELS } from '@/utils';
+import { CHILD_TAGS } from '@/types';
+import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
+
+const CHILD_COLORS: Record<string, string> = { Yuval: '#a855f7', Aviv: '#10b981', Ziv: '#f59e0b', Shared: '#6366f1', none: '#64748b' };
 
 export default function Reports() {
   const currentYear = new Date().getFullYear();
@@ -48,6 +51,20 @@ export default function Reports() {
     });
     return { catData, payerData, total, byMonth };
   }, [filtered, year]);
+
+  // Per-child breakdown of "ילדים"-category expenses for the selected period
+  const { childData, childTotal } = useMemo(() => {
+    const prefix = fullYear ? `${year}-` : `${year}-${month}`;
+    const acc: Record<string, number> = {};
+    transactions
+      .filter((t) => t.type === 'expense' && t.category === 'ילדים' && t.date.startsWith(prefix))
+      .forEach((t) => { const k = t.child || 'none'; acc[k] = (acc[k] || 0) + t.amount; });
+    const order: string[] = [...CHILD_TAGS, 'none'];
+    const childData = order
+      .filter((k) => acc[k])
+      .map((k) => ({ key: k, label: k === 'none' ? 'ללא שיוך' : (CHILD_LABELS[k] ?? k), value: acc[k] }));
+    return { childData, childTotal: childData.reduce((s, d) => s + d.value, 0) };
+  }, [transactions, year, month, fullYear]);
 
   // Fixed vs variable (ignores expClass filter so split is always meaningful)
   const { fixedTotal, varTotal, splitTotal, fixedCats, varCats } = useMemo(() => {
@@ -536,6 +553,33 @@ export default function Reports() {
 
           {incomeTotal === 0 && expenseTotal === 0 && <EmptyState />}
         </div>
+      )}
+
+      {childData.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">👨‍👩‍👧‍👦 הוצאות ילדים לפי ילד/ה</CardTitle></CardHeader>
+          <CardContent className="pt-0 space-y-2">
+            {childData.map(({ key, label, value }) => {
+              const color = CHILD_COLORS[key] ?? '#64748b';
+              const pct = childTotal ? Math.round(value / childTotal * 100) : 0;
+              return (
+                <div key={key} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-sm text-white flex-1">{label}</span>
+                    <span className="text-sm font-bold text-white">{formatCurrency(value)}</span>
+                    <span className="text-xs text-white/40 w-10 text-left">{pct}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} /></div>
+                </div>
+              );
+            })}
+            <div className="flex justify-between pt-1 border-t border-white/10 text-xs text-white/50">
+              <span>סה"כ ילדים בתקופה</span>
+              <span className="font-bold text-white">{formatCurrency(childTotal)}</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {txType !== 'balance' && (

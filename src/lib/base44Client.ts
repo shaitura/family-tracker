@@ -66,7 +66,11 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
     },
 
     async update(id: string, updates: Partial<T>): Promise<T> {
-      await updateDoc(doc(db, collectionName, id), updates as Record<string, unknown>);
+      // Firestore updateDoc throws on `undefined` values — strip them (use null to clear a field).
+      const clean = Object.fromEntries(
+        Object.entries(updates as Record<string, unknown>).filter(([, v]) => v !== undefined),
+      );
+      await updateDoc(doc(db, collectionName, id), clean);
       return { id, ...updates } as T;
     },
 

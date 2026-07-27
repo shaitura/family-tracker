@@ -71,6 +71,7 @@ export function ruleToVirtual(rule: RecurringRule, month: string, nowMonth: stri
     payment_method: rule.payment_method,
     expense_class: 'קבועה',
     notes: rule.notes,
+    child: rule.child,
     status: month > nowMonth ? 'future' : 'paid',
     recurrence_id: rule.id,
     recurrence_month: month,

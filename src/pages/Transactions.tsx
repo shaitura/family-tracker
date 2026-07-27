@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/toaster';
-import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass } from '@/types';
-import { formatCurrency, formatDate, formatMonth, categoryColor, PAYER_LABELS } from '@/utils';
+import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, CHILD_TAGS, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass, ChildTag } from '@/types';
+import { formatCurrency, formatDate, formatMonth, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
 import { useTransactions } from '@/hooks/useTransactions';
 import { isVirtualId, monthsInRange } from '@/lib/recurrence';
 import { auth } from '@/lib/firebase';
@@ -51,6 +51,7 @@ function emptyForm() {
     notes: '',
     installments: '1',
     status: 'paid' as Transaction['status'],
+    child: '' as '' | ChildTag,
   };
 }
 
@@ -159,6 +160,7 @@ const TransactionRow = memo(function TransactionRow({
               </div>
               <div className="flex items-center gap-1.5 mt-1.5">
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{tx.category}</Badge>
+                {tx.child && <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-cyan-500/15 text-cyan-300 border-cyan-500/30">🧒 {CHILD_LABELS[tx.child] ?? tx.child}</Badge>}
                 {tx.expense_class && <Badge variant={tx.expense_class === 'קבועה' ? 'purple' : 'default'} className="text-[10px] px-1.5 py-0">{tx.expense_class}</Badge>}
                 {isRecurring && <Badge variant="purple" className="text-[10px] px-1.5 py-0 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" />חוזרת</Badge>}
                 {tx.status !== 'paid' && <Badge variant={tx.status === 'pending' ? 'warning' : 'secondary'} className="text-[10px] px-1.5 py-0">{tx.status === 'pending' ? 'ממתין' : 'עתידי'}</Badge>}
@@ -212,11 +214,24 @@ const TransactionRow = memo(function TransactionRow({
                   </div>
                   <div>
                     <Label className="text-[10px] mb-1 block">קטגוריה</Label>
-                    <select value={editForm.category ?? ''} onChange={(e) => setE('category', e.target.value as Category)}
+                    <select value={editForm.category ?? ''} onChange={(e) => { const c = e.target.value as Category; setE('category', c); if (c !== 'ילדים') setE('child', undefined); }}
                       className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
                       {CATEGORIES.map((c) => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
                     </select>
                   </div>
+                  {editForm.category === 'ילדים' && (
+                    <div>
+                      <Label className="text-[10px] mb-1 block">שיוך לילד/ה</Label>
+                      <div className="flex flex-wrap gap-1">
+                        {([['', 'ללא'], ...CHILD_TAGS.map((c) => [c, CHILD_LABELS[c]] as const)] as [string, string][]).map(([v, l]) => (
+                          <button key={v || 'none'} type="button" onClick={() => setE('child', (v || undefined) as Transaction['child'])}
+                            className={`flex-1 min-w-[52px] py-1 rounded-lg text-xs transition-all ${(editForm.child ?? '') === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <Label className="text-[10px] mb-1 block">תת-קטגוריה</Label>
                     <Input value={editForm.sub_category ?? ''} onChange={(e) => setE('sub_category', e.target.value)} placeholder="תיאור ספציפי..." className="h-8 text-xs" dir="rtl" />
@@ -338,6 +353,8 @@ export default function Transactions() {
 
   const { mutate: save, isPending: savePending } = useMutation({
     mutationFn: async () => {
+      // child tag only persists on the "ילדים" category
+      const childTag = form.category === 'ילדים' && form.child ? (form.child as ChildTag) : undefined;
       const base: Omit<Transaction, 'id'> = {
         date: form.date,
         type: form.type,
@@ -350,6 +367,7 @@ export default function Transactions() {
         notes: form.notes || undefined,
         installments: parseInt(form.installments) || 1,
         status: form.status,
+        child: childTag,
       };
       if (form.expense_class === 'קבועה' && recStart && recEnd) {
         const [s, e] = recStart <= recEnd ? [recStart, recEnd] : [recEnd, recStart];
@@ -362,6 +380,7 @@ export default function Transactions() {
           payer: form.payer,
           payment_method: form.payment_method,
           notes: form.notes || undefined,
+          child: childTag,
           day_of_month: day,
           start_month: s,
           end_month: e,
@@ -426,6 +445,7 @@ export default function Transactions() {
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
   const [filterExpenseClass, setFilterExpenseClass] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterChild, setFilterChild] = useState('');  // '' = all; 'none' = ללא שיוך; else a ChildTag
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -445,15 +465,17 @@ export default function Transactions() {
         if (data.payer) ruleUpdate.payer = data.payer;
         if (data.payment_method) ruleUpdate.payment_method = data.payment_method;
         if (data.notes !== undefined) ruleUpdate.notes = data.notes || undefined;
+        if ('child' in data) ruleUpdate.child = (data.category ?? tx.category) === 'ילדים' ? (data.child || undefined) : undefined;
         await base44.entities.RecurringRule.update(tx.recurrence_id, ruleUpdate);
         return;
       }
       // ── Recurring: edit just this month → materialize a real override row ──
       if (isVirtualId(tx.id)) {
+        const cat = (data.category ?? tx.category) as Category;
         const overrideRow: Omit<Transaction, 'id'> = {
           date: data.date ?? tx.date,
           type: tx.type,
-          category: (data.category ?? tx.category) as Category,
+          category: cat,
           sub_category: data.sub_category ?? tx.sub_category,
           amount: data.amount ?? tx.amount,
           payer: data.payer ?? tx.payer,
@@ -461,6 +483,7 @@ export default function Transactions() {
           expense_class: 'קבועה',
           notes: data.notes ?? tx.notes,
           status: data.status ?? tx.status,
+          child: cat === 'ילדים' ? (data.child ?? tx.child) : undefined,
           recurrence_id: tx.recurrence_id,
           recurrence_month: tx.recurrence_month,
         };
@@ -484,7 +507,10 @@ export default function Transactions() {
         return;
       }
       // ── Plain real row ──
-      await base44.entities.Transaction.update(tx.id, data);
+      // Normalize the child tag: valid only on "ילדים"; null clears it (undefined would be stripped, leaving a stale tag).
+      const isKids = (data.category ?? tx.category) === 'ילדים';
+      const clean = { ...data, child: (isKids && data.child ? data.child : null) as Transaction['child'] };
+      await base44.entities.Transaction.update(tx.id, clean);
     },
     onSuccess: (_, { scope }) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
@@ -562,6 +588,9 @@ export default function Transactions() {
         if (filterPaymentMethod && t.payment_method !== filterPaymentMethod) return false;
         if (filterExpenseClass && t.expense_class !== filterExpenseClass) return false;
         if (filterStatus && t.status !== filterStatus) return false;
+        if (filterChild) {
+          if (filterChild === 'none' ? !!t.child : t.child !== filterChild) return false;
+        }
         if (!deferredSearch) {
           if (filterYear && !t.date.startsWith(filterYear)) return false;
           if (filterMonth && t.date.slice(8, 10) !== filterMonth) return false;
@@ -570,7 +599,7 @@ export default function Transactions() {
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, deferredSearch]
+    [transactions, filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterChild, filterYear, filterMonth, deferredSearch]
   );
 
   const currentMonthKey = new Date().toISOString().slice(0, 7); // e.g. "2026-03"
@@ -589,7 +618,7 @@ export default function Transactions() {
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered, currentMonthKey]);
 
-  const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth].filter(Boolean).length;
+  const activeFilters = [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterChild, filterYear, filterMonth].filter(Boolean).length;
 
   // ── Scroll to current month ───────────────────────────────────────────────
   const currentMonthRef = useRef<HTMLDivElement>(null);
@@ -639,11 +668,11 @@ export default function Transactions() {
   // ── Reset visible months when filters change ──────────────────────────────
   useEffect(() => {
     setVisibleMonthCount(MONTHS_PER_PAGE);
-  }, [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth, deferredSearch]);
+  }, [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterChild, filterYear, filterMonth, deferredSearch]);
 
   function clearFilters() {
     setFilterCat(''); setFilterPayer(''); setFilterType('');
-    setFilterPaymentMethod(''); setFilterExpenseClass(''); setFilterStatus('');
+    setFilterPaymentMethod(''); setFilterExpenseClass(''); setFilterStatus(''); setFilterChild('');
     setFilterYear(''); setFilterMonth('');
   }
 
@@ -659,13 +688,14 @@ export default function Transactions() {
       const statusLabel = STATUS_OPTIONS.find((o) => o.v === filterStatus)?.l ?? filterStatus;
       chips.push({ label: statusLabel, clear: () => setFilterStatus('') });
     }
+    if (filterChild) chips.push({ label: `🧒 ${filterChild === 'none' ? 'ללא שיוך' : (CHILD_LABELS[filterChild] ?? filterChild)}`, clear: () => setFilterChild('') });
     if (filterYear) chips.push({ label: filterYear, clear: () => setFilterYear('') });
     if (filterMonth) {
       const monthLabel = MONTH_NAMES[parseInt(filterMonth) - 1] ?? filterMonth;
       chips.push({ label: monthLabel, clear: () => setFilterMonth('') });
     }
     return chips;
-  }, [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterYear, filterMonth]);
+  }, [filterCat, filterPayer, filterType, filterPaymentMethod, filterExpenseClass, filterStatus, filterChild, filterYear, filterMonth]);
 
   async function applyBulkEdit() {
     if (!bulkValue) return;
@@ -881,13 +911,28 @@ export default function Transactions() {
                     {/* Category */}
                     <div>
                       <Label className="mb-0.5 block text-xs">קטגוריה</Label>
-                      <select value={form.category} onChange={(e) => set('category', e.target.value as Category | IncomeCategory)}
+                      <select value={form.category} onChange={(e) => { const c = e.target.value as Category | IncomeCategory; set('category', c); if (c !== 'ילדים') set('child', ''); }}
                         className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" dir="rtl">
                         {(form.type === 'income' ? INCOME_CATEGORIES : CATEGORIES).map((c) => (
                           <option key={c} value={c} className="bg-slate-800">{c}</option>
                         ))}
                       </select>
                     </div>
+
+                    {/* Child tag — only for the "ילדים" category */}
+                    {form.category === 'ילדים' && (
+                      <div>
+                        <Label className="mb-0.5 block text-xs">שיוך לילד/ה</Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {([['', 'ללא'], ...CHILD_TAGS.map((c) => [c, CHILD_LABELS[c]] as const)] as [string, string][]).map(([v, l]) => (
+                            <button key={v || 'none'} type="button" onClick={() => set('child', v as '' | ChildTag)}
+                              className={`flex-1 min-w-[64px] py-1.5 rounded-xl text-sm font-medium transition-all ${form.child === v ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Sub-category + Payment Method */}
                     <div className="grid grid-cols-2 gap-2">
@@ -1127,6 +1172,19 @@ export default function Transactions() {
                     {STATUS_OPTIONS.map(({ v, l }) => (
                       <button key={v || 'all'} onClick={() => setFilterStatus(v)}
                         className={`flex-1 py-1.5 rounded-xl text-xs transition-all ${filterStatus === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* שיוך לילד/ה */}
+                <div>
+                  <p className="text-xs text-white/50 mb-2">שיוך לילד/ה</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([['', 'הכל'], ...CHILD_TAGS.map((c) => [c, CHILD_LABELS[c]] as const), ['none', 'ללא שיוך']] as [string, string][]).map(([v, l]) => (
+                      <button key={v || 'all'} onClick={() => setFilterChild(filterChild === v ? '' : v)}
+                        className={`px-2.5 py-1 rounded-full text-xs transition-all ${filterChild === v ? 'bg-cyan-500/30 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50'}`}>
                         {l}
                       </button>
                     ))}

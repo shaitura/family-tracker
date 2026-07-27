@@ -20,6 +20,12 @@ export type IncomeCategory = typeof INCOME_CATEGORIES[number];
 
 export const PAYMENT_METHODS: PaymentMethod[] = ['אשראי', 'מזומן', 'העברה', 'ביט', "צ'ק", 'הוראת קבע'];
 
+// Per-child tagging — only meaningful on the "ילדים" category.
+export const CHILDREN = ['Yuval', 'Aviv', 'Ziv'] as const;
+export type Child = typeof CHILDREN[number];
+export type ChildTag = Child | 'Shared';   // 'Shared' = משותף לכולם; undefined = ללא שיוך
+export const CHILD_TAGS: ChildTag[] = [...CHILDREN, 'Shared'];
+
 export const ASSET_OWNERS = ['Shi', 'Ortal', 'Yuval', 'Aviv', 'Ziv', 'Joint', 'Car_Private', 'Apt_Rent', 'Apt_Own'] as const;
 export type AssetOwner = typeof ASSET_OWNERS[number];
 
@@ -57,6 +63,7 @@ export interface Transaction {
   notes?: string;
   installments?: number;
   status: TransactionStatus;
+  child?: ChildTag;            // only set on "ילדים"-category rows; absent = ללא שיוך
   // ── Recurrence linkage (approach B — rules projected at read time) ──
   recurrence_id?: string;      // set on a materialized override/skip row; links to its RecurringRule
   recurrence_month?: string;   // 'YYYY-MM' the override/skip applies to
@@ -75,6 +82,7 @@ export interface RecurringRule {
   payer: Payer;
   payment_method: PaymentMethod;
   notes?: string;
+  child?: ChildTag;       // only meaningful for "ילדים"-category rules
   day_of_month: number;   // 1-31, clamped to the month's last day on projection
   start_month: string;    // 'YYYY-MM' inclusive
   end_month: string;      // 'YYYY-MM' inclusive

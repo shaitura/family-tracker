@@ -98,3 +98,11 @@ export const OWNER_LABELS: Record<string, string> = {
   Apt_Rent: 'דירה שכורה',
   Apt_Own: 'נדל"ן',
 };
+
+// Per-child tag labels (for the "ילדים" category). undefined/'' = ללא שיוך.
+export const CHILD_LABELS: Record<string, string> = {
+  Yuval: 'יובל',
+  Aviv: 'אביב',
+  Ziv: 'זיו',
+  Shared: 'משותף',
+};
