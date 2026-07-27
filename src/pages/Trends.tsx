@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
@@ -8,8 +7,8 @@ import {
   TrendingUp, TrendingDown, Sparkles, Droplets, AlertTriangle,
   CreditCard, Calendar, ChevronRight, HelpCircle,
 } from 'lucide-react';
-import { base44 } from '@/lib/base44Client';
 import { Transaction } from '@/types';
+import { useTransactions } from '@/hooks/useTransactions';
 import { Card, CardContent } from '@/components/ui/card';
 
 const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
@@ -145,10 +144,7 @@ export default function Trends() {
   const [selectedMonth, setSelectedMonth] = useState<string>(prevMonthYM);
   const [showExpTooltip, setShowExpTooltip] = useState(false);
 
-  const { data: transactions = [] } = useQuery<Transaction[]>({
-    queryKey: ['transactions'],
-    queryFn: () => base44.entities.Transaction.filter(),
-  });
+  const { transactions } = useTransactions();
 
   const allExpenses = useMemo(() => transactions.filter(t => t.type === 'expense'), [transactions]);
   const allIncome   = useMemo(() => transactions.filter(t => t.type === 'income'),  [transactions]);

@@ -1,14 +1,14 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList,
   PieChart, Pie, Cell,
 } from 'recharts';
 import { RefreshCw } from 'lucide-react';
-import { base44 } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Transaction } from '@/types';
+import { useTransactions } from '@/hooks/useTransactions';
 import { formatCurrency, categoryColor } from '@/utils';
 
 const MONTH_NAMES = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יולי', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
@@ -563,12 +563,14 @@ export default function AnnualAnalysis() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: transactions = [] } = useQuery<Transaction[]>({
-    queryKey: ['transactions', year],
-    queryFn: () => base44.entities.Transaction.filter({
-      dateRange: { start: `${year}-01-01`, end: `${year}-12-31` },
-    }),
-  });
+  // Recurring rules are projected across years, so we fetch the full merged set
+  // and filter to the selected year client-side (server-side date filtering would
+  // hide projected instances that have no persisted row).
+  const { transactions: allTransactions } = useTransactions();
+  const transactions = useMemo(
+    () => allTransactions.filter((t) => t.date.startsWith(year)),
+    [allTransactions, year],
+  );
 
   // Generate available years: 2020 → current year
   const availableYears = Array.from(
@@ -581,7 +583,8 @@ export default function AnnualAnalysis() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['transactions', year] });
+    await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    await queryClient.invalidateQueries({ queryKey: ['recurringRules'] });
     setIsRefreshing(false);
   };
 

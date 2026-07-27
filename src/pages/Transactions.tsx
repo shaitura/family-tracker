@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useDeferredValue, useCallback, memo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain, CalendarCheck } from 'lucide-react';
+import { Search, Trash2, Filter, X, Edit3, CheckCircle, Pencil, Save, PlusCircle, List, Sparkles, Loader2, Brain, CalendarCheck, Repeat } from 'lucide-react';
 import { base44, buildMerchantMap } from '@/lib/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/toaster';
-import { Transaction, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass } from '@/types';
+import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, Payer, PaymentMethod, ExpenseClass } from '@/types';
 import { formatCurrency, formatDate, formatMonth, categoryColor, PAYER_LABELS } from '@/utils';
+import { useTransactions } from '@/hooks/useTransactions';
+import { isVirtualId, monthsInRange } from '@/lib/recurrence';
 import { auth } from '@/lib/firebase';
 
 // ── AddTransaction helpers ────────────────────────────────────────────────
@@ -26,8 +28,6 @@ const CLASSES: { val: ExpenseClass; label: string }[] = [
   { val: 'קבועה', label: 'קבועה' },
   { val: 'משתנה', label: 'משתנה' },
 ];
-
-const MONTH_LABELS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -111,8 +111,8 @@ interface TxRowProps {
   isDuplicate: boolean;
   onStartEdit: (tx: Transaction) => void;
   onCancelEdit: () => void;
-  onSave: (id: string, data: Partial<Transaction>, allMonths: boolean) => void;
-  onDelete: (id: string) => void;
+  onSave: (tx: Transaction, data: Partial<Transaction>, scope: 'one' | 'rule') => void;
+  onDelete: (tx: Transaction, scope: 'one' | 'rule') => void;
   updatePending: boolean;
 }
 const TransactionRow = memo(function TransactionRow({
@@ -123,6 +123,9 @@ const TransactionRow = memo(function TransactionRow({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const setE = useCallback(<K extends keyof Transaction>(k: K, v: Transaction[K]) =>
     setEditForm((f) => ({ ...f, [k]: v })), []);
+
+  // A projected instance (virtual id) or a materialized override both belong to a recurring rule.
+  const isRecurring = isVirtualId(tx.id) || !!tx.recurrence_id;
 
   const wasEditingRef = useRef(false);
   useEffect(() => {
@@ -157,6 +160,7 @@ const TransactionRow = memo(function TransactionRow({
               <div className="flex items-center gap-1.5 mt-1.5">
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{tx.category}</Badge>
                 {tx.expense_class && <Badge variant={tx.expense_class === 'קבועה' ? 'purple' : 'default'} className="text-[10px] px-1.5 py-0">{tx.expense_class}</Badge>}
+                {isRecurring && <Badge variant="purple" className="text-[10px] px-1.5 py-0 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" />חוזרת</Badge>}
                 {tx.status !== 'paid' && <Badge variant={tx.status === 'pending' ? 'warning' : 'secondary'} className="text-[10px] px-1.5 py-0">{tx.status === 'pending' ? 'ממתין' : 'עתידי'}</Badge>}
               </div>
             </div>
@@ -169,7 +173,14 @@ const TransactionRow = memo(function TransactionRow({
               </button>
               {confirmDelete ? (
                 <div className="flex gap-1">
-                  <Button size="sm" variant="destructive" className="h-7 text-xs px-2" onClick={() => onDelete(tx.id)}>מחק</Button>
+                  {isRecurring ? (
+                    <>
+                      <Button size="sm" variant="destructive" className="h-7 text-xs px-2" onClick={() => onDelete(tx, 'one')}>חודש זה</Button>
+                      <Button size="sm" variant="destructive" className="h-7 text-xs px-2 opacity-80" onClick={() => onDelete(tx, 'rule')}>כל הכלל</Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="destructive" className="h-7 text-xs px-2" onClick={() => onDelete(tx, 'one')}>מחק</Button>
+                  )}
                   <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setConfirmDelete(false)}>ביטול</Button>
                 </div>
               ) : (
@@ -254,20 +265,23 @@ const TransactionRow = memo(function TransactionRow({
                     <Label className="text-[10px] mb-1 block">הערות</Label>
                     <Input value={editForm.notes ?? ''} onChange={(e) => setE('notes', e.target.value)} placeholder="הערה חופשית..." className="h-8 text-xs" dir="rtl" />
                   </div>
-                  {editForm.expense_class === 'קבועה' && (
+                  {(isRecurring || editForm.expense_class === 'קבועה') && (
                     <button
                       onClick={() => setApplyToAll((v) => !v)}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${applyToAll ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300' : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/60'}`}
                     >
-                      <span>החל על כל ההעתקים באותה שנה</span>
+                      <span>{isRecurring ? 'החל על כל החודשים בכלל (עדכון הכלל)' : 'החל על כל ההעתקים באותה שנה'}</span>
                       <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${applyToAll ? 'bg-purple-500 border-purple-400' : 'border-white/30'}`}>
                         {applyToAll && <span className="w-2 h-2 rounded-full bg-white" />}
                       </span>
                     </button>
                   )}
+                  {isRecurring && !applyToAll && (
+                    <p className="text-[10px] text-white/40 text-center -mt-1">שינוי זה יחול על חודש זה בלבד (יהפוך לרשומה קבועה נפרדת)</p>
+                  )}
                   <div className="flex gap-2 pt-1">
                     <Button size="sm" variant="outline" onClick={onCancelEdit} className="flex-1 text-xs h-8">ביטול</Button>
-                    <Button size="sm" onClick={() => onSave(tx.id, editForm, applyToAll)} disabled={updatePending}
+                    <Button size="sm" onClick={() => onSave(tx, editForm, applyToAll ? 'rule' : 'one')} disabled={updatePending}
                       className="flex-1 text-xs h-8 bg-cyan-500/80 hover:bg-cyan-500 text-white border-0">
                       {updatePending ? '...' : <><Save className="w-3 h-3 ml-1" />שמור</>}
                     </Button>
@@ -312,19 +326,18 @@ export default function Transactions() {
   const [aiText, setAiText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
-  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+  // Recurring range (approach B): a "קבועה" expense/income becomes one RecurringRule
+  // spanning [recStart, recEnd] inclusive ('YYYY-MM'), instead of N replicated rows.
+  const [recStart, setRecStart] = useState('');
+  const [recEnd, setRecEnd] = useState('');
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
-
-  const toggleMonth = (m: number) =>
-    setSelectedMonths((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
 
   // merchantMap is computed after transactions query below
 
   const { mutate: save, isPending: savePending } = useMutation({
     mutationFn: async () => {
-      const year = new Date(form.date).getFullYear();
       const base: Omit<Transaction, 'id'> = {
         date: form.date,
         type: form.type,
@@ -338,11 +351,22 @@ export default function Transactions() {
         installments: parseInt(form.installments) || 1,
         status: form.status,
       };
-      if (form.expense_class === 'קבועה' && selectedMonths.length > 0) {
-        await Promise.all(selectedMonths.map((m) => {
-          const mm = String(m).padStart(2, '0');
-          return base44.entities.Transaction.create({ ...base, date: `${year}-${mm}-01` });
-        }));
+      if (form.expense_class === 'קבועה' && recStart && recEnd) {
+        const [s, e] = recStart <= recEnd ? [recStart, recEnd] : [recEnd, recStart];
+        const day = Number(form.date.slice(8, 10)) || 1;
+        await base44.entities.RecurringRule.create({
+          type: form.type,
+          category: form.category as Category,
+          sub_category: form.sub_category || undefined,
+          amount: parseFloat(form.amount) || 0,
+          payer: form.payer,
+          payment_method: form.payment_method,
+          notes: form.notes || undefined,
+          day_of_month: day,
+          start_month: s,
+          end_month: e,
+          active: true,
+        });
         return;
       }
       const inst = parseInt(form.installments) || 1;
@@ -358,8 +382,9 @@ export default function Transactions() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['recurringRules'] });
       setAddSuccess(true);
-      setSelectedMonths([]);
+      setRecStart(''); setRecEnd('');
       setTimeout(() => { setAddSuccess(false); setForm(emptyForm()); }, 1500);
       toast({ title: 'העסקה נשמרה בהצלחה!', variant: 'success' });
     },
@@ -410,36 +435,70 @@ export default function Transactions() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { mutate: update, isPending: updatePending } = useMutation({
-    mutationFn: async ({ id, data, allMonths }: { id: string; data: Partial<Transaction>; allMonths: boolean }) => {
-      if (allMonths && data.expense_class === 'קבועה') {
-        const origTx = transactions.find((t) => t.id === id);
-        const year = (origTx?.date ?? data.date ?? '').slice(0, 4);
+    mutationFn: async ({ tx, data, scope }: { tx: Transaction; data: Partial<Transaction>; scope: 'one' | 'rule' }) => {
+      // ── Recurring: "apply to whole rule" → update the RecurringRule itself ──
+      if (scope === 'rule' && tx.recurrence_id) {
+        const ruleUpdate: Partial<RecurringRule> = {};
+        if (data.amount != null) ruleUpdate.amount = data.amount;
+        if (data.category) ruleUpdate.category = data.category as Category;
+        if (data.sub_category !== undefined) ruleUpdate.sub_category = data.sub_category || undefined;
+        if (data.payer) ruleUpdate.payer = data.payer;
+        if (data.payment_method) ruleUpdate.payment_method = data.payment_method;
+        if (data.notes !== undefined) ruleUpdate.notes = data.notes || undefined;
+        await base44.entities.RecurringRule.update(tx.recurrence_id, ruleUpdate);
+        return;
+      }
+      // ── Recurring: edit just this month → materialize a real override row ──
+      if (isVirtualId(tx.id)) {
+        const overrideRow: Omit<Transaction, 'id'> = {
+          date: data.date ?? tx.date,
+          type: tx.type,
+          category: (data.category ?? tx.category) as Category,
+          sub_category: data.sub_category ?? tx.sub_category,
+          amount: data.amount ?? tx.amount,
+          payer: data.payer ?? tx.payer,
+          payment_method: data.payment_method ?? tx.payment_method,
+          expense_class: 'קבועה',
+          notes: data.notes ?? tx.notes,
+          status: data.status ?? tx.status,
+          recurrence_id: tx.recurrence_id,
+          recurrence_month: tx.recurrence_month,
+        };
+        await base44.entities.Transaction.create(overrideRow);
+        return;
+      }
+      // ── Legacy real "קבועה" rows: apply to same-year siblings ──
+      if (scope === 'rule' && data.expense_class === 'קבועה') {
+        const year = (tx.date ?? data.date ?? '').slice(0, 4);
         const siblings = transactions.filter((t) =>
+          !isVirtualId(t.id) &&
           t.expense_class === 'קבועה' &&
-          t.category === origTx?.category &&
-          t.payer === origTx?.payer &&
-          (t.sub_category ?? '') === (origTx?.sub_category ?? '') &&
+          t.category === tx.category &&
+          t.payer === tx.payer &&
+          (t.sub_category ?? '') === (tx.sub_category ?? '') &&
           t.date.startsWith(year)
         );
         const updateData = { ...data };
         delete (updateData as Partial<Transaction> & { date?: string }).date;
         await Promise.all(siblings.map((t) => base44.entities.Transaction.update(t.id, updateData)));
-      } else {
-        await base44.entities.Transaction.update(id, data);
+        return;
       }
+      // ── Plain real row ──
+      await base44.entities.Transaction.update(tx.id, data);
     },
-    onSuccess: (_, { allMonths }) => {
+    onSuccess: (_, { scope }) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['recurringRules'] });
       setEditingId(null);
-      toast({ title: allMonths ? 'כל ההעתקים עודכנו' : 'עסקה עודכנה', variant: 'success' });
+      toast({ title: scope === 'rule' ? 'הכלל עודכן' : 'עסקה עודכנה', variant: 'success' });
     },
     onError: (e) => toast({ title: 'שגיאה בעדכון', description: String(e), variant: 'destructive' }),
   });
 
   const handleStartEdit = useCallback((tx: Transaction) => { setEditingId(tx.id); }, []);
   const handleCancelEdit = useCallback(() => { setEditingId(null); }, []);
-  const handleSave = useCallback((id: string, data: Partial<Transaction>, allMonths: boolean) => {
-    update({ id, data, allMonths });
+  const handleSave = useCallback((tx: Transaction, data: Partial<Transaction>, scope: 'one' | 'rule') => {
+    update({ tx, data, scope });
   }, [update]);
 
   // bulk edit
@@ -448,18 +507,46 @@ export default function Transactions() {
   const [bulkValue, setBulkValue] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const { data: transactions = [] } = useQuery<Transaction[]>({
-    queryKey: ['transactions'],
-    queryFn: () => base44.entities.Transaction.filter(),
-  });
+  const { transactions, realTransactions } = useTransactions();
 
-  const merchantMap = useMemo(() => buildMerchantMap(transactions), [transactions]);
+  const merchantMap = useMemo(() => buildMerchantMap(realTransactions), [realTransactions]);
 
   const { mutate: del } = useMutation({
-    mutationFn: (id: string) => base44.entities.Transaction.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); toast({ title: 'עסקה נמחקה', variant: 'default' }); },
+    mutationFn: async ({ tx, scope }: { tx: Transaction; scope: 'one' | 'rule' }) => {
+      // ── Delete the whole rule (+ clean up its hidden skip tombstones) ──
+      if (scope === 'rule' && tx.recurrence_id) {
+        await base44.entities.RecurringRule.delete(tx.recurrence_id);
+        const tombstones = realTransactions.filter((t) => t.recurrence_id === tx.recurrence_id && t.recurrence_skip);
+        await Promise.all(tombstones.map((t) => base44.entities.Transaction.delete(t.id)));
+        return;
+      }
+      // ── Hide a single projected month → write a skip tombstone ──
+      if (isVirtualId(tx.id)) {
+        const tombstone: Omit<Transaction, 'id'> = {
+          date: tx.date, type: tx.type, category: tx.category, amount: 0,
+          payer: tx.payer, payment_method: tx.payment_method, expense_class: 'קבועה',
+          status: tx.status, recurrence_id: tx.recurrence_id, recurrence_month: tx.recurrence_month,
+          recurrence_skip: true,
+        };
+        await base44.entities.Transaction.create(tombstone);
+        return;
+      }
+      // ── A materialized override → convert to skip so the projection doesn't resurrect it ──
+      if (tx.recurrence_id) {
+        await base44.entities.Transaction.update(tx.id, { recurrence_skip: true, amount: 0 });
+        return;
+      }
+      // ── Plain real row ──
+      await base44.entities.Transaction.delete(tx.id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['recurringRules'] });
+      toast({ title: 'נמחק', variant: 'default' });
+    },
+    onError: (e) => toast({ title: 'שגיאה במחיקה', description: String(e), variant: 'destructive' }),
   });
-  const handleDelete = useCallback((id: string) => { del(id); }, [del]);
+  const handleDelete = useCallback((tx: Transaction, scope: 'one' | 'rule') => { del({ tx, scope }); }, [del]);
 
   const availableYears = useMemo(() => {
     const years = new Set(transactions.map((t) => t.date.slice(0, 4)));
@@ -831,7 +918,14 @@ export default function Transactions() {
                     <div>
                       <div className="flex gap-2">
                         {CLASSES.map(({ val, label }) => (
-                          <button key={val} onClick={() => { set('expense_class', val); if (val !== 'קבועה') setSelectedMonths([]); }}
+                          <button key={val} onClick={() => {
+                            set('expense_class', val);
+                            if (val === 'קבועה') {
+                              const ym = form.date.slice(0, 7);
+                              setRecStart((s) => s || ym);
+                              setRecEnd((e) => e || ym);
+                            } else { setRecStart(''); setRecEnd(''); }
+                          }}
                             className={`flex-1 py-1.5 rounded-xl text-sm font-medium transition-all ${form.expense_class === val ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-500/50 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {label}
                           </button>
@@ -840,29 +934,27 @@ export default function Transactions() {
                       <AnimatePresence>
                         {form.expense_class === 'קבועה' && (
                           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                            <div className="mt-3 rounded-xl bg-purple-500/10 border border-purple-500/20 p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs text-purple-300 font-medium">{form.type === 'income' ? 'באילו חודשים ההכנסה חוזרת?' : 'באילו חודשים ההוצאה חוזרת?'}</span>
-                                <div className="flex gap-2">
-                                  <button onClick={() => setSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1))} className="text-[10px] text-purple-400 hover:text-purple-300 underline">הכל</button>
-                                  <button onClick={() => setSelectedMonths([])} className="text-[10px] text-white/40 hover:text-white/60 underline">נקה</button>
+                            <div className="mt-3 rounded-xl bg-purple-500/10 border border-purple-500/20 p-3 space-y-2">
+                              <div className="flex items-center gap-1.5 text-purple-300">
+                                <Repeat className="w-3.5 h-3.5" />
+                                <span className="text-xs font-medium">{form.type === 'income' ? 'הכנסה חוזרת חודשית' : 'הוצאה חוזרת חודשית'}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="mb-0.5 block text-[10px] text-purple-300/80">מחודש</Label>
+                                  <Input type="month" value={recStart} onChange={(e) => setRecStart(e.target.value)} className="h-9" />
+                                </div>
+                                <div>
+                                  <Label className="mb-0.5 block text-[10px] text-purple-300/80">עד חודש (כולל)</Label>
+                                  <Input type="month" value={recEnd} min={recStart || undefined} onChange={(e) => setRecEnd(e.target.value)} className="h-9" />
                                 </div>
                               </div>
-                              <div className="grid grid-cols-4 gap-1.5">
-                                {MONTH_LABELS.map((name, i) => {
-                                  const m = i + 1;
-                                  const active = selectedMonths.includes(m);
-                                  return (
-                                    <button key={m} onClick={() => toggleMonth(m)}
-                                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-purple-500/50 border border-purple-400/60 text-white' : 'bg-white/5 border border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70'}`}>
-                                      {name}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {selectedMonths.length > 0 && (
-                                <p className="mt-2 text-[10px] text-purple-300/70 text-center">
-                                  {form.type === 'income' ? 'ההכנסה' : 'ההוצאה'} תתווסף ל-{selectedMonths.length} חודשים בשנת {new Date(form.date).getFullYear()}
+                              {recStart && recEnd && (
+                                <p className="text-[10px] text-purple-300/70 text-center">
+                                  {(() => {
+                                    const [s, e] = recStart <= recEnd ? [recStart, recEnd] : [recEnd, recStart];
+                                    return `ייווצר כלל אחד שיחזור ${monthsInRange(s, e).length} חודשים (${s} → ${e}) וייעצר אוטומטית לאחר מכן`;
+                                  })()}
                                 </p>
                               )}
                             </div>

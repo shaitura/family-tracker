@@ -57,6 +57,29 @@ export interface Transaction {
   notes?: string;
   installments?: number;
   status: TransactionStatus;
+  // ── Recurrence linkage (approach B — rules projected at read time) ──
+  recurrence_id?: string;      // set on a materialized override/skip row; links to its RecurringRule
+  recurrence_month?: string;   // 'YYYY-MM' the override/skip applies to
+  recurrence_skip?: boolean;   // tombstone: this month was deleted from the rule; never displayed
+  is_virtual?: boolean;        // runtime-only flag on projected instances — NEVER persisted to Firestore
+}
+
+// A single "define once" recurring expense/income. Projected into virtual
+// transactions for every month in [start_month, end_month] (inclusive, across years).
+export interface RecurringRule {
+  id: string;
+  type: TransactionType;
+  category: Category;
+  sub_category?: string;
+  amount: number;
+  payer: Payer;
+  payment_method: PaymentMethod;
+  notes?: string;
+  day_of_month: number;   // 1-31, clamped to the month's last day on projection
+  start_month: string;    // 'YYYY-MM' inclusive
+  end_month: string;      // 'YYYY-MM' inclusive
+  active?: boolean;       // default true; false = paused (kept for history, stops projecting)
+  created_at?: number;
 }
 
 export interface Budget {

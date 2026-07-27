@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate, currentMonthKey, createPageUrl, categoryColor, PAYER_LABELS } from '@/utils';
-import { Transaction, Budget } from '@/types';
+import { Budget } from '@/types';
+import { useTransactions } from '@/hooks/useTransactions';
 import { PendingClarificationsCard } from '@/components/PendingClarificationsCard';
 
 const fadeUp = { hidden: { opacity: 0, y: 16 }, visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.4 } }) };
@@ -17,7 +18,7 @@ export default function Home() {
   const navigate = useNavigate();
   const monthKey = currentMonthKey();
 
-  const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ['transactions'], queryFn: () => base44.entities.Transaction.filter() });
+  const { transactions } = useTransactions();
   const { data: budgets = [] } = useQuery<Budget[]>({ queryKey: ['budgets'], queryFn: () => base44.entities.Budget.filter() });
 
   const monthTx = transactions.filter((t) => t.date.startsWith(monthKey));

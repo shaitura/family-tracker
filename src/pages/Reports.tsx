@@ -1,12 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
 import { Download } from 'lucide-react';
-import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Transaction } from '@/types';
+import { useTransactions } from '@/hooks/useTransactions';
 import { formatCurrency, categoryColor, PAYER_LABELS } from '@/utils';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
@@ -21,7 +19,7 @@ export default function Reports() {
   const [txType, setTxType] = useState('expense');
   const [expClass, setExpClass] = useState('');
 
-  const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ['transactions'], queryFn: () => base44.entities.Transaction.filter() });
+  const { transactions } = useTransactions();
 
   const months = Array.from({ length: 12 }, (_, i) => ({ val: String(i + 1).padStart(2, '0'), label: new Date(2000, i).toLocaleString('he', { month: 'short' }) }));
 
