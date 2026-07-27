@@ -7,7 +7,7 @@ import {
 import { RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Transaction } from '@/types';
+import { Transaction, CATEGORIES, INCOME_CATEGORIES } from '@/types';
 import { useTransactions } from '@/hooks/useTransactions';
 import { formatCurrency, categoryColor } from '@/utils';
 
@@ -560,6 +560,7 @@ function NetProfitTab({ expenses, incomes }: { expenses: Transaction[]; incomes:
 export default function AnnualAnalysis() {
   const currentYear = String(new Date().getFullYear());
   const [year, setYear] = useState(currentYear);
+  const [filterCat, setFilterCat] = useState('');   // '' = all categories
   const [isRefreshing, setIsRefreshing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -578,8 +579,8 @@ export default function AnnualAnalysis() {
     (_, i) => String(2022 + i),
   ).reverse();
 
-  const expenses = transactions.filter((t) => t.type === 'expense');
-  const incomes = transactions.filter((t) => t.type === 'income');
+  const expenses = transactions.filter((t) => t.type === 'expense' && (!filterCat || t.category === filterCat));
+  const incomes = transactions.filter((t) => t.type === 'income' && (!filterCat || t.category === filterCat));
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -613,6 +614,14 @@ export default function AnnualAnalysis() {
           </select>
         </div>
       </div>
+
+      {/* Category filter */}
+      <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl">
+        <option value="" className="bg-slate-800">כל הקטגוריות</option>
+        {[...CATEGORIES, ...INCOME_CATEGORIES].map((c) => (
+          <option key={c} value={c} className="bg-slate-800">{c}</option>
+        ))}
+      </select>
 
       <Tabs defaultValue="fixed">
         <TabsList className="grid grid-cols-3 w-full" dir="rtl">

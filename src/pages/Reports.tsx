@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { useTransactions } from '@/hooks/useTransactions';
-import { CHILD_TAGS } from '@/types';
+import { CHILD_TAGS, CATEGORIES, INCOME_CATEGORIES } from '@/types';
 import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
@@ -21,6 +21,7 @@ export default function Reports() {
   const [fullYear, setFullYear] = useState(false);
   const [txType, setTxType] = useState('expense');
   const [expClass, setExpClass] = useState('');
+  const [filterCat, setFilterCat] = useState('');   // '' = all categories
 
   const { transactions } = useTransactions();
 
@@ -31,8 +32,9 @@ export default function Reports() {
     if (!t.date.startsWith(prefix)) return false;
     if (t.type !== txType) return false;
     if (expClass && t.expense_class !== expClass) return false;
+    if (filterCat && t.category !== filterCat) return false;
     return true;
-  }), [transactions, year, month, fullYear, txType, expClass]);
+  }), [transactions, year, month, fullYear, txType, expClass, filterCat]);
 
   const { catData, payerData, total, byMonth } = useMemo(() => {
     const byCat: Record<string, number> = {};
@@ -56,15 +58,18 @@ export default function Reports() {
   const { childData, childTotal } = useMemo(() => {
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
     const acc: Record<string, number> = {};
-    transactions
-      .filter((t) => t.type === 'expense' && t.category === 'ילדים' && t.date.startsWith(prefix))
-      .forEach((t) => { const k = t.child || 'none'; acc[k] = (acc[k] || 0) + t.amount; });
+    // only meaningful when not filtered to a non-kids category
+    if (!filterCat || filterCat === 'ילדים') {
+      transactions
+        .filter((t) => t.type === 'expense' && t.category === 'ילדים' && t.date.startsWith(prefix))
+        .forEach((t) => { const k = t.child || 'none'; acc[k] = (acc[k] || 0) + t.amount; });
+    }
     const order: string[] = [...CHILD_TAGS, 'none'];
     const childData = order
       .filter((k) => acc[k])
       .map((k) => ({ key: k, label: k === 'none' ? 'ללא שיוך' : (CHILD_LABELS[k] ?? k), value: acc[k] }));
     return { childData, childTotal: childData.reduce((s, d) => s + d.value, 0) };
-  }, [transactions, year, month, fullYear]);
+  }, [transactions, year, month, fullYear, filterCat]);
 
   // Fixed vs variable (ignores expClass filter so split is always meaningful)
   const { fixedTotal, varTotal, splitTotal, fixedCats, varCats } = useMemo(() => {
@@ -72,6 +77,7 @@ export default function Reports() {
       const prefix = fullYear ? `${year}-` : `${year}-${month}`;
       if (!t.date.startsWith(prefix)) return false;
       if (t.type !== txType) return false;
+      if (filterCat && t.category !== filterCat) return false;
       return true;
     });
     const fixedByCat: Record<string, number> = {};
@@ -88,14 +94,14 @@ export default function Reports() {
       fixedCats: Object.entries(fixedByCat).sort((a, b) => b[1] - a[1]),
       varCats:   Object.entries(varByCat).sort((a, b) => b[1] - a[1]),
     };
-  }, [transactions, year, month, fullYear, txType]);
+  }, [transactions, year, month, fullYear, txType, filterCat]);
   // Income vs Expenses comparison (ignores txType/expClass filters)
   const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
   const isInvCat = (cat: string) => INVESTMENT_CATS.some(k => cat.includes(k));
 
   const { incomeTotal, expenseTotal, investmentTotal, balanceByMonth, expCatData } = useMemo(() => {
     const prefix = fullYear ? `${year}-` : `${year}-${month}`;
-    const periodTxs = transactions.filter((t) => t.date.startsWith(prefix));
+    const periodTxs = transactions.filter((t) => t.date.startsWith(prefix) && (!filterCat || t.category === filterCat));
     const incomeTotal = periodTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expenseTotal = periodTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const investmentTotal = periodTxs.filter((t) => t.type === 'expense' && isInvCat(t.category)).reduce((s, t) => s + t.amount, 0);
@@ -109,7 +115,7 @@ export default function Reports() {
     periodTxs.filter((t) => t.type === 'expense').forEach((t) => { catAcc[t.category] = (catAcc[t.category] || 0) + t.amount; });
     const expCatData = Object.entries(catAcc).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
     return { incomeTotal, expenseTotal, investmentTotal, balanceByMonth, expCatData };
-  }, [transactions, year, month, fullYear, months]);
+  }, [transactions, year, month, fullYear, months, filterCat]);
 
   const exportExcel = async () => {
     const { utils, writeFile } = await import('xlsx');
@@ -411,6 +417,16 @@ export default function Reports() {
               ))}
             </div>
           )}
+          {/* Category filter */}
+          <div>
+            <p className="text-xs text-white/50 mb-1">קטגוריה</p>
+            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl">
+              <option value="" className="bg-slate-800">כל הקטגוריות</option>
+              {(txType === 'income' ? INCOME_CATEGORIES : txType === 'expense' ? CATEGORIES : [...CATEGORIES, ...INCOME_CATEGORIES]).map((c) => (
+                <option key={c} value={c} className="bg-slate-800">{c}</option>
+              ))}
+            </select>
+          </div>
         </CardContent>
       </Card>
 
@@ -553,33 +569,6 @@ export default function Reports() {
 
           {incomeTotal === 0 && expenseTotal === 0 && <EmptyState />}
         </div>
-      )}
-
-      {childData.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-sm">👨‍👩‍👧‍👦 הוצאות ילדים לפי ילד/ה</CardTitle></CardHeader>
-          <CardContent className="pt-0 space-y-2">
-            {childData.map(({ key, label, value }) => {
-              const color = CHILD_COLORS[key] ?? '#64748b';
-              const pct = childTotal ? Math.round(value / childTotal * 100) : 0;
-              return (
-                <div key={key} className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    <span className="text-sm text-white flex-1">{label}</span>
-                    <span className="text-sm font-bold text-white">{formatCurrency(value)}</span>
-                    <span className="text-xs text-white/40 w-10 text-left">{pct}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} /></div>
-                </div>
-              );
-            })}
-            <div className="flex justify-between pt-1 border-t border-white/10 text-xs text-white/50">
-              <span>סה"כ ילדים בתקופה</span>
-              <span className="font-bold text-white">{formatCurrency(childTotal)}</span>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {txType !== 'balance' && (
@@ -795,6 +784,34 @@ export default function Reports() {
         </TabsContent>
 
       </Tabs>
+      )}
+
+      {/* Per-child breakdown of "ילדים" spending — bottom of the page */}
+      {childData.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">👨‍👩‍👧‍👦 הוצאות ילדים לפי ילד/ה</CardTitle></CardHeader>
+          <CardContent className="pt-0 space-y-2">
+            {childData.map(({ key, label, value }) => {
+              const color = CHILD_COLORS[key] ?? '#64748b';
+              const pct = childTotal ? Math.round(value / childTotal * 100) : 0;
+              return (
+                <div key={key} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <span className="text-sm text-white flex-1">{label}</span>
+                    <span className="text-sm font-bold text-white">{formatCurrency(value)}</span>
+                    <span className="text-xs text-white/40 w-10 text-left">{pct}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} /></div>
+                </div>
+              );
+            })}
+            <div className="flex justify-between pt-1 border-t border-white/10 text-xs text-white/50">
+              <span>סה"כ ילדים בתקופה</span>
+              <span className="font-bold text-white">{formatCurrency(childTotal)}</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
       </div>{/* end reports-content */}
     </div>

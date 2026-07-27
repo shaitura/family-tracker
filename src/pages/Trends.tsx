@@ -7,7 +7,7 @@ import {
   TrendingUp, TrendingDown, Sparkles, Droplets, AlertTriangle,
   CreditCard, Calendar, ChevronRight, HelpCircle,
 } from 'lucide-react';
-import { Transaction } from '@/types';
+import { Transaction, CATEGORIES, INCOME_CATEGORIES } from '@/types';
 import { useTransactions } from '@/hooks/useTransactions';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -143,11 +143,12 @@ export default function Trends() {
   const [period, setPeriod] = useState<Period>('month');
   const [selectedMonth, setSelectedMonth] = useState<string>(prevMonthYM);
   const [showExpTooltip, setShowExpTooltip] = useState(false);
+  const [filterCat, setFilterCat] = useState('');   // '' = all categories
 
   const { transactions } = useTransactions();
 
-  const allExpenses = useMemo(() => transactions.filter(t => t.type === 'expense'), [transactions]);
-  const allIncome   = useMemo(() => transactions.filter(t => t.type === 'income'),  [transactions]);
+  const allExpenses = useMemo(() => transactions.filter(t => t.type === 'expense' && (!filterCat || t.category === filterCat)), [transactions, filterCat]);
+  const allIncome   = useMemo(() => transactions.filter(t => t.type === 'income'  && (!filterCat || t.category === filterCat)), [transactions, filterCat]);
 
   const effectiveMonth = useMemo(() => {
     if (period !== 'month') return '';
@@ -402,6 +403,12 @@ export default function Trends() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 space-y-4" dir="rtl">
       <PeriodFilter value={period} onChange={setPeriod} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} monthOptions={monthOptions} />
+      <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl">
+        <option value="" className="bg-slate-800">כל הקטגוריות</option>
+        {[...CATEGORIES, ...INCOME_CATEGORIES].map((c) => (
+          <option key={c} value={c} className="bg-slate-800">{c}</option>
+        ))}
+      </select>
       <ExecutiveSummary items={execItems} title={`סיכום מנהלים — ${periodLabel}`} />
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
