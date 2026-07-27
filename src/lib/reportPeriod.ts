@@ -2,6 +2,9 @@ import { monthsInRange, currentMonthKey } from './recurrence';
 
 export { currentMonthKey };
 
+/** Earliest calendar month with real data — floor for period pickers (custom range, year dropdown, seasonal analysis). */
+export const EARLIEST_DATA_MONTH = '2022-01';
+
 export type PeriodQuickPick =
   | 'currentMonth' | 'selectedYear' | 'lastQuarter' | 'last12' | 'last18' | 'allTime' | 'custom';
 

@@ -1,4 +1,4 @@
-import { PeriodQuickPick, ReportPeriod, buildPeriod } from '@/lib/reportPeriod';
+import { PeriodQuickPick, ReportPeriod, buildPeriod, EARLIEST_DATA_MONTH } from '@/lib/reportPeriod';
 
 const QUICK_PICKS: { key: PeriodQuickPick; label: string }[] = [
   { key: 'currentMonth', label: 'החודש הנוכחי' },
@@ -11,7 +11,8 @@ const QUICK_PICKS: { key: PeriodQuickPick; label: string }[] = [
 ];
 
 const currentYear = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from({ length: currentYear - 2021 }, (_, i) => String(2022 + i)).reverse();
+const EARLIEST_YEAR = Number(EARLIEST_DATA_MONTH.slice(0, 4));
+const YEAR_OPTIONS = Array.from({ length: currentYear - EARLIEST_YEAR + 1 }, (_, i) => String(EARLIEST_YEAR + i)).reverse();
 
 export function PeriodSelector({ period, onChange }: { period: ReportPeriod; onChange: (p: ReportPeriod) => void }) {
   const pick = (key: PeriodQuickPick) => onChange(buildPeriod(key, { year: period.year, customStart: period.startMonth, customEnd: period.endMonth }));
@@ -49,6 +50,7 @@ export function PeriodSelector({ period, onChange }: { period: ReportPeriod; onC
             <input
               type="month"
               value={period.startMonth}
+              min={EARLIEST_DATA_MONTH}
               onChange={(e) => onChange(buildPeriod('custom', { customStart: e.target.value, customEnd: period.endMonth }))}
               className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none"
             />
@@ -58,7 +60,7 @@ export function PeriodSelector({ period, onChange }: { period: ReportPeriod; onC
             <input
               type="month"
               value={period.endMonth}
-              min={period.startMonth || undefined}
+              min={period.startMonth || EARLIEST_DATA_MONTH}
               onChange={(e) => onChange(buildPeriod('custom', { customStart: period.startMonth, customEnd: e.target.value }))}
               className="w-full h-9 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none"
             />

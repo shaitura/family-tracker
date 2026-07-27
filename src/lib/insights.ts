@@ -1,4 +1,5 @@
 import { Transaction, Payer } from '@/types';
+import { EARLIEST_DATA_MONTH } from './reportPeriod';
 
 const SHORT_MONTHS = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
 
@@ -87,7 +88,7 @@ export function seasonalPeaks(allExpenses: Transaction[], currentYear: number): 
   return Array.from({ length: 12 }, (_, i) => {
     const m = String(i + 1).padStart(2, '0');
     const yt: number[] = [];
-    for (let y = 2022; y <= currentYear; y++) {
+    for (let y = Number(EARLIEST_DATA_MONTH.slice(0, 4)); y <= currentYear; y++) {
       const total = allExpenses.filter((t) => t.date.startsWith(`${y}-${m}`)).reduce((s, t) => s + t.amount, 0);
       if (total > 0) yt.push(total);
     }

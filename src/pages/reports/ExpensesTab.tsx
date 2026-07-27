@@ -24,6 +24,16 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
   const total = filtered.reduce((s, t) => s + t.amount, 0);
   const catData = useMemo(() => byCategory(filtered), [filtered]);
   const payerData = useMemo(() => byPayer(filtered), [filtered]);
+  const payerByMonth = useMemo(() => {
+    if (!isMultiMonth) return [];
+    return months.map((m) => {
+      const row: Record<string, number | string> = { month: m };
+      for (const p of ['Shi', 'Ortal', 'Joint']) {
+        row[PAYER_LABELS[p] ?? p] = filtered.filter((t) => t.date.startsWith(m) && t.payer === p).reduce((s, t) => s + t.amount, 0);
+      }
+      return row;
+    });
+  }, [filtered, months, isMultiMonth]);
   const monthData = useMemo(() => byMonth(filtered, months), [filtered, months]);
   const split = useMemo(() => fixedVariableSplit(filtered), [filtered]);
   const matrix = useMemo(() => (isMultiMonth ? categoryMonthMatrix(filtered, months) : []), [filtered, months, isMultiMonth]);
@@ -150,19 +160,17 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
         <Card>
           <CardContent className="pt-4">
             {isMultiMonth ? (
-              <div className="space-y-1">
-                {months.map((m) => {
-                  const inMonth = filtered.filter((t) => t.date.startsWith(m));
-                  const monthTotal = inMonth.reduce((s, t) => s + t.amount, 0);
-                  if (monthTotal === 0) return null;
-                  return (
-                    <div key={m} className="flex justify-between py-1.5 border-b border-white/5 text-xs">
-                      <span className="text-white/70">{m}</span>
-                      <span className="text-white font-bold">{formatCurrency(monthTotal)}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={payerByMonth} barSize={20}>
+                  <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
+                  <Bar dataKey={PAYER_LABELS['Shi']} stackId="a" fill="#22d3ee" />
+                  <Bar dataKey={PAYER_LABELS['Ortal']} stackId="a" fill="#ec4899" />
+                  <Bar dataKey={PAYER_LABELS['Joint']} stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
               payerData.map(({ name, value }) => (
                 <div key={name} className="flex justify-between items-center py-2 border-b border-white/5">
