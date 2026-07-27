@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Resp
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
-import { ReportPeriod, periodMonths } from '@/lib/reportPeriod';
+import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
 import { byCategory, byMonth, categoryMonthMatrix } from '@/lib/reportAggregates';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
@@ -18,8 +18,8 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
   const isMultiMonth = months.length > 1 || period.isAllTime;
 
   const filtered = useMemo(
-    () => transactions.filter((t) => t.type === 'income' && (!category || t.category === category)),
-    [transactions, category],
+    () => transactions.filter((t) => t.type === 'income' && (!category || t.category === category) && inPeriod(t.date, period)),
+    [transactions, category, period],
   );
 
   const total = filtered.reduce((s, t) => s + t.amount, 0);

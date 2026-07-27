@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Resp
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction, CHILD_TAGS } from '@/types';
 import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
-import { ReportPeriod, periodMonths } from '@/lib/reportPeriod';
+import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
 import { byCategory, byPayer, byMonth, fixedVariableSplit, categoryMonthMatrix } from '@/lib/reportAggregates';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
@@ -17,8 +17,8 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
   const isMultiMonth = months.length > 1 || period.isAllTime;
 
   const filtered = useMemo(
-    () => transactions.filter((t) => t.type === 'expense' && (!category || t.category === category)),
-    [transactions, category],
+    () => transactions.filter((t) => t.type === 'expense' && (!category || t.category === category) && inPeriod(t.date, period)),
+    [transactions, category, period],
   );
 
   const total = filtered.reduce((s, t) => s + t.amount, 0);

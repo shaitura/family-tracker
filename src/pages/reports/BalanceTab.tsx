@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency } from '@/utils';
-import { ReportPeriod, periodMonths, currentMonthKey } from '@/lib/reportPeriod';
+import { ReportPeriod, periodMonths, currentMonthKey, inPeriod } from '@/lib/reportPeriod';
 import { fixedVariableSplit } from '@/lib/reportAggregates';
 
 const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
@@ -14,7 +14,7 @@ export function BalanceTab({ transactions, period, category }: { transactions: T
   const months = useMemo(() => periodMonths(period), [period]);
   const isMultiMonth = months.length > 1 || period.isAllTime;
 
-  const filtered = useMemo(() => transactions.filter((t) => !category || t.category === category), [transactions, category]);
+  const filtered = useMemo(() => transactions.filter((t) => (!category || t.category === category) && inPeriod(t.date, period)), [transactions, category, period]);
   const incomeTxs = useMemo(() => filtered.filter((t) => t.type === 'income'), [filtered]);
   const expenseTxs = useMemo(() => filtered.filter((t) => t.type === 'expense'), [filtered]);
 

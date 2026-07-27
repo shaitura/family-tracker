@@ -14,7 +14,7 @@ import {
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#10b981'];
 const PAYER_COLORS = ['#22d3ee', '#ec4899', '#a855f7'];
 const METHOD_COLORS = ['#22d3ee', '#f97316', '#a855f7', '#10b981', '#eab308', '#94a3b8'];
-const TT = { background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 };
+const TT = { background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11, color: '#fff' };
 
 type SubTab = 'trends' | 'compare' | 'anomalies' | 'payers' | 'leaks' | 'forecast' | 'misc';
 
@@ -222,7 +222,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   <Pie data={payer.pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
                     {payer.pieData.map((_, i) => <Cell key={i} fill={PAYER_COLORS[i]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), String(name)]} />
+                  <Tooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), String(name)]} contentStyle={TT} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                 </PieChart>
               </ResponsiveContainer>
