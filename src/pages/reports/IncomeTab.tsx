@@ -1,6 +1,6 @@
 // src/pages/reports/IncomeTab.tsx
 import { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
@@ -131,6 +131,7 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
                   <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                   <Bar dataKey="שי" stackId="a" fill="#22d3ee" />
                   <Bar dataKey="אורטל" stackId="a" fill="#ec4899" />
                   <Bar dataKey="משותף" stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />

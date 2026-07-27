@@ -44,6 +44,11 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
 
   const anomalies = useMemo(() => findAnomalies(allExpenses, months, priorMonths), [allExpenses, months, priorMonths]);
   const leaks = useMemo(() => findLeaks(allExpenses), [allExpenses]); // period-independent by design
+  const leaksByCategory = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const l of leaks) acc[l.category] = (acc[l.category] || 0) + l.yearlyEstimate;
+    return Object.entries(acc).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value: Math.round(value) }));
+  }, [leaks]);
   const execItems = useMemo(
     () => executiveSummary({ expenses: expensesInWindow, priorExpenses, income: incomeInWindow, anomalies, leaks }),
     [expensesInWindow, priorExpenses, incomeInWindow, anomalies, leaks],
@@ -129,6 +134,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
 
       {subTab === 'compare' && (
         <div className="space-y-4">
+          <p className="text-xs text-white/40 -mb-1">📌 השוואה זו מבוססת על כל ההיסטוריה הזמינה (שנים קלנדריות מלאות) — אינה מושפעת מבורר התקופה למעלה</p>
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
               <div className="text-sm text-white/60 mb-3">השוואה שנה-על-שנה</div>
@@ -160,6 +166,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   </Bar>
                 </BarChart>
               </ResponsiveContainer></div>
+              <div className="mt-2 text-xs text-white/40">אדום = שיא עונתי (20%+ מעל ממוצע), צהוב = מעט גבוה, ירוק = רגיל</div>
             </CardContent>
           </Card>
           <Card className="bg-white/5 border-white/10">
@@ -171,6 +178,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v as number)} />
+                  <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff80' }} />
                   {PAYMENT_METHODS_LIST.map((m, i) => <Bar key={m} dataKey={m} stackId="a" fill={METHOD_COLORS[i % METHOD_COLORS.length]} />)}
                 </BarChart>
               </ResponsiveContainer></div>
@@ -231,6 +239,22 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
               <div className="text-xl font-bold text-amber-400">{formatCurrency(leaks.reduce((s, l) => s + l.yearlyEstimate, 0))} /שנה</div>
             </CardContent>
           </Card>
+          <p className="text-xs text-white/40">📌 דליפות מזוהות על כל ההיסטוריה — אינן מושפעות מבורר התקופה למעלה</p>
+          {leaksByCategory.length > 0 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardContent className="pt-4">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={leaksByCategory} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
+                      {leaksByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(Math.round(v)) + ' /שנה', String(name)]} contentStyle={TT} />
+                    <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff70' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
           {leaks.length === 0 ? (
             <div className="text-center text-white/40 py-8">✅ לא זוהו הוצאות חוזרות חשודות</div>
           ) : leaks.map((l) => (
@@ -257,6 +281,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
         <Card className="bg-white/5 border-white/10">
           <CardContent className="pt-4 space-y-3">
             <div className="text-sm text-white/60">תזרים חזוי — 3 החודשים הבאים</div>
+            <p className="text-xs text-white/40">📌 תזרים תמיד מציג את 3 החודשים הבאים מהיום — אינו מושפע מבורר התקופה למעלה</p>
             {forecast.length === 0 ? (
               <p className="text-sm text-white/40 text-center py-4">אין חודשים עתידיים להצגה</p>
             ) : forecast.map((f) => (

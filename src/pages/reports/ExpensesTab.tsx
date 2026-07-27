@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction, CHILD_TAGS } from '@/types';
 import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
@@ -218,6 +218,7 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
                     <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                    <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff80' }} formatter={(value: string) => CHILD_LABELS[value] ?? (value === 'none' ? 'ללא שיוך' : value)} />
                     {[...CHILD_TAGS, 'none'].map((child) => (
                       <Bar key={child} dataKey={child} stackId="a" fill={CHILD_COLORS[child] ?? '#64748b'} />
                     ))}
