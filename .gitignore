@@ -10,3 +10,6 @@ index.html
 .env
 .env.local
 .env.*.local
+
+# Brainstorming visual-companion session files (local, ephemeral)
+.superpowers/
