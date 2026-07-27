@@ -1,5 +1,7 @@
 import { monthsInRange, currentMonthKey } from './recurrence';
 
+export { currentMonthKey };
+
 export type PeriodQuickPick =
   | 'currentMonth' | 'selectedYear' | 'lastQuarter' | 'last12' | 'last18' | 'allTime' | 'custom';
 
