@@ -203,3 +203,43 @@ export function executiveSummary(params: {
   }
   return items.slice(0, 5);
 }
+
+// ── Cashflow forecast ────────────────────────────────────────────────────────
+export interface ForecastMonth { month: string; knownFixed: number; estimatedVariable: number; total: number }
+
+/**
+ * `futureExpenses` = transactions already flagged status:'future' by useTransactions()
+ * (i.e. RecurringRule instances projected into upcoming months). `recentVariableExpenses`
+ * = actual "משתנה" expenses from the last `lookbackMonths` — their average estimates
+ * the variable spend not covered by any declared recurring rule.
+ */
+export function cashflowForecast(
+  futureExpenses: Transaction[],
+  recentVariableExpenses: Transaction[],
+  monthsAhead: string[],
+  lookbackMonths: number,
+): ForecastMonth[] {
+  const avgVariable = recentVariableExpenses.length > 0 && lookbackMonths > 0
+    ? recentVariableExpenses.reduce((s, t) => s + t.amount, 0) / lookbackMonths
+    : 0;
+  return monthsAhead.map((m) => {
+    const knownFixed = futureExpenses.filter((t) => t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0);
+    const estimatedVariable = Math.round(avgVariable);
+    return { month: m, knownFixed, estimatedVariable, total: knownFixed + estimatedVariable };
+  });
+}
+
+// ── "שונות" drift indicator ──────────────────────────────────────────────────
+export interface MiscDriftMonth { month: string; miscTotal: number; totalExpense: number; sharePct: number; flagged: boolean }
+
+const MISC_DRIFT_THRESHOLD_PCT = 15;
+
+export function miscDrift(expenses: Transaction[], months: string[]): MiscDriftMonth[] {
+  return months.map((m) => {
+    const inMonth = expenses.filter((t) => t.date.startsWith(m));
+    const totalExpense = inMonth.reduce((s, t) => s + t.amount, 0);
+    const miscTotal = inMonth.filter((t) => t.category === 'שונות').reduce((s, t) => s + t.amount, 0);
+    const sharePct = totalExpense > 0 ? Math.round((miscTotal / totalExpense) * 100) : 0;
+    return { month: m, miscTotal, totalExpense, sharePct, flagged: sharePct > MISC_DRIFT_THRESHOLD_PCT };
+  });
+}
