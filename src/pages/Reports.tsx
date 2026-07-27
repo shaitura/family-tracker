@@ -48,7 +48,7 @@ export default function Reports() {
 
       <div className="grid grid-cols-4 gap-2">
         {TYPES.map(({ key, label }) => (
-          <button key={key} onClick={() => setType(key)}
+          <button key={key} onClick={() => { setType(key); setCategory(''); }}
             className={`py-1.5 rounded-xl text-xs font-semibold transition-all ${type === key ? 'bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}>
             {label}
           </button>
