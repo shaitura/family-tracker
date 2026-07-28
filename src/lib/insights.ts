@@ -244,3 +244,107 @@ export function miscDrift(expenses: Transaction[], months: string[]): MiscDriftM
     return { month: m, miscTotal, totalExpense, sharePct, flagged: sharePct > MISC_DRIFT_THRESHOLD_PCT };
   });
 }
+
+// ── Analyst insights: cross-cutting, whole-history narrative ──────────────────
+// Distinct from executiveSummary() (period-vs-prior-period only): this looks across
+// ALL available history to surface slow trends, seasonal heads-up, and YoY drift that
+// a single-period comparison misses. Still no LLM — rule-based heuristics, same as
+// every other function in this file.
+export interface AnalystInsight { icon: string; headline: string; detail: string; level: 'ok' | 'warn' | 'bad' | 'info' }
+
+function monthKey(d: Date): string { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+
+/** Consecutive-month rise/fall for each category over the last `lookback` months (default 4) — catches slow creep a single-period anomaly threshold misses. */
+export function categoryTrendInsights(allExpenses: Transaction[], now: Date = new Date(), lookback = 4): AnalystInsight[] {
+  const months = Array.from({ length: lookback }, (_, i) => monthKey(new Date(now.getFullYear(), now.getMonth() - (lookback - 1 - i), 1)));
+  const cats = Array.from(new Set(allExpenses.map((t) => t.category)));
+  const insights: AnalystInsight[] = [];
+  for (const cat of cats) {
+    const perMonth = months.map((m) => allExpenses.filter((t) => t.category === cat && t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0));
+    if (perMonth.some((v) => v < 50)) continue; // needs real spend every month to call it a genuine trend, not sporadic purchases
+    const rising = perMonth.every((v, i) => i === 0 || v > perMonth[i - 1]);
+    const falling = perMonth.every((v, i) => i === 0 || v < perMonth[i - 1]);
+    if (!rising && !falling) continue;
+    const first = perMonth[0], last = perMonth[perMonth.length - 1];
+    const pct = Math.round(((last - first) / first) * 100);
+    if (Math.abs(pct) < 15) continue; // ignore noise-level drift
+    insights.push(rising
+      ? { icon: '📈', level: pct > 40 ? 'bad' : 'warn', headline: `${cat} עולה בעקביות`, detail: `${lookback} חודשים ברציפות — מ-${fmt(first)} ל-${fmt(last)} (+${pct}%)` }
+      : { icon: '📉', level: 'ok', headline: `${cat} יורדת בעקביות`, detail: `${lookback} חודשים ברציפות — מ-${fmt(first)} ל-${fmt(last)} (${pct}%)` });
+  }
+  return insights.sort((a, b) => (a.level === 'bad' ? -1 : 0) - (b.level === 'bad' ? -1 : 0)).slice(0, 2);
+}
+
+/** If the real-world current month is historically a seasonal peak, warn ahead of time instead of only after the fact. */
+export function seasonalHeadsUp(seasonal: SeasonalPeak[], now: Date = new Date()): AnalystInsight[] {
+  const currentMonthLabel = SHORT_MONTHS[now.getMonth()];
+  const match = seasonal.find((s) => s.month === currentMonthLabel && s.ratio > 1.15);
+  if (!match) return [];
+  const pct = Math.round((match.ratio - 1) * 100);
+  return [{
+    icon: '📅', level: 'warn',
+    headline: `${match.month} הוא בדרך כלל חודש-שיא בהוצאות`,
+    detail: `בממוצע כ-${pct}% מעל חודש רגיל (${fmt(match.avg)}) — כדאי להיערך מראש`,
+  }];
+}
+
+/** Same-calendar-month comparison: the most recently fully-elapsed month vs. the same month last year. */
+export function yoySameMonthInsight(yoy: YoyRow[], currentYear: number, now: Date = new Date()): AnalystInsight[] {
+  const lastCompleteMonthIdx = now.getMonth() - 1; // 0-based; -1 in January means no complete month yet this year
+  if (lastCompleteMonthIdx < 0) return [];
+  const label = SHORT_MONTHS[lastCompleteMonthIdx];
+  const row = yoy.find((r) => r.month === label);
+  if (!row) return [];
+  const thisYear = row[currentYear] ?? 0;
+  const lastYear = row[currentYear - 1] ?? 0;
+  if (lastYear < 200) return [];
+  const pct = Math.round(((thisYear - lastYear) / lastYear) * 100);
+  if (Math.abs(pct) < 15) return [];
+  return [{
+    icon: pct > 0 ? '🔺' : '🔻', level: pct > 25 ? 'bad' : pct > 0 ? 'warn' : 'ok',
+    headline: `${label} השנה ${pct > 0 ? 'גבוה' : 'נמוך'} משמעותית מאשתקד`,
+    detail: `${fmt(thisYear)} לעומת ${fmt(lastYear)} ב-${label} ${currentYear - 1} (${pct > 0 ? '+' : ''}${pct}%)`,
+  }];
+}
+
+/** Which category's share of total spend shifted the most, comparing the last 6 months to the 6 before that. */
+export function categoryShareShift(allExpenses: Transaction[], now: Date = new Date()): AnalystInsight[] {
+  const monthsBack = (offset: number) => Array.from({ length: 6 }, (_, i) => monthKey(new Date(now.getFullYear(), now.getMonth() - offset - (5 - i), 1)));
+  const recent = monthsBack(0), older = monthsBack(6);
+  const shareByCat = (months: string[]) => {
+    const inWindow = allExpenses.filter((t) => months.includes(t.date.slice(0, 7)));
+    const total = inWindow.reduce((s, t) => s + t.amount, 0);
+    if (total === 0) return {} as Record<string, number>;
+    const byCat: Record<string, number> = {};
+    for (const t of inWindow) byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    return Object.fromEntries(Object.entries(byCat).map(([k, v]) => [k, v / total]));
+  };
+  const recentShare = shareByCat(recent), olderShare = shareByCat(older);
+  if (Object.keys(olderShare).length === 0) return [];
+  let biggest: { cat: string; delta: number } | null = null;
+  for (const cat of new Set([...Object.keys(recentShare), ...Object.keys(olderShare)])) {
+    const delta = (recentShare[cat] || 0) - (olderShare[cat] || 0);
+    if (!biggest || Math.abs(delta) > Math.abs(biggest.delta)) biggest = { cat, delta };
+  }
+  if (!biggest || Math.abs(biggest.delta) < 0.04) return []; // <4 percentage-points shift = noise
+  const fromPct = Math.round((olderShare[biggest.cat] || 0) * 100);
+  const toPct = Math.round((recentShare[biggest.cat] || 0) * 100);
+  return [{
+    icon: '🧭', level: 'info',
+    headline: `התקציב נוטה יותר ל${biggest.cat}`,
+    detail: `${fromPct}% מסך ההוצאות לפני חצי שנה → ${toPct}% היום`,
+  }];
+}
+
+/** Cross-cutting analyst-style read across ALL available history — complements executiveSummary(), which is period-scoped. */
+export function analystInsights(params: {
+  allExpenses: Transaction[]; seasonal: SeasonalPeak[]; yoy: YoyRow[]; currentYear: number; now?: Date;
+}): AnalystInsight[] {
+  const { allExpenses, seasonal, yoy, currentYear, now = new Date() } = params;
+  return [
+    ...seasonalHeadsUp(seasonal, now),
+    ...yoySameMonthInsight(yoy, currentYear, now),
+    ...categoryTrendInsights(allExpenses, now),
+    ...categoryShareShift(allExpenses, now),
+  ].slice(0, 6);
+}

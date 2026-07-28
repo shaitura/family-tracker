@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { findAnomalies, findLeaks, yearOverYear, seasonalPeaks, paymentMethodByMonth, payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift } from './insights';
+import {
+  findAnomalies, findLeaks, yearOverYear, seasonalPeaks, paymentMethodByMonth, payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift,
+  categoryTrendInsights, seasonalHeadsUp, yoySameMonthInsight, categoryShareShift, analystInsights,
+} from './insights';
 import { Transaction } from '@/types';
 
 function tx(over: Partial<Transaction>): Transaction {
@@ -160,5 +163,113 @@ describe('miscDrift', () => {
 
   it('handles a month with no expenses at all', () => {
     expect(miscDrift([], ['2026-07'])).toEqual([{ month: '2026-07', miscTotal: 0, totalExpense: 0, sharePct: 0, flagged: false }]);
+  });
+});
+
+const NOW = new Date(2026, 6, 15); // 2026-07-15
+
+describe('categoryTrendInsights', () => {
+  it('flags a category rising every month over the lookback window', () => {
+    const all = [
+      tx({ category: 'רכב', date: '2026-04-01', amount: 100 }),
+      tx({ category: 'רכב', date: '2026-05-01', amount: 150 }),
+      tx({ category: 'רכב', date: '2026-06-01', amount: 200 }),
+      tx({ category: 'רכב', date: '2026-07-01', amount: 250 }),
+    ];
+    const out = categoryTrendInsights(all, NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0].headline).toContain('רכב');
+    expect(out[0].level).toBe('bad'); // 150% rise, >40%
+  });
+
+  it('does not flag a category with a sporadic (near-zero) month', () => {
+    const all = [
+      tx({ category: 'פנאי', date: '2026-04-01', amount: 100 }),
+      tx({ category: 'פנאי', date: '2026-05-01', amount: 0 }),
+      tx({ category: 'פנאי', date: '2026-06-01', amount: 200 }),
+      tx({ category: 'פנאי', date: '2026-07-01', amount: 250 }),
+    ];
+    expect(categoryTrendInsights(all, NOW)).toEqual([]);
+  });
+
+  it('does not flag a flat (non-monotonic) category', () => {
+    const all = [
+      tx({ category: 'דלק', date: '2026-04-01', amount: 200 }),
+      tx({ category: 'דלק', date: '2026-05-01', amount: 180 }),
+      tx({ category: 'דלק', date: '2026-06-01', amount: 210 }),
+      tx({ category: 'דלק', date: '2026-07-01', amount: 190 }),
+    ];
+    expect(categoryTrendInsights(all, NOW)).toEqual([]);
+  });
+});
+
+describe('seasonalHeadsUp', () => {
+  it('warns when the current real-world month is a known seasonal peak', () => {
+    const out = seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.3 }], NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0].headline).toContain('יול');
+  });
+
+  it('stays silent when the current month is not a peak', () => {
+    expect(seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.05 }], NOW)).toEqual([]);
+  });
+
+  it('stays silent when there is no seasonal data for the current month', () => {
+    expect(seasonalHeadsUp([{ month: 'דצמ', avg: 5000, ratio: 1.3 }], NOW)).toEqual([]);
+  });
+});
+
+describe('yoySameMonthInsight', () => {
+  it('flags a significant rise vs. the same month last year', () => {
+    const yoy = [{ month: 'יוני', 2025: 700, 2026: 1000 }];
+    const out = yoySameMonthInsight(yoy, 2026, NOW); // last complete month before July = June
+    expect(out).toHaveLength(1);
+    expect(out[0].level).toBe('bad'); // ~43% rise, >25%
+  });
+
+  it('stays silent in January (no complete month yet this year)', () => {
+    expect(yoySameMonthInsight([{ month: 'דצמ', 2025: 700, 2026: 1000 }], 2026, new Date(2026, 0, 10))).toEqual([]);
+  });
+
+  it('stays silent below the noise threshold', () => {
+    expect(yoySameMonthInsight([{ month: 'יוני', 2025: 700, 2026: 730 }], 2026, NOW)).toEqual([]);
+  });
+});
+
+describe('categoryShareShift', () => {
+  // With NOW = 2026-07-15: "recent" 6-month window is 2026-02..2026-07 (inclusive of the current month),
+  // "older" 6-month window is 2025-08..2026-01 — verified against the function's own monthKey/monthsBack math.
+  const RECENT_MONTHS = ['2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07'];
+  const OLDER_MONTHS = ['2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01'];
+
+  it('flags the category whose budget share shifted the most', () => {
+    const all: Transaction[] = [];
+    for (const ym of OLDER_MONTHS) all.push(tx({ category: 'דיור', date: `${ym}-01`, amount: 900 }), tx({ category: 'פנאי', date: `${ym}-01`, amount: 100 }));
+    for (const ym of RECENT_MONTHS) all.push(tx({ category: 'דיור', date: `${ym}-01`, amount: 500 }), tx({ category: 'פנאי', date: `${ym}-01`, amount: 500 }));
+    const out = categoryShareShift(all, NOW);
+    expect(out).toHaveLength(1);
+    expect(['דיור', 'פנאי']).toContain(out[0].headline.replace('התקציב נוטה יותר ל', ''));
+  });
+
+  it('stays silent with no older-window data to compare against', () => {
+    expect(categoryShareShift([tx({ date: '2026-07-01' })], NOW)).toEqual([]);
+  });
+});
+
+describe('analystInsights', () => {
+  it('composes results from all four sub-analyses, capped at 6', () => {
+    const all = [
+      tx({ category: 'רכב', date: '2026-04-01', amount: 100 }),
+      tx({ category: 'רכב', date: '2026-05-01', amount: 150 }),
+      tx({ category: 'רכב', date: '2026-06-01', amount: 200 }),
+      tx({ category: 'רכב', date: '2026-07-01', amount: 250 }),
+    ];
+    const out = analystInsights({ allExpenses: all, seasonal: [], yoy: [], currentYear: 2026, now: NOW });
+    expect(out.length).toBeLessThanOrEqual(6);
+    expect(out.length).toBeGreaterThan(0);
+  });
+
+  it('returns an empty array gracefully when there is no data at all', () => {
+    expect(analystInsights({ allExpenses: [], seasonal: [], yoy: [], currentYear: 2026, now: NOW })).toEqual([]);
   });
 });

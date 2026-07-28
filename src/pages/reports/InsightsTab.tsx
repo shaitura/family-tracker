@@ -1,14 +1,14 @@
 // src/pages/reports/InsightsTab.tsx
 import { useState, useMemo } from 'react';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Brain } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency } from '@/utils';
 import { ReportPeriod, periodMonths, priorPeriod, inPeriod, periodLabel } from '@/lib/reportPeriod';
 import {
   findAnomalies, findLeaks, yearOverYear, seasonalPeaks, paymentMethodByMonth, PAYMENT_METHODS_LIST,
-  payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift,
+  payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift, analystInsights,
 } from '@/lib/insights';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#10b981'];
@@ -58,6 +58,12 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
   const yoy = useMemo(() => yearOverYear(allExpenses, currentYear), [allExpenses, currentYear]);
   const seasonal = useMemo(() => seasonalPeaks(allExpenses, currentYear), [allExpenses, currentYear]);
   const paymentMethods = useMemo(() => paymentMethodByMonth(expensesInWindow, months), [expensesInWindow, months]);
+
+  // "🧠 ניתוח אנליסט" — whole-history cross-cutting read, independent of the selected period (unlike execItems above).
+  const analystItems = useMemo(
+    () => analystInsights({ allExpenses, seasonal, yoy, currentYear }),
+    [allExpenses, seasonal, yoy, currentYear],
+  );
 
   const payer = useMemo(() => payerCategoryBreakdown(expensesInWindow), [expensesInWindow]);
 
@@ -119,6 +125,29 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
           )}
         </CardContent>
       </Card>
+
+      {analystItems.length > 0 && (
+        <Card className="border-indigo-500/20 bg-gradient-to-br from-indigo-950/40 to-slate-900/60">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Brain className="w-4 h-4 text-indigo-400" />
+              <span className="text-sm font-bold text-white">ניתוח אנליסט</span>
+            </div>
+            <p className="text-[11px] text-white/40 mb-3">📌 מבוסס על כל ההיסטוריה — לא מושפע מבורר התקופה למעלה</p>
+            <div className="space-y-2">
+              {analystItems.map((item, i) => (
+                <div key={i} className={`p-3 rounded-xl border ${LEVEL_STYLE[item.level]}`}>
+                  <div className="flex gap-2.5 items-start text-sm font-medium leading-relaxed">
+                    <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
+                    <span className="flex-1">{item.headline}</span>
+                  </div>
+                  <p className="text-xs text-white/50 mt-1 mr-6">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {TABS.map(([key, label]) => (
