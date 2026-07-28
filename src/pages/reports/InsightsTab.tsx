@@ -11,12 +11,12 @@ import {
   payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift, analystInsights,
 } from '@/lib/insights';
 import { InsightDrilldownList, toggleIndex } from './InsightDrilldownList';
+import { ChartTooltip } from './ChartTooltip';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#10b981'];
 const PAYER_COLORS = ['#22d3ee', '#ec4899', '#a855f7'];
 const PAYER_HE_KEYS = ['שי', 'אורטל', 'משותף']; // order matches PAYER_COLORS and insights.ts's payerCategoryBreakdown()
 const METHOD_COLORS = ['#22d3ee', '#f97316', '#a855f7', '#10b981', '#eab308', '#94a3b8'];
-const TT = { background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11, color: '#fff' };
 
 type SubTab = 'trends' | 'compare' | 'anomalies' | 'payers' | 'leaks' | 'forecast' | 'misc';
 
@@ -86,12 +86,12 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     }).filter((m) => m > nowM);
   }, [now, currentYear]);
-  const futureExpenses = useMemo(() => transactions.filter((t) => t.type === 'expense' && t.status === 'future'), [transactions]);
+  const futureExpenses = useMemo(() => transactions.filter((t) => t.type === 'expense' && (!category || t.category === category) && t.status === 'future'), [transactions, category]);
   const recentVariable = useMemo(() => {
     const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1);
     const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
-    return transactions.filter((t) => t.type === 'expense' && t.expense_class === 'משתנה' && t.date.slice(0, 7) >= cutoffKey);
-  }, [transactions, now]);
+    return transactions.filter((t) => t.type === 'expense' && (!category || t.category === category) && t.expense_class === 'משתנה' && t.date.slice(0, 7) >= cutoffKey);
+  }, [transactions, category, now]);
   const forecast = useMemo(() => cashflowForecast(futureExpenses, recentVariable, forecastMonths, 3), [futureExpenses, recentVariable, forecastMonths]);
 
   const misc = useMemo(() => miscDrift(expensesInWindow, months), [expensesInWindow, months]);
@@ -207,7 +207,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                     <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                    <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                     <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff80' }} />
                     {topCategories.map((cat, i) => (
                       <Area key={cat} type="monotone" dataKey={cat} stackId="1" stroke={COLORS[i % COLORS.length]} fill={`url(#insCatG${i})`} strokeWidth={1.5} />
@@ -225,7 +225,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                  <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Bar dataKey="total" fill="#06b6d4" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer></div>
@@ -262,7 +262,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                  <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Bar dataKey="avg" fill="#f59e0b" radius={[3, 3, 0, 0]}>
                     {seasonal.map((e, i) => <Cell key={i} fill={e.ratio > 1.2 ? '#ef4444' : e.ratio > 1.05 ? '#f59e0b' : '#10b981'} />)}
                   </Bar>
@@ -279,7 +279,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                  <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v as number)} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff80' }} />
                   {PAYMENT_METHODS_LIST.map((m, i) => <Bar key={m} dataKey={m} stackId="a" fill={METHOD_COLORS[i % METHOD_COLORS.length]} />)}
                 </BarChart>
@@ -336,7 +336,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                   <Pie data={payer.pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
                     {payer.pieData.map((_, i) => <Cell key={i} fill={PAYER_COLORS[i]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), String(name)]} contentStyle={TT} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -358,7 +358,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
                     <XAxis type="number" reversed tick={{ fontSize: 9, fill: '#ffffff50' }} />
                     <YAxis type="category" dataKey="category" orientation="right" tick={{ fontSize: 10, fill: '#ffffff70' }} width={70} />
-                    <Tooltip contentStyle={TT} formatter={(v: number, name: string): [string, string] => [formatCurrency(v as number), String(name)]} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                     {PAYER_HE_KEYS.map((he, i) => <Bar key={he} dataKey={he} stackId="a" fill={PAYER_COLORS[i]} />)}
                   </BarChart>
                 </ResponsiveContainer></div>
@@ -385,7 +385,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
                     <Pie data={leaksByCategory} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
                       {leaksByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(Math.round(v)) + ' /שנה', String(name)]} contentStyle={TT} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(Math.round(v)) + ' /שנה', name]} />} />
                     <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff70' }} />
                   </PieChart>
                 </ResponsiveContainer>
