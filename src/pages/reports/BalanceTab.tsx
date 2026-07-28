@@ -9,6 +9,7 @@ import { fixedVariableSplit } from '@/lib/reportAggregates';
 
 const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
 const isInvCat = (cat: string) => INVESTMENT_CATS.some((k) => cat.includes(k));
+const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 export function BalanceTab({ transactions, period, category }: { transactions: Transaction[]; period: ReportPeriod; category: string }) {
   const months = useMemo(() => periodMonths(period), [period]);
@@ -32,6 +33,33 @@ export function BalanceTab({ transactions, period, category }: { transactions: T
     'הכנסות': incomeTxs.filter((t) => t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0),
     'הוצאות': expenseTxs.filter((t) => t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0),
   })), [months, incomeTxs, expenseTxs]);
+
+  // "כל הזמן" → year-over-year comparison instead of the (otherwise empty, since periodMonths([]) for allTime) monthly chart.
+  const availableYears = useMemo(() => Array.from(new Set(filtered.map((t) => t.date.slice(0, 4)))).sort(), [filtered]);
+  const yearlyMatrix = useMemo(() => {
+    if (!period.isAllTime) return [];
+    return Array.from({ length: 12 }, (_, i) => {
+      const mm = String(i + 1).padStart(2, '0');
+      const byYear: Record<string, { income: number; expense: number }> = {};
+      for (const y of availableYears) {
+        byYear[y] = {
+          income: incomeTxs.filter((t) => t.date.startsWith(`${y}-${mm}`)).reduce((s, t) => s + t.amount, 0),
+          expense: expenseTxs.filter((t) => t.date.startsWith(`${y}-${mm}`)).reduce((s, t) => s + t.amount, 0),
+        };
+      }
+      return { monthLabel: MONTH_NAMES[i], monthNum: mm, byYear };
+    });
+  }, [period.isAllTime, availableYears, incomeTxs, expenseTxs]);
+  const yearlyTotals = useMemo(() => {
+    const totals: Record<string, { income: number; expense: number }> = {};
+    for (const y of availableYears) {
+      totals[y] = {
+        income: yearlyMatrix.reduce((s, r) => s + r.byYear[y].income, 0),
+        expense: yearlyMatrix.reduce((s, r) => s + r.byYear[y].expense, 0),
+      };
+    }
+    return totals;
+  }, [availableYears, yearlyMatrix]);
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -71,7 +99,7 @@ export function BalanceTab({ transactions, period, category }: { transactions: T
         </div>
       </div>
 
-      {isMultiMonth && (
+      {isMultiMonth && !period.isAllTime && (
         <>
           <Card>
             <CardHeader><CardTitle className="text-sm">הכנסות מול הוצאות לפי חודש</CardTitle></CardHeader>
@@ -108,6 +136,53 @@ export function BalanceTab({ transactions, period, category }: { transactions: T
             </CardContent>
           </Card>
         </>
+      )}
+
+      {period.isAllTime && availableYears.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">הכנסות מול הוצאות — השוואה שנתית</CardTitle></CardHeader>
+          <CardContent className="pt-0">
+            <div className="overflow-x-auto -mx-4 px-1">
+              <table dir="rtl" className="text-[11px] min-w-[600px] w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th rowSpan={2} className="text-right py-2 pr-2 pl-1 text-white/50 font-medium sticky right-0 bg-slate-900 align-bottom min-w-[60px]">חודש</th>
+                    {availableYears.map((y) => (
+                      <th key={y} colSpan={2} className="text-center py-1 text-white/70 font-bold border-r border-white/10">{y}</th>
+                    ))}
+                  </tr>
+                  <tr className="border-b border-white/10">
+                    {availableYears.flatMap((y) => [
+                      <th key={`${y}-inc`} className="text-center py-1 px-1 text-emerald-400/70 font-medium w-16 border-r border-white/5">הכנסות</th>,
+                      <th key={`${y}-exp`} className="text-center py-1 px-1 text-rose-400/70 font-medium w-16">הוצאות</th>,
+                    ])}
+                  </tr>
+                </thead>
+                <tbody>
+                  {yearlyMatrix.map((row) => (
+                    <tr key={row.monthNum} className="border-b border-white/5">
+                      <td className="py-1.5 pr-2 pl-1 text-white/70 sticky right-0 bg-slate-900">{row.monthLabel}</td>
+                      {availableYears.flatMap((y) => {
+                        const cell = row.byYear[y];
+                        return [
+                          <td key={`${y}-inc`} className="text-center py-1.5 px-1 text-emerald-400 border-r border-white/5">{cell.income > 0 ? formatCurrency(cell.income) : '—'}</td>,
+                          <td key={`${y}-exp`} className="text-center py-1.5 px-1 text-rose-400">{cell.expense > 0 ? formatCurrency(cell.expense) : '—'}</td>,
+                        ];
+                      })}
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-white/20 font-bold">
+                    <td className="py-2 pr-2 pl-1 text-white sticky right-0 bg-slate-900">סה"כ</td>
+                    {availableYears.flatMap((y) => [
+                      <td key={`${y}-ti`} className="text-center py-2 px-1 text-emerald-300 border-r border-white/5">{formatCurrency(yearlyTotals[y].income)}</td>,
+                      <td key={`${y}-te`} className="text-center py-2 px-1 text-rose-300">{formatCurrency(yearlyTotals[y].expense)}</td>,
+                    ])}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
