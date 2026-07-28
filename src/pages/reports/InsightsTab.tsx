@@ -32,6 +32,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
   const [expandedExec, setExpandedExec] = useState<Set<number>>(new Set());
   const [expandedAnalyst, setExpandedAnalyst] = useState<Set<number>>(new Set());
   const [expandedAnomaly, setExpandedAnomaly] = useState<Set<number>>(new Set());
+  const [expandedLeak, setExpandedLeak] = useState<Set<number>>(new Set());
   const now = new Date();
   const currentYear = now.getFullYear();
 
@@ -387,23 +388,34 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
           )}
           {leaks.length === 0 ? (
             <div className="text-center text-white/40 py-8">✅ לא זוהו הוצאות חוזרות חשודות</div>
-          ) : leaks.map((l) => (
-            <Card key={l.name} className="bg-white/5 border-white/10">
-              <CardContent className="py-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white truncate">{l.name}</span>
-                    {l.isSubscription && <span className="shrink-0 text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-full">מנוי</span>}
+          ) : leaks.map((l, i) => {
+            const expandable = l.transactions.length > 0;
+            const open = expandedLeak.has(i);
+            return (
+              <Card key={l.name} className={`bg-white/5 border-white/10 ${expandable ? 'cursor-pointer' : ''}`}
+                onClick={() => expandable && setExpandedLeak((s) => toggleIndex(s, i))}>
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white truncate">{l.name}</span>
+                        {l.isSubscription && <span className="shrink-0 text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-full">מנוי</span>}
+                      </div>
+                      <div className="text-xs text-white/40 mt-0.5">{l.category} · {l.months} חודשים · {l.occurrences} פעמים</div>
+                    </div>
+                    <div className="text-left shrink-0 flex items-center gap-2">
+                      <div>
+                        <div className="text-sm font-bold text-amber-400">{formatCurrency(l.monthlyAvg)}/חודש</div>
+                        <div className="text-xs text-white/40">{formatCurrency(l.yearlyEstimate)}/שנה</div>
+                      </div>
+                      {expandable && <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />}
+                    </div>
                   </div>
-                  <div className="text-xs text-white/40 mt-0.5">{l.category} · {l.months} חודשים · {l.occurrences} פעמים</div>
-                </div>
-                <div className="text-left shrink-0">
-                  <div className="text-sm font-bold text-amber-400">{formatCurrency(l.monthlyAvg)}/חודש</div>
-                  <div className="text-xs text-white/40">{formatCurrency(l.yearlyEstimate)}/שנה</div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {open && <InsightDrilldownList transactions={l.transactions} />}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
