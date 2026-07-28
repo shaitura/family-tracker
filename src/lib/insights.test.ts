@@ -239,6 +239,19 @@ describe('categoryTrendInsights', () => {
     ];
     expect(categoryTrendInsights(all, NOW)).toEqual([]);
   });
+
+  it('attaches only the matched category\'s transactions within the lookback window, sorted by amount desc', () => {
+    const all = [
+      tx({ category: 'רכב', date: '2026-04-01', amount: 100 }),
+      tx({ category: 'רכב', date: '2026-05-01', amount: 150 }),
+      tx({ category: 'רכב', date: '2026-06-01', amount: 200 }),
+      tx({ category: 'רכב', date: '2026-07-01', amount: 250 }),
+      tx({ category: 'דיור', date: '2026-07-01', amount: 999 }), // different category, must not appear
+      tx({ category: 'רכב', date: '2026-03-01', amount: 999 }),  // outside lookback window, must not appear
+    ];
+    const out = categoryTrendInsights(all, NOW);
+    expect(out[0].transactions.map((t) => t.amount)).toEqual([250, 200, 150, 100]);
+  });
 });
 
 describe('seasonalHeadsUp', () => {

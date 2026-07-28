@@ -262,7 +262,7 @@ export function miscDrift(expenses: Transaction[], months: string[]): MiscDriftM
 // ALL available history to surface slow trends, seasonal heads-up, and YoY drift that
 // a single-period comparison misses. Still no LLM — rule-based heuristics, same as
 // every other function in this file.
-export interface AnalystInsight { icon: string; headline: string; detail: string; level: 'ok' | 'warn' | 'bad' | 'info' }
+export interface AnalystInsight { icon: string; headline: string; detail: string; level: 'ok' | 'warn' | 'bad' | 'info'; transactions: Transaction[] }
 
 function monthKey(d: Date): string { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
 
@@ -272,7 +272,8 @@ export function categoryTrendInsights(allExpenses: Transaction[], now: Date = ne
   const cats = Array.from(new Set(allExpenses.map((t) => t.category)));
   const insights: AnalystInsight[] = [];
   for (const cat of cats) {
-    const perMonth = months.map((m) => allExpenses.filter((t) => t.category === cat && t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0));
+    const catTx = allExpenses.filter((t) => t.category === cat && months.includes(t.date.slice(0, 7)));
+    const perMonth = months.map((m) => catTx.filter((t) => t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0));
     if (perMonth.some((v) => v < 50)) continue; // needs real spend every month to call it a genuine trend, not sporadic purchases
     const rising = perMonth.every((v, i) => i === 0 || v > perMonth[i - 1]);
     const falling = perMonth.every((v, i) => i === 0 || v < perMonth[i - 1]);
@@ -281,8 +282,8 @@ export function categoryTrendInsights(allExpenses: Transaction[], now: Date = ne
     const pct = Math.round(((last - first) / first) * 100);
     if (Math.abs(pct) < 15) continue; // ignore noise-level drift
     insights.push(rising
-      ? { icon: '📈', level: pct > 40 ? 'bad' : 'warn', headline: `${cat} עולה בעקביות`, detail: `${lookback} חודשים ברציפות — מ-${fmt(first)} ל-${fmt(last)} (+${pct}%)` }
-      : { icon: '📉', level: 'ok', headline: `${cat} יורדת בעקביות`, detail: `${lookback} חודשים ברציפות — מ-${fmt(first)} ל-${fmt(last)} (${pct}%)` });
+      ? { icon: '📈', level: pct > 40 ? 'bad' : 'warn', headline: `${cat} עולה בעקביות`, detail: `${lookback} חודשים ברציפות — מ-${fmt(first)} ל-${fmt(last)} (+${pct}%)`, transactions: topTransactions(catTx) }
+      : { icon: '📉', level: 'ok', headline: `${cat} יורדת בעקביות`, detail: `${lookback} חודשים ברציפות — מ-${fmt(first)} ל-${fmt(last)} (${pct}%)`, transactions: topTransactions(catTx) });
   }
   return insights.sort((a, b) => (a.level === 'bad' ? -1 : 0) - (b.level === 'bad' ? -1 : 0)).slice(0, 2);
 }
