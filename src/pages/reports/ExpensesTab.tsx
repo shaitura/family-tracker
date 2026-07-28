@@ -5,6 +5,7 @@ import { Transaction, CHILD_TAGS } from '@/types';
 import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
 import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
 import { byCategory, byPayer, byMonth, fixedVariableSplit, categoryMonthMatrix } from '@/lib/reportAggregates';
+import { ChartTooltip } from './ChartTooltip';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
 const CHILD_COLORS: Record<string, string> = { Yuval: '#a855f7', Aviv: '#10b981', Ziv: '#f59e0b', Shared: '#6366f1', none: '#64748b' };
@@ -85,7 +86,7 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
                   <Pie data={catData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" nameKey="name" paddingAngle={2}>
                     {catData.map((entry) => <Cell key={entry.name} fill={categoryColor(entry.name)} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>
@@ -146,7 +147,7 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
               <BarChart data={[...monthData].reverse()} barSize={24}>
                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                 <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                   {monthData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>
@@ -164,7 +165,7 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
                 <BarChart data={payerByMonth} barSize={20}>
                   <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
-                  <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                   <Bar dataKey={PAYER_LABELS['Shi']} stackId="a" fill="#22d3ee" />
                   <Bar dataKey={PAYER_LABELS['Ortal']} stackId="a" fill="#ec4899" />
@@ -225,7 +226,7 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
                   <BarChart data={childByMonth} barSize={10}>
                     <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} />
                     <YAxis hide />
-                    <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                     <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff80' }} formatter={(value: string) => CHILD_LABELS[value] ?? (value === 'none' ? 'ללא שיוך' : value)} />
                     {[...CHILD_TAGS, 'none'].map((child) => (
                       <Bar key={child} dataKey={child} stackId="a" fill={CHILD_COLORS[child] ?? '#64748b'} />
