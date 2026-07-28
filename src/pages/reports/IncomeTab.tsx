@@ -32,9 +32,13 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
     if (!isMultiMonth) return [];
     return months.map((m) => {
       const row: Record<string, number | string> = { month: m };
+      let total = 0;
       for (const p of ['Shi', 'Ortal', 'Joint']) {
-        row[PAYER_HE[p]] = filtered.filter((t) => t.date.startsWith(m) && t.payer === p).reduce((s, t) => s + t.amount, 0);
+        const v = filtered.filter((t) => t.date.startsWith(m) && t.payer === p).reduce((s, t) => s + t.amount, 0);
+        row[PAYER_HE[p]] = v;
+        total += v;
       }
+      row.total = total;
       return row;
     });
   }, [filtered, months, isMultiMonth]);
@@ -43,6 +47,19 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
     for (const t of filtered) acc[t.payer] = (acc[t.payer] || 0) + t.amount;
     return ['Shi', 'Ortal', 'Joint'].map((p) => ({ name: PAYER_HE[p], value: acc[p] }));
   }, [filtered]);
+  const payerMonthlyTotals = useMemo(() => {
+    const totals = { she: 0, ortal: 0, joint: 0, total: 0 };
+    let activeMonths = 0;
+    for (const row of payerByMonth) {
+      const rowTotal = row.total as number;
+      if (rowTotal > 0) activeMonths++;
+      totals.she += row[PAYER_HE.Shi] as number;
+      totals.ortal += row[PAYER_HE.Ortal] as number;
+      totals.joint += row[PAYER_HE.Joint] as number;
+      totals.total += rowTotal;
+    }
+    return { totals, activeMonths: activeMonths || 1 };
+  }, [payerByMonth]);
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -123,30 +140,75 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
       )}
 
       {subTab === 'payer' && (
-        <Card>
-          <CardContent className="pt-4">
-            {isMultiMonth ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={payerByMonth} barSize={20}>
-                  <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
-                  <Bar dataKey="שי" stackId="a" fill="#22d3ee" />
-                  <Bar dataKey="אורטל" stackId="a" fill="#ec4899" />
-                  <Bar dataKey="משותף" stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              payerTotals.map(({ name, value }) => (
-                <div key={name} className="flex justify-between items-center py-2 border-b border-white/5">
-                  <span className="text-sm text-white">{name}</span>
-                  <span className="text-sm font-bold text-white">{formatCurrency(value)}</span>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="pt-4">
+              {isMultiMonth ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={payerByMonth} barSize={20}>
+                    <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis hide />
+                    <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
+                    <Bar dataKey={PAYER_HE.Shi} stackId="a" fill="#22d3ee" />
+                    <Bar dataKey={PAYER_HE.Ortal} stackId="a" fill="#ec4899" />
+                    <Bar dataKey={PAYER_HE.Joint} stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                payerTotals.map(({ name, value }) => (
+                  <div key={name} className="flex justify-between items-center py-2 border-b border-white/5">
+                    <span className="text-sm text-white">{name}</span>
+                    <span className="text-sm font-bold text-white">{formatCurrency(value)}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {isMultiMonth && payerByMonth.length > 0 && (
+            <Card>
+              <CardContent className="pt-4">
+                <table dir="rtl" className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-white/40">
+                      <th className="text-right py-1.5">חודש</th>
+                      <th className="text-center py-1.5 text-cyan-400/70">{PAYER_HE.Shi}</th>
+                      <th className="text-center py-1.5 text-pink-400/70">{PAYER_HE.Ortal}</th>
+                      <th className="text-center py-1.5 text-purple-400/70">{PAYER_HE.Joint}</th>
+                      <th className="text-center py-1.5">סה"כ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payerByMonth.filter((row) => (row.total as number) > 0).map((row) => (
+                      <tr key={row.month as string} className="border-b border-white/5">
+                        <td className="py-1.5 text-white/70">{row.month}</td>
+                        <td className="text-center py-1.5 text-cyan-400">{(row[PAYER_HE.Shi] as number) > 0 ? formatCurrency(row[PAYER_HE.Shi] as number) : '—'}</td>
+                        <td className="text-center py-1.5 text-pink-400">{(row[PAYER_HE.Ortal] as number) > 0 ? formatCurrency(row[PAYER_HE.Ortal] as number) : '—'}</td>
+                        <td className="text-center py-1.5 text-purple-400">{(row[PAYER_HE.Joint] as number) > 0 ? formatCurrency(row[PAYER_HE.Joint] as number) : '—'}</td>
+                        <td className="text-center py-1.5 text-white font-bold">{formatCurrency(row.total as number)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-white/20 font-bold">
+                      <td className="py-2 text-white">סה"כ</td>
+                      <td className="text-center py-2 text-cyan-300">{formatCurrency(payerMonthlyTotals.totals.she)}</td>
+                      <td className="text-center py-2 text-pink-300">{formatCurrency(payerMonthlyTotals.totals.ortal)}</td>
+                      <td className="text-center py-2 text-purple-300">{formatCurrency(payerMonthlyTotals.totals.joint)}</td>
+                      <td className="text-center py-2 text-white">{formatCurrency(payerMonthlyTotals.totals.total)}</td>
+                    </tr>
+                    <tr className="text-white/50">
+                      <td className="py-1.5">ממוצע חודשי</td>
+                      <td className="text-center py-1.5">{formatCurrency(payerMonthlyTotals.totals.she / payerMonthlyTotals.activeMonths)}</td>
+                      <td className="text-center py-1.5">{formatCurrency(payerMonthlyTotals.totals.ortal / payerMonthlyTotals.activeMonths)}</td>
+                      <td className="text-center py-1.5">{formatCurrency(payerMonthlyTotals.totals.joint / payerMonthlyTotals.activeMonths)}</td>
+                      <td className="text-center py-1.5">{formatCurrency(payerMonthlyTotals.totals.total / payerMonthlyTotals.activeMonths)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
