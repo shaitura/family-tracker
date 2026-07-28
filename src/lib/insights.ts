@@ -305,7 +305,8 @@ export function seasonalHeadsUp(seasonal: SeasonalPeak[], allExpenses: Transacti
 }
 
 /** Same-calendar-month comparison: the most recently fully-elapsed month vs. the same month last year. */
-export function yoySameMonthInsight(yoy: YoyRow[], currentYear: number, now: Date = new Date()): AnalystInsight[] {
+/** Same-calendar-month comparison: the most recently fully-elapsed month vs. the same month last year. */
+export function yoySameMonthInsight(yoy: YoyRow[], allExpenses: Transaction[], currentYear: number, now: Date = new Date()): AnalystInsight[] {
   const lastCompleteMonthIdx = now.getMonth() - 1; // 0-based; -1 in January means no complete month yet this year
   if (lastCompleteMonthIdx < 0) return [];
   const label = SHORT_MONTHS[lastCompleteMonthIdx];
@@ -316,10 +317,13 @@ export function yoySameMonthInsight(yoy: YoyRow[], currentYear: number, now: Dat
   if (lastYear < 200) return [];
   const pct = Math.round(((thisYear - lastYear) / lastYear) * 100);
   if (Math.abs(pct) < 15) return [];
+  const monthNum = String(lastCompleteMonthIdx + 1).padStart(2, '0');
+  const matchingTx = allExpenses.filter((t) => t.date.startsWith(`${currentYear}-${monthNum}`));
   return [{
     icon: pct > 0 ? '🔺' : '🔻', level: pct > 25 ? 'bad' : pct > 0 ? 'warn' : 'ok',
     headline: `${label} השנה ${pct > 0 ? 'גבוה' : 'נמוך'} משמעותית מאשתקד`,
     detail: `${fmt(thisYear)} לעומת ${fmt(lastYear)} ב-${label} ${currentYear - 1} (${pct > 0 ? '+' : ''}${pct}%)`,
+    transactions: topTransactions(matchingTx),
   }];
 }
 
@@ -359,7 +363,7 @@ export function analystInsights(params: {
   const { allExpenses, seasonal, yoy, currentYear, now = new Date() } = params;
   return [
     ...seasonalHeadsUp(seasonal, allExpenses, now),
-    ...yoySameMonthInsight(yoy, currentYear, now),
+    ...yoySameMonthInsight(yoy, allExpenses, currentYear, now),
     ...categoryTrendInsights(allExpenses, now),
     ...categoryShareShift(allExpenses, now),
   ].slice(0, 6);

@@ -283,17 +283,28 @@ describe('seasonalHeadsUp', () => {
 describe('yoySameMonthInsight', () => {
   it('flags a significant rise vs. the same month last year', () => {
     const yoy = [{ month: 'יוני', 2025: 700, 2026: 1000 }];
-    const out = yoySameMonthInsight(yoy, 2026, NOW); // last complete month before July = June
+    const out = yoySameMonthInsight(yoy, [], 2026, NOW); // last complete month before July = June
     expect(out).toHaveLength(1);
     expect(out[0].level).toBe('bad'); // ~43% rise, >25%
   });
 
   it('stays silent in January (no complete month yet this year)', () => {
-    expect(yoySameMonthInsight([{ month: 'דצמ', 2025: 700, 2026: 1000 }], 2026, new Date(2026, 0, 10))).toEqual([]);
+    expect(yoySameMonthInsight([{ month: 'דצמ', 2025: 700, 2026: 1000 }], [], 2026, new Date(2026, 0, 10))).toEqual([]);
   });
 
   it('stays silent below the noise threshold', () => {
-    expect(yoySameMonthInsight([{ month: 'יוני', 2025: 700, 2026: 730 }], 2026, NOW)).toEqual([]);
+    expect(yoySameMonthInsight([{ month: 'יוני', 2025: 700, 2026: 730 }], [], 2026, NOW)).toEqual([]);
+  });
+
+  it('attaches only this-year transactions from the matched month', () => {
+    const yoy = [{ month: 'יוני', 2025: 700, 2026: 1000 }];
+    const all = [
+      tx({ date: '2026-06-05', amount: 600 }),
+      tx({ date: '2026-06-20', amount: 400 }),
+      tx({ date: '2025-06-05', amount: 700 }), // last year, must not appear
+    ];
+    const out = yoySameMonthInsight(yoy, all, 2026, NOW);
+    expect(out[0].transactions.map((t) => t.amount)).toEqual([600, 400]);
   });
 });
 
