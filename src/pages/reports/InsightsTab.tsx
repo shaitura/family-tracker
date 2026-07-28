@@ -30,6 +30,7 @@ const LEVEL_STYLE: Record<string, string> = {
 export function InsightsTab({ transactions, period, category }: { transactions: Transaction[]; period: ReportPeriod; category: string }) {
   const [subTab, setSubTab] = useState<SubTab>('trends');
   const [expandedExec, setExpandedExec] = useState<Set<number>>(new Set());
+  const [expandedAnalyst, setExpandedAnalyst] = useState<Set<number>>(new Set());
   const now = new Date();
   const currentYear = now.getFullYear();
 
@@ -147,15 +148,23 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
             </div>
             <p className="text-[11px] text-white/40 mb-3">📌 מבוסס על כל ההיסטוריה — לא מושפע מבורר התקופה למעלה</p>
             <div className="space-y-2">
-              {analystItems.map((item, i) => (
-                <div key={i} className={`p-3 rounded-xl border ${LEVEL_STYLE[item.level]}`}>
-                  <div className="flex gap-2.5 items-start text-sm font-medium leading-relaxed">
-                    <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
-                    <span className="flex-1">{item.headline}</span>
+              {analystItems.map((item, i) => {
+                const expandable = item.transactions.length > 0;
+                const open = expandedAnalyst.has(i);
+                return (
+                  <div key={i}
+                    className={`p-3 rounded-xl border ${LEVEL_STYLE[item.level]} ${expandable ? 'cursor-pointer' : ''}`}
+                    onClick={() => expandable && setExpandedAnalyst((s) => toggleIndex(s, i))}>
+                    <div className="flex gap-2.5 items-start text-sm font-medium leading-relaxed">
+                      <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
+                      <span className="flex-1">{item.headline}</span>
+                      {expandable && <ChevronDown className={`w-4 h-4 shrink-0 mt-0.5 transition-transform ${open ? 'rotate-180' : ''}`} />}
+                    </div>
+                    <p className="text-xs text-white/50 mt-1 mr-6">{item.detail}</p>
+                    {open && <InsightDrilldownList transactions={item.transactions} />}
                   </div>
-                  <p className="text-xs text-white/50 mt-1 mr-6">{item.detail}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
