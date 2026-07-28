@@ -78,14 +78,12 @@ export function findLeaks(allExpenses: Transaction[]): Leak[] {
 // ── Year-over-year & seasonal ─────────────────────────────────────────────────
 export type YoyRow = { month: string } & Record<number, number>;
 
-export function yearOverYear(allExpenses: Transaction[], currentYear: number): YoyRow[] {
+export function yearOverYear(allExpenses: Transaction[], years: number[]): YoyRow[] {
   return Array.from({ length: 12 }, (_, i) => {
     const m = String(i + 1).padStart(2, '0');
     const sum = (y: number) => allExpenses.filter((t) => t.date.startsWith(`${y}-${m}`)).reduce((s, t) => s + t.amount, 0);
     const row = { month: SHORT_MONTHS[i] } as YoyRow;
-    row[currentYear - 2] = Math.round(sum(currentYear - 2));
-    row[currentYear - 1] = Math.round(sum(currentYear - 1));
-    row[currentYear] = Math.round(sum(currentYear));
+    for (const y of years) row[y] = Math.round(sum(y));
     return row;
   }).reverse();
 }

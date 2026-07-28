@@ -79,13 +79,26 @@ describe('findLeaks', () => {
 });
 
 describe('yearOverYear', () => {
-  it('sums each calendar month across 3 years', () => {
+  it('sums each calendar month across the requested years', () => {
     const all = [tx({ date: '2024-07-01', amount: 100 }), tx({ date: '2025-07-01', amount: 200 }), tx({ date: '2026-07-01', amount: 300 })];
-    const out = yearOverYear(all, 2026);
+    const out = yearOverYear(all, [2024, 2025, 2026]);
     const julRow = out.find((r) => r.month === 'יול')!;
     expect(julRow[2024]).toBe(100);
     expect(julRow[2025]).toBe(200);
     expect(julRow[2026]).toBe(300);
+  });
+
+  it('supports an arbitrary, non-adjacent pair of years', () => {
+    const all = [
+      tx({ date: '2022-03-01', amount: 500 }),
+      tx({ date: '2024-03-01', amount: 999 }), // not requested, must not appear
+      tx({ date: '2026-03-01', amount: 700 }),
+    ];
+    const out = yearOverYear(all, [2022, 2026]);
+    const marRow = out.find((r) => r.month === 'מרץ')!;
+    expect(marRow[2022]).toBe(500);
+    expect(marRow[2026]).toBe(700);
+    expect(marRow[2024]).toBeUndefined();
   });
 });
 
