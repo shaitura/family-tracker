@@ -349,10 +349,12 @@ export function categoryShareShift(allExpenses: Transaction[], now: Date = new D
   if (!biggest || Math.abs(biggest.delta) < 0.04) return []; // <4 percentage-points shift = noise
   const fromPct = Math.round((olderShare[biggest.cat] || 0) * 100);
   const toPct = Math.round((recentShare[biggest.cat] || 0) * 100);
+  const recentCatTx = allExpenses.filter((t) => t.category === biggest!.cat && recent.includes(t.date.slice(0, 7)));
   return [{
     icon: '🧭', level: 'info',
     headline: `התקציב נוטה יותר ל${biggest.cat}`,
     detail: `${fromPct}% מסך ההוצאות לפני חצי שנה → ${toPct}% היום`,
+    transactions: topTransactions(recentCatTx),
   }];
 }
 

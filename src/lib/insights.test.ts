@@ -323,6 +323,16 @@ describe('categoryShareShift', () => {
     expect(['דיור', 'פנאי']).toContain(out[0].headline.replace('התקציב נוטה יותר ל', ''));
   });
 
+  it('attaches only the shifted category\'s transactions from the recent 6-month window', () => {
+    const all: Transaction[] = [];
+    for (const ym of OLDER_MONTHS) all.push(tx({ category: 'דיור', date: `${ym}-01`, amount: 900 }), tx({ category: 'פנאי', date: `${ym}-01`, amount: 100 }));
+    for (const ym of RECENT_MONTHS) all.push(tx({ category: 'דיור', date: `${ym}-01`, amount: 500 }), tx({ category: 'פנאי', date: `${ym}-01`, amount: 500 }));
+    const out = categoryShareShift(all, NOW);
+    const shiftedCat = out[0].headline.replace('התקציב נוטה יותר ל', '');
+    expect(out[0].transactions.every((t) => t.category === shiftedCat)).toBe(true);
+    expect(out[0].transactions.every((t) => RECENT_MONTHS.includes(t.date.slice(0, 7)))).toBe(true);
+  });
+
   it('stays silent with no older-window data to compare against', () => {
     expect(categoryShareShift([tx({ date: '2026-07-01' })], NOW)).toEqual([]);
   });
