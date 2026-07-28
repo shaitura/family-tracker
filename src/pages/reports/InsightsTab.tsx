@@ -31,6 +31,7 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
   const [subTab, setSubTab] = useState<SubTab>('trends');
   const [expandedExec, setExpandedExec] = useState<Set<number>>(new Set());
   const [expandedAnalyst, setExpandedAnalyst] = useState<Set<number>>(new Set());
+  const [expandedAnomaly, setExpandedAnomaly] = useState<Set<number>>(new Set());
   const now = new Date();
   const currentYear = now.getFullYear();
 
@@ -285,17 +286,29 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
         <div className="space-y-3">
           {anomalies.length === 0 ? (
             <Card className="bg-white/5 border-white/10"><CardContent className="py-8 text-center text-white/40">✅ לא נמצאו חריגות משמעותיות בתקופה זו</CardContent></Card>
-          ) : anomalies.map((a) => (
-            <Card key={a.category} className={`border ${a.level === 'bad' ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}>
-              <CardContent className="py-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-medium text-sm text-white">{a.category}</div>
-                  <div className="text-xs text-white/50 mt-0.5">התקופה: {formatCurrency(a.currentAmount)} | קודם: {formatCurrency(a.movingAvg)}</div>
-                </div>
-                <div className={`text-lg font-bold shrink-0 ${a.level === 'bad' ? 'text-red-400' : 'text-yellow-400'}`}>+{a.deviation}%</div>
-              </CardContent>
-            </Card>
-          ))}
+          ) : anomalies.map((a, i) => {
+            const expandable = a.transactions.length > 0;
+            const open = expandedAnomaly.has(i);
+            return (
+              <Card key={a.category}
+                className={`border ${expandable ? 'cursor-pointer' : ''} ${a.level === 'bad' ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`}
+                onClick={() => expandable && setExpandedAnomaly((s) => toggleIndex(s, i))}>
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-sm text-white">{a.category}</div>
+                      <div className="text-xs text-white/50 mt-0.5">התקופה: {formatCurrency(a.currentAmount)} | קודם: {formatCurrency(a.movingAvg)}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className={`text-lg font-bold ${a.level === 'bad' ? 'text-red-400' : 'text-yellow-400'}`}>+{a.deviation}%</div>
+                      {expandable && <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />}
+                    </div>
+                  </div>
+                  {open && <InsightDrilldownList transactions={a.transactions} />}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
