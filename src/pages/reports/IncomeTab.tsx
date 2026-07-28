@@ -6,6 +6,7 @@ import { Transaction } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
 import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
 import { byCategory, byMonth, categoryMonthMatrix } from '@/lib/reportAggregates';
+import { ChartTooltip } from './ChartTooltip';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
 const PAYER_HE: Record<string, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
@@ -87,7 +88,7 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
                   <Pie data={catData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" nameKey="name" paddingAngle={2}>
                     {catData.map((entry) => <Cell key={entry.name} fill={categoryColor(entry.name)} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>
@@ -129,7 +130,7 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
               <BarChart data={[...monthData].reverse()} barSize={24}>
                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                 <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                   {monthData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>
@@ -148,7 +149,7 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
                   <BarChart data={payerByMonth} barSize={20}>
                     <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis hide />
-                    <Tooltip formatter={(v: number) => formatCurrency(v as number)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                     <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
                     <Bar dataKey={PAYER_HE.Shi} stackId="a" fill="#22d3ee" />
                     <Bar dataKey={PAYER_HE.Ortal} stackId="a" fill="#ec4899" />
