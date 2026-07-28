@@ -45,18 +45,19 @@ export function findAnomalies(allExpenses: Transaction[], months: string[], prio
 // ── Leaks ────────────────────────────────────────────────────────────────────
 export interface Leak {
   name: string; category: string; monthlyAvg: number; yearlyEstimate: number;
-  months: number; occurrences: number; isSubscription: boolean;
+  months: number; occurrences: number; isSubscription: boolean; transactions: Transaction[];
 }
 
 /** Recurring-looking "משתנה" expenses (same description in >=3 distinct months) — period-independent by design. */
 export function findLeaks(allExpenses: Transaction[]): Leak[] {
-  const groups: Record<string, { amounts: number[]; months: Set<string>; category: string }> = {};
+  const groups: Record<string, { amounts: number[]; months: Set<string>; category: string; transactions: Transaction[] }> = {};
   for (const t of allExpenses.filter((t) => t.expense_class === 'משתנה')) {
     const key = (t.sub_category || t.notes || '').trim().toLowerCase();
     if (!key || key.length < 3) continue;
-    if (!groups[key]) groups[key] = { amounts: [], months: new Set(), category: t.category };
+    if (!groups[key]) groups[key] = { amounts: [], months: new Set(), category: t.category, transactions: [] };
     groups[key].amounts.push(t.amount);
     groups[key].months.add(t.date.slice(0, 7));
+    groups[key].transactions.push(t);
   }
   return Object.entries(groups)
     .filter(([, g]) => g.months.size >= 3)
@@ -67,6 +68,7 @@ export function findLeaks(allExpenses: Transaction[]): Leak[] {
         name, category: g.category, monthlyAvg, yearlyEstimate: monthlyAvg * 12,
         months: g.months.size, occurrences: g.amounts.length,
         isSubscription: g.amounts.length >= 3 && g.amounts.every((a) => Math.abs(a - g.amounts[0]) < 5),
+        transactions: topTransactions(g.transactions),
       };
     })
     .sort((a, b) => b.yearlyEstimate - a.yearlyEstimate)

@@ -62,6 +62,16 @@ describe('findLeaks', () => {
     expect(out[0].isSubscription).toBe(true);
   });
 
+  it('attaches the underlying transactions for the group, sorted by amount desc', () => {
+    const all = [
+      tx({ expense_class: 'משתנה', notes: 'נטפליקס', date: '2026-05-01', amount: 40 }),
+      tx({ expense_class: 'משתנה', notes: 'נטפליקס', date: '2026-06-01', amount: 60 }),
+      tx({ expense_class: 'משתנה', notes: 'נטפליקס', date: '2026-07-01', amount: 50 }),
+    ];
+    const out = findLeaks(all);
+    expect(out[0].transactions.map((t) => t.amount)).toEqual([60, 50, 40]);
+  });
+
   it('ignores fixed-class expenses (they are already declared, not "leaks")', () => {
     const all = Array.from({ length: 4 }, (_, i) => tx({ expense_class: 'קבועה', notes: 'שכירות', date: `2026-0${i + 4}-01`, amount: 3000 }));
     expect(findLeaks(all)).toEqual([]);
