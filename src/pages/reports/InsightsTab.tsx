@@ -1,7 +1,7 @@
 // src/pages/reports/InsightsTab.tsx
 import { useState, useMemo } from 'react';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
-import { Sparkles, Brain } from 'lucide-react';
+import { Sparkles, Brain, ChevronDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency } from '@/utils';
@@ -10,6 +10,7 @@ import {
   findAnomalies, findLeaks, yearOverYear, seasonalPeaks, paymentMethodByMonth, PAYMENT_METHODS_LIST,
   payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift, analystInsights,
 } from '@/lib/insights';
+import { InsightDrilldownList, toggleIndex } from './InsightDrilldownList';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#10b981'];
 const PAYER_COLORS = ['#22d3ee', '#ec4899', '#a855f7'];
@@ -28,6 +29,7 @@ const LEVEL_STYLE: Record<string, string> = {
 
 export function InsightsTab({ transactions, period, category }: { transactions: Transaction[]; period: ReportPeriod; category: string }) {
   const [subTab, setSubTab] = useState<SubTab>('trends');
+  const [expandedExec, setExpandedExec] = useState<Set<number>>(new Set());
   const now = new Date();
   const currentYear = now.getFullYear();
 
@@ -115,12 +117,22 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
             <p className="text-sm text-white/40 text-center py-3">אין מספיק נתונים</p>
           ) : (
             <div className="space-y-2">
-              {execItems.map((item, i) => (
-                <div key={i} className={`flex gap-2.5 items-start text-sm leading-relaxed p-3 rounded-xl border ${LEVEL_STYLE[item.level]}`}>
-                  <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
-                  <span className="flex-1">{item.text}</span>
-                </div>
-              ))}
+              {execItems.map((item, i) => {
+                const expandable = item.transactions.length > 0;
+                const open = expandedExec.has(i);
+                return (
+                  <div key={i}
+                    className={`flex flex-col gap-2 p-3 rounded-xl border ${LEVEL_STYLE[item.level]} ${expandable ? 'cursor-pointer' : ''}`}
+                    onClick={() => expandable && setExpandedExec((s) => toggleIndex(s, i))}>
+                    <div className="flex gap-2.5 items-start text-sm leading-relaxed">
+                      <span className="text-base leading-none mt-0.5 shrink-0">{item.icon}</span>
+                      <span className="flex-1">{item.text}</span>
+                      {expandable && <ChevronDown className={`w-4 h-4 shrink-0 mt-0.5 transition-transform ${open ? 'rotate-180' : ''}`} />}
+                    </div>
+                    {open && <InsightDrilldownList transactions={item.transactions} />}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
