@@ -6,8 +6,13 @@ const SHORT_MONTHS = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ�
 function fmt(n: number): string { return `₪${Math.round(n).toLocaleString('he')}`; }
 function fmtK(n: number): string { return `₪${Math.round(n).toLocaleString('en-US')}`; }
 
+/** Top-10 by amount desc — the standard "supporting evidence" slice attached to every insight. */
+function topTransactions(txs: Transaction[]): Transaction[] {
+  return [...txs].sort((a, b) => b.amount - a.amount).slice(0, 10);
+}
+
 // ── Anomalies ────────────────────────────────────────────────────────────────
-export interface Anomaly { category: string; currentAmount: number; movingAvg: number; deviation: number; level: 'warn' | 'bad' }
+export interface Anomaly { category: string; currentAmount: number; movingAvg: number; deviation: number; level: 'warn' | 'bad'; transactions: Transaction[] }
 
 /** Categories whose average-per-month over `months` deviates >=30% from the equal-length `priorMonths` window. */
 export function findAnomalies(allExpenses: Transaction[], months: string[], priorMonths: string[]): Anomaly[] {
@@ -16,7 +21,8 @@ export function findAnomalies(allExpenses: Transaction[], months: string[], prio
   const results: Anomaly[] = [];
   const categories = new Set(allExpenses.map((t) => t.category));
   for (const cat of categories) {
-    const curMonthly = inMonths.filter((t) => t.category === cat).reduce((s, t) => s + t.amount, 0) / months.length;
+    const catTx = inMonths.filter((t) => t.category === cat);
+    const curMonthly = catTx.reduce((s, t) => s + t.amount, 0) / months.length;
     const priorMonthly = priorMonths.length > 0
       ? allExpenses.filter((t) => priorMonths.includes(t.date.slice(0, 7)) && t.category === cat).reduce((s, t) => s + t.amount, 0) / priorMonths.length
       : 0;
@@ -29,6 +35,7 @@ export function findAnomalies(allExpenses: Transaction[], months: string[], prio
         movingAvg: Math.round(priorMonthly * months.length),
         deviation: dev,
         level: dev >= 60 ? 'bad' : 'warn',
+        transactions: topTransactions(catTx),
       });
     }
   }

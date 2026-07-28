@@ -26,6 +26,16 @@ describe('findAnomalies', () => {
     expect(out[0].level).toBe('bad'); // >=60%
   });
 
+  it('attaches the top-10 contributing transactions, sorted by amount desc', () => {
+    const all = [
+      tx({ category: 'רכב', date: '2026-06-01', amount: 500 }),
+      tx({ category: 'רכב', date: '2026-07-01', amount: 300 }),
+      tx({ category: 'רכב', date: '2026-07-05', amount: 700 }),
+    ];
+    const out = findAnomalies(all, ['2026-07'], ['2026-06']);
+    expect(out[0].transactions.map((t) => t.amount)).toEqual([700, 300]);
+  });
+
   it('ignores categories below the minimum-amount noise floor', () => {
     const all = [tx({ category: 'דלק', date: '2026-06-01', amount: 50 }), tx({ category: 'דלק', date: '2026-07-01', amount: 90 })];
     expect(findAnomalies(all, ['2026-07'], ['2026-06'])).toEqual([]);
