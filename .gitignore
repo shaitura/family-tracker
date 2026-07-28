@@ -13,3 +13,6 @@ index.html
 
 # Brainstorming visual-companion session files (local, ephemeral)
 .superpowers/
+
+# Isolated worktrees for subagent-driven development
+.worktrees/
