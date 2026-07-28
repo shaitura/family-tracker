@@ -187,10 +187,9 @@ export function executiveSummary(params: {
     const top = anomalies[0];
     items.push({ icon: '⚠️', level: top.level, text: `חריגה בקטגוריית ${top.category}: ${fmt(top.currentAmount)} לעומת ${fmt(top.movingAvg)} בתקופה הקודמת (+${top.deviation}%)`, transactions: top.transactions });
   }
-  const topCatEntries = Object.entries(
+  const topCat = Object.entries(
     expenses.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string, number>),
-  ).sort((a, b) => b[1] - a[1]);
-  const topCat = topCatEntries[0];
+  ).sort((a, b) => b[1] - a[1])[0];
   if (topCat) items.push({ icon: '🎯', level: 'info', text: `קטגוריה מובילת: ${topCat[0]} — ${fmt(topCat[1])}`, transactions: topTransactions(expenses.filter((t) => t.category === topCat[0])) });
   if (leaks.length > 0) {
     const totalLeak = leaks.reduce((s, l) => s + l.yearlyEstimate, 0);
@@ -305,7 +304,6 @@ export function seasonalHeadsUp(seasonal: SeasonalPeak[], allExpenses: Transacti
 }
 
 /** Same-calendar-month comparison: the most recently fully-elapsed month vs. the same month last year. */
-/** Same-calendar-month comparison: the most recently fully-elapsed month vs. the same month last year. */
 export function yoySameMonthInsight(yoy: YoyRow[], allExpenses: Transaction[], currentYear: number, now: Date = new Date()): AnalystInsight[] {
   const lastCompleteMonthIdx = now.getMonth() - 1; // 0-based; -1 in January means no complete month yet this year
   if (lastCompleteMonthIdx < 0) return [];
@@ -347,12 +345,13 @@ export function categoryShareShift(allExpenses: Transaction[], now: Date = new D
     if (!biggest || Math.abs(delta) > Math.abs(biggest.delta)) biggest = { cat, delta };
   }
   if (!biggest || Math.abs(biggest.delta) < 0.04) return []; // <4 percentage-points shift = noise
-  const fromPct = Math.round((olderShare[biggest.cat] || 0) * 100);
-  const toPct = Math.round((recentShare[biggest.cat] || 0) * 100);
-  const recentCatTx = allExpenses.filter((t) => t.category === biggest!.cat && recent.includes(t.date.slice(0, 7)));
+  const chosen = biggest;
+  const fromPct = Math.round((olderShare[chosen.cat] || 0) * 100);
+  const toPct = Math.round((recentShare[chosen.cat] || 0) * 100);
+  const recentCatTx = allExpenses.filter((t) => t.category === chosen.cat && recent.includes(t.date.slice(0, 7)));
   return [{
     icon: '🧭', level: 'info',
-    headline: `התקציב נוטה יותר ל${biggest.cat}`,
+    headline: `התקציב נוטה יותר ל${chosen.cat}`,
     detail: `${fromPct}% מסך ההוצאות לפני חצי שנה → ${toPct}% היום`,
     transactions: topTransactions(recentCatTx),
   }];

@@ -149,12 +149,19 @@ describe('executiveSummary', () => {
   });
 
   it('every returned item carries its own supporting transactions', () => {
-    const expenses = [tx({ category: 'דיור', amount: 1000 }), tx({ category: 'רכב', amount: 200 })];
-    const items = executiveSummary({ expenses, priorExpenses: [], income: 0, anomalies: [], leaks: [] });
+    const expenses = [
+      tx({ category: 'דיור', amount: 1000 }),
+      tx({ category: 'רכב', amount: 200 }),
+      tx({ category: 'דיור', amount: 500, expense_class: 'קבועה' }),
+    ];
+    const priorExpenses = [tx({ category: 'דיור', amount: 800 })];
+    const items = executiveSummary({ expenses, priorExpenses, income: 3000, anomalies: [], leaks: [] });
     expect(items.length).toBeGreaterThan(0);
     for (const item of items) expect(Array.isArray(item.transactions)).toBe(true);
     const topCatItem = items.find((i) => i.text.startsWith('קטגוריה מובילת'))!;
     expect(topCatItem.transactions.every((t) => t.category === 'דיור')).toBe(true);
+    const fixedItem = items.find((i) => i.text.includes('קבועות'));
+    expect(fixedItem?.transactions.every((t) => t.expense_class === 'קבועה')).toBe(true);
   });
 
   it('the leaks-summary item aggregates transactions across all leak groups', () => {

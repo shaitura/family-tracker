@@ -1,5 +1,5 @@
 // src/pages/reports/InsightsTab.tsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Sparkles, Brain, ChevronDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,6 +33,12 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
   const [expandedAnalyst, setExpandedAnalyst] = useState<Set<number>>(new Set());
   const [expandedAnomaly, setExpandedAnomaly] = useState<Set<number>>(new Set());
   const [expandedLeak, setExpandedLeak] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    setExpandedExec(new Set());
+    setExpandedAnomaly(new Set());
+  }, [period]);
+
   const now = new Date();
   const currentYear = now.getFullYear();
 

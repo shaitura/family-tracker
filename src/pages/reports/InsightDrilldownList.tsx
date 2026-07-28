@@ -17,7 +17,7 @@ export function InsightDrilldownList({ transactions }: { transactions: Transacti
       {transactions.map((t) => (
         <div key={t.id} className="flex items-center justify-between gap-2 text-xs text-white/60">
           <span className="shrink-0 text-white/40">{formatDate(t.date)}</span>
-          <span className="flex-1 truncate">{t.sub_category || t.notes || t.category}</span>
+          <span className="flex-1 min-w-0 truncate">{t.sub_category || t.notes || t.category}</span>
           <span className="shrink-0 text-white/40">{PAYER_LABELS[t.payer] ?? t.payer}</span>
           <span className="shrink-0 font-medium text-white/80">{formatCurrency(t.amount)}</span>
         </div>
