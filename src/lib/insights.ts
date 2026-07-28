@@ -162,7 +162,7 @@ export function payerCategoryBreakdown(expensesInWindow: Transaction[]): PayerBr
 }
 
 // ── Executive summary ───────────────────────────────────────────────────────────
-export interface ExecItem { icon: string; text: string; level: 'ok' | 'warn' | 'bad' | 'info'; saving?: number }
+export interface ExecItem { icon: string; text: string; level: 'ok' | 'warn' | 'bad' | 'info'; saving?: number; transactions: Transaction[] }
 
 /** Ordered rule-based sentences — NOT an LLM call (see design spec §7: all client-side heuristics). */
 export function executiveSummary(params: {
@@ -174,42 +174,45 @@ export function executiveSummary(params: {
   if (!expenses.length) return items;
   const curTotal = expenses.reduce((s, t) => s + t.amount, 0);
   const priorTotal = priorExpenses.reduce((s, t) => s + t.amount, 0);
+  const periodTx = topTransactions(expenses);
   if (priorTotal > 0) {
     const pct = Math.round(((curTotal - priorTotal) / priorTotal) * 100);
     items.push(pct > 10
-      ? { icon: '📈', level: 'bad', text: `הוצאות בתקופה גבוהות ב-${pct}% לעומת התקופה הקודמת (${fmt(curTotal)} לעומת ${fmt(priorTotal)})` }
+      ? { icon: '📈', level: 'bad', text: `הוצאות בתקופה גבוהות ב-${pct}% לעומת התקופה הקודמת (${fmt(curTotal)} לעומת ${fmt(priorTotal)})`, transactions: periodTx }
       : pct < -10
-      ? { icon: '📉', level: 'ok', text: `הוצאות בתקופה נמוכות ב-${Math.abs(pct)}% לעומת התקופה הקודמת (${fmt(curTotal)})` }
-      : { icon: '⚖️', level: 'info', text: `הוצאות יציבות: ${fmt(curTotal)} (שינוי של ${pct > 0 ? '+' : ''}${pct}%)` });
+      ? { icon: '📉', level: 'ok', text: `הוצאות בתקופה נמוכות ב-${Math.abs(pct)}% לעומת התקופה הקודמת (${fmt(curTotal)})`, transactions: periodTx }
+      : { icon: '⚖️', level: 'info', text: `הוצאות יציבות: ${fmt(curTotal)} (שינוי של ${pct > 0 ? '+' : ''}${pct}%)`, transactions: periodTx });
   }
   if (anomalies.length > 0) {
     const top = anomalies[0];
-    items.push({ icon: '⚠️', level: top.level, text: `חריגה בקטגוריית ${top.category}: ${fmt(top.currentAmount)} לעומת ${fmt(top.movingAvg)} בתקופה הקודמת (+${top.deviation}%)` });
+    items.push({ icon: '⚠️', level: top.level, text: `חריגה בקטגוריית ${top.category}: ${fmt(top.currentAmount)} לעומת ${fmt(top.movingAvg)} בתקופה הקודמת (+${top.deviation}%)`, transactions: top.transactions });
   }
-  const topCat = Object.entries(
+  const topCatEntries = Object.entries(
     expenses.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string, number>),
-  ).sort((a, b) => b[1] - a[1])[0];
-  if (topCat) items.push({ icon: '🎯', level: 'info', text: `קטגוריה מובילת: ${topCat[0]} — ${fmt(topCat[1])}` });
+  ).sort((a, b) => b[1] - a[1]);
+  const topCat = topCatEntries[0];
+  if (topCat) items.push({ icon: '🎯', level: 'info', text: `קטגוריה מובילת: ${topCat[0]} — ${fmt(topCat[1])}`, transactions: topTransactions(expenses.filter((t) => t.category === topCat[0])) });
   if (leaks.length > 0) {
     const totalLeak = leaks.reduce((s, l) => s + l.yearlyEstimate, 0);
-    items.push({ icon: '💸', level: 'warn', text: `זוהו ${leaks.length} הוצאות קבועות בסך ${fmtK(totalLeak)} ש"ח/שנה` });
+    items.push({ icon: '💸', level: 'warn', text: `זוהו ${leaks.length} הוצאות קבועות בסך ${fmtK(totalLeak)} ש"ח/שנה`, transactions: topTransactions(leaks.flatMap((l) => l.transactions)) });
   }
   if (income > 0 && curTotal > 0) {
     const ratio = Math.round((curTotal / income) * 100);
     items.push(ratio > 90
-      ? { icon: '🚨', level: 'bad', text: `הוצאות מהוות ${ratio}% מההכנסה — סכנת גירעון!` }
+      ? { icon: '🚨', level: 'bad', text: `הוצאות מהוות ${ratio}% מההכנסה — סכנת גירעון!`, transactions: periodTx }
       : ratio > 70
-      ? { icon: '⚠️', level: 'warn', text: `הוצאות מהוות ${ratio}% מההכנסה` }
-      : { icon: '✅', level: 'ok', text: `יחס הוצאות/הכנסה תקין: ${ratio}%` });
+      ? { icon: '⚠️', level: 'warn', text: `הוצאות מהוות ${ratio}% מההכנסה`, transactions: periodTx }
+      : { icon: '✅', level: 'ok', text: `יחס הוצאות/הכנסה תקין: ${ratio}%`, transactions: periodTx });
     const saved = income - curTotal;
     const savePct = Math.round((saved / income) * 100);
-    if (savePct > 20) items.push({ icon: '🏦', level: 'ok', text: `חיסכון בתקופה: ${fmt(saved)} (${savePct}% מההכנסה)` });
-    else if (savePct < 0) items.push({ icon: '🔴', level: 'bad', text: `גירעון בתקופה: ${fmt(Math.abs(saved))} — ההוצאות עולות על ההכנסה` });
+    if (savePct > 20) items.push({ icon: '🏦', level: 'ok', text: `חיסכון בתקופה: ${fmt(saved)} (${savePct}% מההכנסה)`, transactions: periodTx });
+    else if (savePct < 0) items.push({ icon: '🔴', level: 'bad', text: `גירעון בתקופה: ${fmt(Math.abs(saved))} — ההוצאות עולות על ההכנסה`, transactions: periodTx });
   }
-  const fixedAmt = expenses.filter((t) => t.expense_class === 'קבועה').reduce((s, t) => s + t.amount, 0);
+  const fixedExpenses = expenses.filter((t) => t.expense_class === 'קבועה');
+  const fixedAmt = fixedExpenses.reduce((s, t) => s + t.amount, 0);
   if (curTotal > 0 && fixedAmt > 0) {
     const fixedPct = Math.round((fixedAmt / curTotal) * 100);
-    items.push({ icon: '📋', level: 'info', text: `${fixedPct}% מהוצאות הן קבועות (${fmt(fixedAmt)})` });
+    items.push({ icon: '📋', level: 'info', text: `${fixedPct}% מהוצאות הן קבועות (${fmt(fixedAmt)})`, transactions: topTransactions(fixedExpenses) });
   }
   return items.slice(0, 5);
 }

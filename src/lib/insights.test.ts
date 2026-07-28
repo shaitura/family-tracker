@@ -134,9 +134,10 @@ describe('payerCategoryBreakdown', () => {
 describe('executiveSummary', () => {
   it('returns at most 5 items and includes an anomaly line when one exists', () => {
     const expenses = [tx({ amount: 1000 })];
+    const anomalyTx = [tx({ category: 'רכב', amount: 900 })];
     const items = executiveSummary({
       expenses, priorExpenses: [tx({ amount: 500 })], income: 5000,
-      anomalies: [{ category: 'רכב', currentAmount: 900, movingAvg: 400, deviation: 125, level: 'bad' }],
+      anomalies: [{ category: 'רכב', currentAmount: 900, movingAvg: 400, deviation: 125, level: 'bad', transactions: anomalyTx }],
       leaks: [],
     });
     expect(items.length).toBeLessThanOrEqual(5);
@@ -145,6 +146,23 @@ describe('executiveSummary', () => {
 
   it('empty expenses returns no items', () => {
     expect(executiveSummary({ expenses: [], priorExpenses: [], income: 0, anomalies: [], leaks: [] })).toEqual([]);
+  });
+
+  it('every returned item carries its own supporting transactions', () => {
+    const expenses = [tx({ category: 'דיור', amount: 1000 }), tx({ category: 'רכב', amount: 200 })];
+    const items = executiveSummary({ expenses, priorExpenses: [], income: 0, anomalies: [], leaks: [] });
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) expect(Array.isArray(item.transactions)).toBe(true);
+    const topCatItem = items.find((i) => i.text.startsWith('קטגוריה מובילת'))!;
+    expect(topCatItem.transactions.every((t) => t.category === 'דיור')).toBe(true);
+  });
+
+  it('the leaks-summary item aggregates transactions across all leak groups', () => {
+    const leakA = { name: 'נטפליקס', category: 'פנאי', monthlyAvg: 50, yearlyEstimate: 600, months: 3, occurrences: 3, isSubscription: true, transactions: [tx({ amount: 50 })] };
+    const leakB = { name: 'ספוטיפיי', category: 'פנאי', monthlyAvg: 20, yearlyEstimate: 240, months: 3, occurrences: 3, isSubscription: true, transactions: [tx({ amount: 20 })] };
+    const items = executiveSummary({ expenses: [tx({ amount: 1000 })], priorExpenses: [], income: 0, anomalies: [], leaks: [leakA, leakB] });
+    const leakItem = items.find((i) => i.text.includes('הוצאות קבועות'))!;
+    expect(leakItem.transactions.map((t) => t.amount).sort((a, b) => b - a)).toEqual([50, 20]);
   });
 });
 
