@@ -12,7 +12,7 @@ const QUICK_PICKS: { key: PeriodQuickPick; label: string }[] = [
 
 const currentYear = new Date().getFullYear();
 const EARLIEST_YEAR = Number(EARLIEST_DATA_MONTH.slice(0, 4));
-const YEAR_OPTIONS = Array.from({ length: currentYear - EARLIEST_YEAR + 1 }, (_, i) => String(EARLIEST_YEAR + i)).reverse();
+export const YEAR_OPTIONS = Array.from({ length: currentYear - EARLIEST_YEAR + 1 }, (_, i) => String(EARLIEST_YEAR + i)).reverse();
 
 export function PeriodSelector({ period, onChange }: { period: ReportPeriod; onChange: (p: ReportPeriod) => void }) {
   const pick = (key: PeriodQuickPick) => onChange(buildPeriod(key, { year: period.year, customStart: period.startMonth, customEnd: period.endMonth }));

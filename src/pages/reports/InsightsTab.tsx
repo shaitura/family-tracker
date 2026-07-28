@@ -12,6 +12,7 @@ import {
 } from '@/lib/insights';
 import { InsightDrilldownList, toggleIndex } from './InsightDrilldownList';
 import { ChartTooltip } from './ChartTooltip';
+import { YEAR_OPTIONS } from './PeriodSelector';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#10b981'];
 const PAYER_COLORS = ['#22d3ee', '#ec4899', '#a855f7'];
@@ -27,7 +28,12 @@ const LEVEL_STYLE: Record<string, string> = {
   info: 'border-white/10 bg-white/5 text-white/70',
 };
 
-export function InsightsTab({ transactions, period, category }: { transactions: Transaction[]; period: ReportPeriod; category: string }) {
+export function InsightsTab({
+  transactions, period, category, yoyFromYear, yoyToYear, setYoyFromYear, setYoyToYear,
+}: {
+  transactions: Transaction[]; period: ReportPeriod; category: string;
+  yoyFromYear: number; yoyToYear: number; setYoyFromYear: (y: number) => void; setYoyToYear: (y: number) => void;
+}) {
   const [subTab, setSubTab] = useState<SubTab>('trends');
   const [expandedExec, setExpandedExec] = useState<Set<number>>(new Set());
   const [expandedAnalyst, setExpandedAnalyst] = useState<Set<number>>(new Set());
@@ -66,14 +72,16 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
     [expensesInWindow, priorExpenses, incomeInWindow, anomalies, leaks],
   );
 
-  const yoy = useMemo(() => yearOverYear(allExpenses, currentYear), [allExpenses, currentYear]);
+  const yoyForAnalyst = useMemo(() => yearOverYear(allExpenses, [currentYear - 1, currentYear]), [allExpenses, currentYear]);
+  const yoyYears = useMemo(() => Array.from(new Set([yoyFromYear, yoyToYear])), [yoyFromYear, yoyToYear]);
+  const yoyChart = useMemo(() => yearOverYear(allExpenses, yoyYears), [allExpenses, yoyYears]);
   const seasonal = useMemo(() => seasonalPeaks(allExpenses, currentYear), [allExpenses, currentYear]);
   const paymentMethods = useMemo(() => paymentMethodByMonth(expensesInWindow, months), [expensesInWindow, months]);
 
   // "🧠 ניתוח אנליסט" — whole-history cross-cutting read, independent of the selected period (unlike execItems above).
   const analystItems = useMemo(
-    () => analystInsights({ allExpenses, seasonal, yoy, currentYear }),
-    [allExpenses, seasonal, yoy, currentYear],
+    () => analystInsights({ allExpenses, seasonal, yoy: yoyForAnalyst, currentYear }),
+    [allExpenses, seasonal, yoyForAnalyst, currentYear],
   );
 
   const payer = useMemo(() => payerCategoryBreakdown(expensesInWindow), [expensesInWindow]);
@@ -239,17 +247,29 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
           <p className="text-xs text-white/40 -mb-1">📌 השוואה זו מבוססת על כל ההיסטוריה הזמינה (שנים קלנדריות מלאות) — אינה מושפעת מבורר התקופה למעלה</p>
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-4">
-              <div className="text-sm text-white/60 mb-3">השוואה שנה-על-שנה</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-white/60">השוואה שנה-על-שנה</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/40">מ</span>
+                  <select value={yoyFromYear} onChange={(e) => setYoyFromYear(Number(e.target.value))}
+                    className="h-8 rounded-lg border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none">
+                    {YEAR_OPTIONS.map((y) => <option key={y} value={y} className="bg-slate-800">{y}</option>)}
+                  </select>
+                  <span className="text-xs text-white/40">עד</span>
+                  <select value={yoyToYear} onChange={(e) => setYoyToYear(Number(e.target.value))}
+                    className="h-8 rounded-lg border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none">
+                    {YEAR_OPTIONS.map((y) => <option key={y} value={y} className="bg-slate-800">{y}</option>)}
+                  </select>
+                </div>
+              </div>
               <div dir="ltr"><ResponsiveContainer width="100%" height={260}>
-                <BarChart data={yoy} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                <BarChart data={yoyChart} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                  <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Legend wrapperStyle={{ fontSize: 11, color: '#ffffff80' }} />
-                  <Bar dataKey={currentYear - 2} fill="#6366f1" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey={currentYear - 1} fill="#22d3ee" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey={currentYear} fill="#10b981" radius={[2, 2, 0, 0]} />
+                  {yoyYears.map((y, i) => <Bar key={y} dataKey={y} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} />)}
                 </BarChart>
               </ResponsiveContainer></div>
             </CardContent>
