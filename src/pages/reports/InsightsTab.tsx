@@ -13,6 +13,7 @@ import {
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#10b981'];
 const PAYER_COLORS = ['#22d3ee', '#ec4899', '#a855f7'];
+const PAYER_HE_KEYS = ['שי', 'אורטל', 'משותף']; // order matches PAYER_COLORS and insights.ts's payerCategoryBreakdown()
 const METHOD_COLORS = ['#22d3ee', '#f97316', '#a855f7', '#10b981', '#eab308', '#94a3b8'];
 const TT = { background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11, color: '#fff' };
 
@@ -78,6 +79,20 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
 
   const misc = useMemo(() => miscDrift(expensesInWindow, months), [expensesInWindow, months]);
 
+  // Top-6 category breakdown over time — restores the stacked-area chart the original Trends.tsx "מגמות" tab had.
+  const topCategories = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const t of expensesInWindow) totals[t.category] = (totals[t.category] || 0) + t.amount;
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([c]) => c);
+  }, [expensesInWindow]);
+  const categoryTrendData = useMemo(() => months.map((m) => {
+    const row: Record<string, number | string> = { month: m };
+    for (const cat of topCategories) {
+      row[cat] = expensesInWindow.filter((t) => t.date.startsWith(m) && t.category === cat).reduce((s, t) => s + t.amount, 0);
+    }
+    return row;
+  }), [months, expensesInWindow, topCategories]);
+
   const TABS: [SubTab, string][] = [
     ['trends', 'מגמות'], ['compare', 'השוואה'], ['anomalies', 'חריגות'], ['payers', 'משלמים'], ['leaks', 'דליפות'], ['forecast', 'תזרים חזוי'], ['misc', 'שונות'],
   ];
@@ -116,20 +131,49 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
       </div>
 
       {subTab === 'trends' && (
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="pt-4">
-            <div className="text-sm text-white/60 mb-3">סה"כ הוצאות חודשי</div>
-            <div dir="ltr"><ResponsiveContainer width="100%" height={220}>
-              <BarChart data={months.map((m) => ({ month: m, total: expensesInWindow.filter((t) => t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0) }))} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
-                <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
-                <Bar dataKey="total" fill="#06b6d4" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer></div>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {topCategories.length > 0 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardContent className="pt-4">
+                <div className="text-sm text-white/60 mb-3">הוצאות לפי קטגוריה לאורך זמן</div>
+                <div dir="ltr"><ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={categoryTrendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                    <defs>
+                      {topCategories.map((cat, i) => (
+                        <linearGradient key={cat} id={`insCatG${i}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0} />
+                        </linearGradient>
+                      ))}
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
+                    <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
+                    <Legend wrapperStyle={{ fontSize: 10, color: '#ffffff80' }} />
+                    {topCategories.map((cat, i) => (
+                      <Area key={cat} type="monotone" dataKey={cat} stackId="1" stroke={COLORS[i % COLORS.length]} fill={`url(#insCatG${i})`} strokeWidth={1.5} />
+                    ))}
+                  </AreaChart>
+                </ResponsiveContainer></div>
+              </CardContent>
+            </Card>
+          )}
+          <Card className="bg-white/5 border-white/10">
+            <CardContent className="pt-4">
+              <div className="text-sm text-white/60 mb-3">סה"כ הוצאות חודשי</div>
+              <div dir="ltr"><ResponsiveContainer width="100%" height={220}>
+                <BarChart data={months.map((m) => ({ month: m, total: expensesInWindow.filter((t) => t.date.startsWith(m)).reduce((s, t) => s + t.amount, 0) }))} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#ffffff50' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#ffffff50' }} />
+                  <Tooltip contentStyle={TT} formatter={(v: number) => formatCurrency(v)} />
+                  <Bar dataKey="total" fill="#06b6d4" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer></div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {subTab === 'compare' && (
@@ -228,6 +272,29 @@ export function InsightsTab({ transactions, period, category }: { transactions: 
               </ResponsiveContainer>
             </CardContent>
           </Card>
+          {payer.byCat.length > 0 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardContent className="pt-4">
+                <div className="text-sm text-white/60 mb-2">פירוט לפי קטגוריה</div>
+                <div className="flex gap-4 mb-3">
+                  {PAYER_HE_KEYS.map((he, i) => (
+                    <div key={he} className="flex items-center gap-1.5 text-xs text-white/60">
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PAYER_COLORS[i] }} />{he}
+                    </div>
+                  ))}
+                </div>
+                <div dir="ltr"><ResponsiveContainer width="100%" height={Math.max(200, payer.byCat.length * 28)}>
+                  <BarChart data={payer.byCat} layout="vertical" margin={{ top: 4, right: 75, bottom: 0, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
+                    <XAxis type="number" reversed tick={{ fontSize: 9, fill: '#ffffff50' }} />
+                    <YAxis type="category" dataKey="category" orientation="right" tick={{ fontSize: 10, fill: '#ffffff70' }} width={70} />
+                    <Tooltip contentStyle={TT} formatter={(v: number, name: string): [string, string] => [formatCurrency(v as number), String(name)]} />
+                    {PAYER_HE_KEYS.map((he, i) => <Bar key={he} dataKey={he} stackId="a" fill={PAYER_COLORS[i]} />)}
+                  </BarChart>
+                </ResponsiveContainer></div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
