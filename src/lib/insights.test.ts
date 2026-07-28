@@ -256,17 +256,27 @@ describe('categoryTrendInsights', () => {
 
 describe('seasonalHeadsUp', () => {
   it('warns when the current real-world month is a known seasonal peak', () => {
-    const out = seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.3 }], NOW);
+    const out = seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.3 }], [], NOW);
     expect(out).toHaveLength(1);
     expect(out[0].headline).toContain('יול');
   });
 
   it('stays silent when the current month is not a peak', () => {
-    expect(seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.05 }], NOW)).toEqual([]);
+    expect(seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.05 }], [], NOW)).toEqual([]);
   });
 
   it('stays silent when there is no seasonal data for the current month', () => {
-    expect(seasonalHeadsUp([{ month: 'דצמ', avg: 5000, ratio: 1.3 }], NOW)).toEqual([]);
+    expect(seasonalHeadsUp([{ month: 'דצמ', avg: 5000, ratio: 1.3 }], [], NOW)).toEqual([]);
+  });
+
+  it('attaches transactions from any year that fall in the matched calendar month', () => {
+    const all = [
+      tx({ date: '2025-07-10', amount: 300 }),
+      tx({ date: '2026-07-03', amount: 500 }),
+      tx({ date: '2026-08-01', amount: 999 }), // different month, must not appear
+    ];
+    const out = seasonalHeadsUp([{ month: 'יול', avg: 5000, ratio: 1.3 }], all, NOW);
+    expect(out[0].transactions.map((t) => t.amount)).toEqual([500, 300]);
   });
 });
 

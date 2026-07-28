@@ -289,15 +289,18 @@ export function categoryTrendInsights(allExpenses: Transaction[], now: Date = ne
 }
 
 /** If the real-world current month is historically a seasonal peak, warn ahead of time instead of only after the fact. */
-export function seasonalHeadsUp(seasonal: SeasonalPeak[], now: Date = new Date()): AnalystInsight[] {
+export function seasonalHeadsUp(seasonal: SeasonalPeak[], allExpenses: Transaction[], now: Date = new Date()): AnalystInsight[] {
   const currentMonthLabel = SHORT_MONTHS[now.getMonth()];
   const match = seasonal.find((s) => s.month === currentMonthLabel && s.ratio > 1.15);
   if (!match) return [];
   const pct = Math.round((match.ratio - 1) * 100);
+  const currentMonthNum = String(now.getMonth() + 1).padStart(2, '0');
+  const matchingTx = allExpenses.filter((t) => t.date.slice(5, 7) === currentMonthNum);
   return [{
     icon: '📅', level: 'warn',
     headline: `${match.month} הוא בדרך כלל חודש-שיא בהוצאות`,
     detail: `בממוצע כ-${pct}% מעל חודש רגיל (${fmt(match.avg)}) — כדאי להיערך מראש`,
+    transactions: topTransactions(matchingTx),
   }];
 }
 
@@ -355,7 +358,7 @@ export function analystInsights(params: {
 }): AnalystInsight[] {
   const { allExpenses, seasonal, yoy, currentYear, now = new Date() } = params;
   return [
-    ...seasonalHeadsUp(seasonal, now),
+    ...seasonalHeadsUp(seasonal, allExpenses, now),
     ...yoySameMonthInsight(yoy, currentYear, now),
     ...categoryTrendInsights(allExpenses, now),
     ...categoryShareShift(allExpenses, now),
