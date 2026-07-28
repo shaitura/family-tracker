@@ -6,6 +6,7 @@ import { Transaction } from '@/types';
 import { formatCurrency } from '@/utils';
 import { ReportPeriod, periodMonths, currentMonthKey, inPeriod } from '@/lib/reportPeriod';
 import { fixedVariableSplit } from '@/lib/reportAggregates';
+import { ChartTooltip } from './ChartTooltip';
 
 const INVESTMENT_CATS = ['חסכון', 'חיסכון', 'השקעות', 'השקעה', 'קרן השתלמות', 'פנסיה', 'קופת גמל', 'גמל'];
 const isInvCat = (cat: string) => INVESTMENT_CATS.some((k) => cat.includes(k));
@@ -108,7 +109,7 @@ export function BalanceTab({ transactions, period, category }: { transactions: T
                 <BarChart data={[...byMonthChart].reverse()} barSize={14} barGap={2}>
                   <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number, name: string): [string, string] => [formatCurrency(v), name]} />} />
                   <Legend formatter={(v) => <span style={{ color: '#cbd5e1', fontSize: 12 }}>{v}</span>} />
                   <Bar dataKey="הכנסות" fill="#10b981" radius={[6, 6, 0, 0]}>
                     {[...byMonthChart].reverse().map((m, i) => <Cell key={i} fill="#10b981" fillOpacity={m.isCurrent ? 1 : 0.5} stroke={m.isCurrent ? '#fff' : 'none'} strokeWidth={1.5} />)}
