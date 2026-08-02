@@ -3,16 +3,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Car, Plus, Trash2, ChevronDown, ChevronUp, Gauge,
-  TrendingUp, TrendingDown, Info,
+  TrendingUp, TrendingDown, Info, Wallet, AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { base44 } from '@/lib/base44Client';
 import { MileageSettings, MileageReading } from '@/types';
-import { formatDate } from '@/utils';
+import { formatDate, formatCurrency } from '@/utils';
 import { useToast } from '@/components/ui/toaster';
+import {
+  computeExcessPenalty, ExcessPenalty,
+  PENALTY_FREE_KM, TIER_1_KM, TIER_1_RATE, TIER_2_RATE,
+} from '@/lib/leasePenalty';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +34,157 @@ function fmtKm(n: number): string {
   return Math.round(n).toLocaleString('he-IL');
 }
 
+// ── Excess-penalty UI ─────────────────────────────────────────────────────────
+
+type PenaltyTone = 'ok' | 'warn' | 'danger';
+
+const TONE_STYLES: Record<PenaltyTone, { box: string; text: string }> = {
+  ok:     { box: 'bg-emerald-500/10 border-emerald-500/20', text: 'text-emerald-400' },
+  warn:   { box: 'bg-yellow-500/10 border-yellow-500/20',   text: 'text-yellow-400'  },
+  danger: { box: 'bg-rose-500/10 border-rose-500/20',       text: 'text-rose-400'    },
+};
+
+/**
+ * The tiered breakdown behind the number on the card face. The total alone can't
+ * show that the 2,001st excess km costs 2.07× the 2,000th, so this spells out
+ * how many km landed in each tier and what each one cost.
+ */
+function PenaltyBreakdown({ km, penalty, scopeLabel }: {
+  km: number;
+  penalty: ExcessPenalty;
+  scopeLabel: string;
+}) {
+  return (
+    <div className="space-y-2.5 text-right" dir="rtl">
+      <p className="text-sm font-semibold text-white">איך מחושב הקנס</p>
+      <p className="text-xs text-white/50 leading-relaxed">
+        לפי סעיף 10.2 בפוליסת הליסינג, מעל {fmtKm(PENALTY_FREE_KM)} ק"מ בשנה התשלום מדורג — ולכן
+        לא כל ק"מ חורג עולה אותו דבר.
+      </p>
+
+      <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5 text-xs">
+        <div className="flex justify-between gap-2">
+          <span className="text-white/50">{scopeLabel}</span>
+          <span className="text-white/80 font-medium">{fmtKm(km)} ק"מ</span>
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="text-white/50">מעל {fmtKm(PENALTY_FREE_KM)}</span>
+          <span className="text-white/80 font-medium">{fmtKm(penalty.excessKm)} ק"מ</span>
+        </div>
+      </div>
+
+      {penalty.excessKm === 0 ? (
+        <p className="text-xs text-emerald-400">אין חריגה — לא חל תשלום.</p>
+      ) : (
+        <div className="space-y-1.5 text-xs">
+          {penalty.tier1Km > 0 && (
+            <div className="flex justify-between gap-2">
+              <span className="text-white/50">
+                {fmtKm(penalty.tier1Km)} ק"מ × {TIER_1_RATE} ₪
+              </span>
+              <span className="text-white/80 font-medium">{formatCurrency(penalty.tier1Cost)}</span>
+            </div>
+          )}
+          {penalty.tier2Km > 0 && (
+            <div className="flex justify-between gap-2">
+              <span className="text-white/50">
+                {fmtKm(penalty.tier2Km)} ק"מ × {TIER_2_RATE} ₪
+              </span>
+              <span className="text-white/80 font-medium">{formatCurrency(penalty.tier2Cost)}</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-2 pt-1.5 border-t border-white/10">
+            <span className="text-white/70 font-semibold">סה"כ</span>
+            <span className="text-white font-bold">{formatCurrency(penalty.total)}</span>
+          </div>
+        </div>
+      )}
+
+      {penalty.excessKm === 0 ? (
+        <p className="text-xs text-white/40 leading-relaxed">
+          עוד {fmtKm(PENALTY_FREE_KM - km)} ק"מ עד שמתחיל החיוב, בתעריף {TIER_1_RATE} ₪ לק"מ.
+        </p>
+      ) : penalty.kmUntilTier2 > 0 ? (
+        <p className="text-xs text-white/40 leading-relaxed">
+          עוד {fmtKm(penalty.kmUntilTier2)} ק"מ ותיכנס למדרגת {TIER_2_RATE} ₪ לק"מ — יותר מכפול
+          מ-{TIER_1_RATE} ₪.
+        </p>
+      ) : (
+        <p className="text-xs text-white/40 leading-relaxed">
+          כבר במדרגה השנייה — כל ק"מ נוסף עולה {TIER_2_RATE} ₪.
+        </p>
+      )}
+
+      <p className="text-[11px] text-white/30 leading-relaxed border-t border-white/10 pt-2">
+        {fmtKm(TIER_1_KM)} הק"מ החורגים הראשונים בכל שנה ב-{TIER_1_RATE} ₪, וכל ק"מ חריגה נוסף
+        ב-{TIER_2_RATE} ₪ (לרכב בנזין ודיזל). המדרגות מתאפסות בכל שנת חוזה. הפוליסה מציינת
+        שגובה התשלום ייבחן מעת לעת וישתנה לפי צורך.
+      </p>
+    </div>
+  );
+}
+
+function PenaltyCard({ title, subtitle, km, penalty, scopeLabel, tone, icon, emptyText }: {
+  title: string;
+  subtitle: string;
+  km: number;
+  penalty: ExcessPenalty;
+  scopeLabel: string;
+  tone: PenaltyTone;
+  icon: React.ReactNode;
+  emptyText: string;
+}) {
+  const styles = TONE_STYLES[tone];
+
+  return (
+    <Card>
+      <CardContent className="py-4 px-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${styles.box}`}>
+              {icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white/60 uppercase tracking-wide">{title}</p>
+              <p className="text-xs text-white/40">{subtitle}</p>
+            </div>
+          </div>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`הסבר על חישוב הקנס — ${title}`}
+                className="p-1.5 rounded-lg text-white/30 hover:text-cyan-400 hover:bg-cyan-400/10 transition-colors shrink-0"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            </PopoverTrigger>
+            {/* Opaque backdrop: the shared `glass` popover is too translucent to read
+                over the dense cards stacked behind it. `.glass` is declared after
+                @tailwind utilities, so plain bg-* loses to it — hence the ! modifier. */}
+            <PopoverContent
+              align="end"
+              className="w-80 max-w-[calc(100vw-2rem)] !bg-slate-900/95 !border-white/15"
+            >
+              <PenaltyBreakdown km={km} penalty={penalty} scopeLabel={scopeLabel} />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className={`rounded-xl border p-3 ${styles.box}`}>
+          <p className={`text-2xl font-bold ${styles.text}`}>{formatCurrency(penalty.total)}</p>
+          <p className="text-xs text-white/40 mt-0.5">
+            {penalty.excessKm === 0
+              ? emptyText
+              : `חריגה של ${fmtKm(penalty.excessKm)} ק"מ מעל ${fmtKm(PENALTY_FREE_KM)}`}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Business logic ────────────────────────────────────────────────────────────
 
 interface MileageStats {
@@ -38,6 +194,12 @@ interface MileageStats {
   daysInYear: number;
   daysElapsed: number;
   yearStartKm: number;
+  /**
+   * False when this contract year has no reading at or before its start, so
+   * `kmUsed` silently falls back to the whole odometer instead of this year's
+   * distance. Harmless for year 1 (the car starts near 0), misleading later.
+   */
+  hasYearBaseline: boolean;
   latestReading: MileageReading;
   kmUsed: number;
   kmRemaining: number;
@@ -81,6 +243,7 @@ function computeStats(
   const yearStartStr  = toDateInput(yearStart);
   const beforeYear    = sorted.filter((r) => r.reading_date <= yearStartStr);
   const yearStartKm   = beforeYear.length > 0 ? beforeYear[beforeYear.length - 1].odometer_km : 0;
+  const hasYearBaseline = yearNum === 1 || beforeYear.length > 0;
 
   const kmUsed          = Math.max(0, latestReading.odometer_km - yearStartKm);
   const kmRemaining     = settings.yearly_km_limit - kmUsed;
@@ -92,7 +255,7 @@ function computeStats(
   return {
     yearNum, yearStart, nextYearStart,
     daysInYear, daysElapsed,
-    yearStartKm, latestReading,
+    yearStartKm, hasYearBaseline, latestReading,
     kmUsed, kmRemaining,
     expectedKmByNow, paceDelta, projectedYearEnd, avgKmPerMonth,
   };
@@ -145,6 +308,17 @@ export default function Mileage() {
   const sortedReadings = useMemo(
     () => [...readings].sort((a, b) => b.reading_date.localeCompare(a.reading_date)),
     [readings],
+  );
+
+  // Excess-mileage penalty, on what has happened and on where the pace leads.
+  const penalties = useMemo(
+    () => (stats
+      ? {
+          actual:    computeExcessPenalty(stats.kmUsed),
+          projected: computeExcessPenalty(stats.projectedYearEnd),
+        }
+      : null),
+    [stats],
   );
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -257,6 +431,16 @@ export default function Mileage() {
     : stats.projectedYearEnd > limit * 0.9
     ? 'from-yellow-500 to-yellow-400'
     : 'from-emerald-500 to-emerald-400';
+
+  // Penalty severity is measured against the policy's 20,000 km, not the personal
+  // target in settings — the fine starts where the contract says it does.
+  const projectedTone: PenaltyTone = !stats
+    ? 'ok'
+    : stats.projectedYearEnd > PENALTY_FREE_KM
+    ? 'danger'
+    : stats.projectedYearEnd > PENALTY_FREE_KM * 0.9
+    ? 'warn'
+    : 'ok';
 
   // ── Main render ───────────────────────────────────────────────────────────────
   return (
@@ -380,6 +564,49 @@ export default function Mileage() {
             </CardContent>
           </Card>
         </motion.div>
+      )}
+
+      {/* ── Section 2b: Excess-mileage penalty (policy §10.2) ── */}
+      {stats && readings.length >= 2 && penalties && (
+        <>
+          {/* Actual: what has already been racked up this contract year */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }}>
+            <PenaltyCard
+              title="קנס בפועל"
+              subtitle={`לפי ${fmtKm(stats.kmUsed)} ק"מ שנסעת השנה`}
+              km={stats.kmUsed}
+              penalty={penalties.actual}
+              scopeLabel="נסעת עד היום"
+              tone={penalties.actual.excessKm > 0 ? 'danger' : 'ok'}
+              icon={<Wallet className={`w-4 h-4 ${penalties.actual.excessKm > 0 ? 'text-rose-400' : 'text-emerald-400'}`} />}
+              emptyText="טרם נצברה חריגה"
+            />
+          </motion.div>
+
+          {/* Projected: where the current pace lands by year end */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }}>
+            <PenaltyCard
+              title="קנס צפוי"
+              subtitle={`לפי תחזית של ${fmtKm(stats.projectedYearEnd)} ק"מ בסוף השנה`}
+              km={stats.projectedYearEnd}
+              penalty={penalties.projected}
+              scopeLabel="תחזית סוף שנה"
+              tone={projectedTone}
+              icon={<AlertTriangle className={`w-4 h-4 ${TONE_STYLES[projectedTone].text}`} />}
+              emptyText="הקצב הנוכחי לא צפוי לחרוג"
+            />
+          </motion.div>
+
+          {!stats.hasYearBaseline && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-white/5 rounded-xl text-xs text-white/40">
+              <Info className="w-4 h-4 shrink-0 text-yellow-400/60" />
+              <span>
+                אין קריאה מתחילת שנת החוזה, ולכן החישוב מסתמך על מד הקילומטר המלא — הוסף קריאה
+                מתאריך {formatDate(toDateInput(stats.yearStart))} לדיוק מלא
+              </span>
+            </div>
+          )}
+        </>
       )}
 
       {/* Note: only 1 reading → prompt for more */}
