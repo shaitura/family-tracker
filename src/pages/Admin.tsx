@@ -10,7 +10,14 @@ import {
 
 // Bumped on every deploy while diagnosing the "rows survive every filter" report.
 // Lets a screenshot prove which bundle the browser is actually running.
-const ADMIN_BUILD = 'diag-1 · 2026-08-03';
+const ADMIN_BUILD = 'diag-2 · 2026-08-03';
+
+/** Count occurrences of a field across rows, sorted desc. Diagnostic only. */
+function tally(rows: Transaction[], pick: (t: Transaction) => string, top = 10): [string, number][] {
+  const acc: Record<string, number> = {};
+  for (const r of rows) { const k = pick(r) || '(ריק)'; acc[k] = (acc[k] ?? 0) + 1; }
+  return Object.entries(acc).sort((a, b) => b[1] - a[1]).slice(0, top);
+}
 
 const COLUMNS = [
   { key: 'date',           label: 'תאריך',              type: 'date',   width: 110 },
@@ -989,6 +996,10 @@ export default function Admin() {
   showReviewOnly,
   total: transactions.length,
   matched: rows.length,
+  // If the filter works, every matched row carries the filtered category — so a
+  // surprising row inside this set is a DATA problem, not a filtering one.
+  matchedByCategory: tally(rows, (t) => String(t.category ?? '')),
+  matchedTopSubs: tally(rows, (t) => (t.sub_category ?? '').slice(0, 34), 8),
   rendered: rows.slice(0, 6).map((r) => ({
     id: r.id.slice(0, 8),
     date: r.date,
