@@ -8,6 +8,10 @@ import {
   displayLabel, matchesSearch, matchesColFilters,
 } from '@/lib/adminFilters';
 
+// Bumped on every deploy while diagnosing the "rows survive every filter" report.
+// Lets a screenshot prove which bundle the browser is actually running.
+const ADMIN_BUILD = 'diag-1 · 2026-08-03';
+
 const COLUMNS = [
   { key: 'date',           label: 'תאריך',              type: 'date',   width: 110 },
   { key: 'expense_class',  label: 'סוג הוצאה',          type: 'select', options: ['קבועה', 'משתנה'],                   width: 90  },
@@ -311,6 +315,7 @@ export default function Admin() {
   const [search, setSearch]     = useState('');
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [showColFilters, setShowColFilters] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastCheckedIdx = useRef<number | null>(null);
   const [pasteOpen, setPasteOpen]         = useState(false);
@@ -929,6 +934,13 @@ export default function Admin() {
             ✕ נקה פילטרים ({activeFilters})
           </button>
         )}
+        <button
+          onClick={() => setDiagOpen((v) => !v)}
+          className={`px-2 py-1.5 rounded text-xs border ${diagOpen ? 'bg-slate-800 text-white border-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+          title="פאנל אבחון סינון"
+        >
+          🐞
+        </button>
         {reviewIds.size > 0 && (
           <button
             onClick={() => setShowReviewOnly(v => !v)}
@@ -962,6 +974,35 @@ export default function Admin() {
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
         </div>
       </div>
+
+      {/* ── Diagnostic panel (temporary) ──
+          Re-runs both predicates on the rows actually being rendered. If a
+          displayed row reports pass:true for a filter it visibly violates, the
+          predicate is wrong; if it reports false, the table is not rendering
+          `rows` at all. One screenshot settles which. */}
+      {diagOpen && (
+        <div className="px-3 py-2 bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto whitespace-pre border-b" dir="ltr">
+{JSON.stringify({
+  build: ADMIN_BUILD,
+  search,
+  colFilters,
+  showReviewOnly,
+  total: transactions.length,
+  matched: rows.length,
+  rendered: rows.slice(0, 6).map((r) => ({
+    id: r.id.slice(0, 8),
+    date: r.date,
+    category: r.category,
+    sub: (r.sub_category ?? '').slice(0, 28),
+    child: r.child ?? null,
+    virtual: !!r.is_virtual,
+    skip: !!r.recurrence_skip,
+    passSearch: !search || matchesSearch(r, search),
+    passCols: matchesColFilters(r, colFilters),
+  })),
+}, null, 1)}
+        </div>
+      )}
 
       {/* ── Template hint ── */}
       <div className="px-3 py-1.5 bg-blue-50 border-b text-xs text-blue-700">
