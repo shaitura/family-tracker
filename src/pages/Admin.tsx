@@ -2,28 +2,11 @@ import { useState, useRef, useEffect, Fragment } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { base44, migrateLocalToFirestore, hasLocalData } from '@/lib/base44Client';
-import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, CHILD_TAGS, Category, IncomeCategory, PaymentMethod } from '@/types';
-import { CHILD_LABELS } from '@/utils';
-
-// Child-tag column: '' is a real, selectable value meaning "no child assigned".
-// Stored as null (never undefined — base44Client.update strips undefined, which
-// would silently leave a stale tag behind instead of clearing it).
-const NO_CHILD = '';
-// Sentinel used ONLY by the column-filter dropdown, where '' already means "all".
-const FILTER_NO_CHILD = '__none__';
-const CHILD_COL_OPTIONS: string[] = [NO_CHILD, ...CHILD_TAGS];
-
-// Display labels for enum values stored in English
-const OPTION_LABELS: Record<string, Record<string, string>> = {
-  type:   { expense: 'הוצאה',  income: 'הכנסה' },
-  payer:  { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותפת' },
-  status: { paid: 'שולם', pending: 'ממתין', future: 'עתידי' },
-  child:  { [NO_CHILD]: 'ללא שיוך', ...CHILD_LABELS },
-};
-
-function displayLabel(field: string, value: string): string {
-  return OPTION_LABELS[field]?.[value] ?? value;
-}
+import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, PaymentMethod } from '@/types';
+import {
+  NO_CHILD, FILTER_NO_CHILD, CHILD_COL_OPTIONS, OPTION_LABELS,
+  displayLabel, matchesSearch, matchesColFilters,
+} from '@/lib/adminFilters';
 
 const COLUMNS = [
   { key: 'date',           label: 'תאריך',              type: 'date',   width: 110 },
@@ -320,19 +303,6 @@ function getWizardOptions(field: string): string[] {
   return col && 'options' in col ? [...(col.options as readonly string[])] : [];
 }
 
-function matchesAllFields(t: Transaction, q: string): boolean {
-  const s = q.toLowerCase();
-  return [
-    t.date, t.sub_category ?? '', t.category, t.notes ?? '',
-    t.payer, OPTION_LABELS.payer?.[t.payer] ?? '',
-    t.payment_method, t.expense_class ?? '',
-    t.type, OPTION_LABELS.type?.[t.type] ?? '',
-    t.status, OPTION_LABELS.status?.[t.status] ?? '',
-    t.child ?? '', CHILD_LABELS[t.child ?? ''] ?? '',
-    String(t.amount),
-  ].some((v) => v.toLowerCase().includes(s));
-}
-
 export default function Admin() {
   const queryClient = useQueryClient();
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
@@ -381,6 +351,10 @@ export default function Admin() {
   });
 
   const activeColFilters = Object.values(colFilters).filter(Boolean).length;
+  // The free-text search counts as an active filter too — otherwise a search typed
+  // once silently rides along under every column filter applied afterwards, and
+  // "נקה פילטרים" appears to do nothing.
+  const activeFilters = activeColFilters + (search ? 1 : 0);
   const [reviewIds, setReviewIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('ft_review_ids') || '[]')); }
     catch { return new Set(); }
@@ -395,19 +369,8 @@ export default function Admin() {
   const rows = [...transactions]
     .filter((t) => {
       if (showReviewOnly && !reviewIds.has(t.id)) return false;
-      if (search && !matchesAllFields(t, search)) return false;
-      for (const [key, val] of Object.entries(colFilters)) {
-        if (!val) continue;
-        // child filters exact-match (a substring test can't express "no tag at all")
-        if (key === 'child') {
-          const cv = String(t.child ?? '');
-          if (val === FILTER_NO_CHILD ? cv !== '' : cv !== val) return false;
-          continue;
-        }
-        const tv = String(t[key as keyof Transaction] ?? '').toLowerCase();
-        if (!tv.includes(val.toLowerCase())) return false;
-      }
-      return true;
+      if (search && !matchesSearch(t, search)) return false;
+      return matchesColFilters(t, colFilters);
     })
     .sort((a, b) => {
       const av = String(a[sortField as keyof Transaction] ?? '');
@@ -945,16 +908,26 @@ export default function Admin() {
           placeholder="חיפוש בכל השדות..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border rounded px-3 py-1.5 text-sm w-52 mr-2"
+          className={`border rounded px-3 py-1.5 text-sm w-52 mr-2 transition-all ${search ? 'border-blue-400 bg-blue-50 text-blue-800 font-medium' : ''}`}
         />
+        {search && (
+          <span className="text-[11px] text-gray-400" title="חיפוש חופשי מוצא גם התאמה חלקית — למשל 'ילדים' נמצא גם בתוך 'לילדים'">
+            חיפוש חופשי (התאמה חלקית)
+          </span>
+        )}
         <button
           onClick={() => setShowColFilters((v) => !v)}
           className={`px-3 py-1.5 rounded text-sm border transition-all ${showColFilters || activeColFilters > 0 ? 'bg-blue-100 border-blue-400 text-blue-700 font-medium' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
         >
           🔽 פילטר עמודות{activeColFilters > 0 ? ` (${activeColFilters})` : ''}
         </button>
-        {activeColFilters > 0 && (
-          <button onClick={() => setColFilters({})} className="text-xs text-red-500 hover:underline">✕ נקה פילטרים</button>
+        {activeFilters > 0 && (
+          <button
+            onClick={() => { setColFilters({}); setSearch(''); }}
+            className="text-xs text-red-500 hover:underline"
+          >
+            ✕ נקה פילטרים ({activeFilters})
+          </button>
         )}
         {reviewIds.size > 0 && (
           <button
