@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency, categoryColor } from '@/utils';
 import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
-import { byCategory, byMonth, categoryMonthMatrix } from '@/lib/reportAggregates';
+import { byCategory, byMonth, categoryMonthMatrix, fixedVariableSplit } from '@/lib/reportAggregates';
 import { ChartTooltip } from './ChartTooltip';
+import { FixedVariableSplitCard } from './FixedVariableSplitCard';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
 const PAYER_HE: Record<string, string> = { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותף' };
 
-type SubTab = 'category' | 'month' | 'payer';
+type SubTab = 'category' | 'month' | 'payer' | 'split';
 
 export function IncomeTab({ transactions, period, category }: { transactions: Transaction[]; period: ReportPeriod; category: string }) {
   const [subTab, setSubTab] = useState<SubTab>('category');
@@ -27,6 +28,7 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
   const catData = useMemo(() => byCategory(filtered), [filtered]);
   const monthData = useMemo(() => byMonth(filtered, months), [filtered, months]);
   const matrix = useMemo(() => (isMultiMonth ? categoryMonthMatrix(filtered, months) : []), [filtered, months, isMultiMonth]);
+  const split = useMemo(() => fixedVariableSplit(filtered), [filtered]);
 
   // "לפי משלם" — monthly-granular whenever the range spans >1 month (spec §3, applies to both types)
   const payerByMonth = useMemo(() => {
@@ -71,7 +73,7 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
       </div>
 
       <div className="flex gap-2 overflow-x-auto">
-        {([['category', 'לפי קטגוריה'], ['month', 'לפי חודש'], ['payer', 'לפי משלם']] as [SubTab, string][]).map(([key, label]) => (
+        {([['category', 'לפי קטגוריה'], ['month', 'לפי חודש'], ['payer', 'לפי משלם'], ['split', 'קבועה / משתנה']] as [SubTab, string][]).map(([key, label]) => (
           <button key={key} onClick={() => setSubTab(key)}
             className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${subTab === key ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-white/5 border border-white/10 text-white/50'}`}>
             {label}
@@ -210,6 +212,10 @@ export function IncomeTab({ transactions, period, category }: { transactions: Tr
             </Card>
           )}
         </div>
+      )}
+
+      {subTab === 'split' && (
+        <FixedVariableSplitCard split={split} fixedLabel="קבועה" varLabel="משתנה" />
       )}
     </div>
   );
