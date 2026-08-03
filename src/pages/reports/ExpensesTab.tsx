@@ -6,6 +6,7 @@ import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/uti
 import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
 import { byCategory, byPayer, byMonth, fixedVariableSplit, categoryMonthMatrix } from '@/lib/reportAggregates';
 import { ChartTooltip } from './ChartTooltip';
+import { FixedVariableSplitCard } from './FixedVariableSplitCard';
 
 const COLORS = ['#22d3ee', '#a855f7', '#ec4899', '#f97316', '#eab308', '#84cc16', '#10b981', '#f43f5e', '#06b6d4', '#8b5cf6'];
 const CHILD_COLORS: Record<string, string> = { Yuval: '#a855f7', Aviv: '#10b981', Ziv: '#f59e0b', Shared: '#6366f1', none: '#64748b' };
@@ -185,20 +186,7 @@ export function ExpensesTab({ transactions, period, category }: { transactions: 
       )}
 
       {subTab === 'split' && (
-        <Card>
-          <CardContent className="pt-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-cyan-500/10 border border-cyan-500/25 p-3 text-center">
-                <p className="text-[10px] text-cyan-400 mb-1">קבועה</p>
-                <p className="text-lg font-black text-white">{formatCurrency(split.fixedTotal)}</p>
-              </div>
-              <div className="rounded-2xl bg-purple-500/10 border border-purple-500/25 p-3 text-center">
-                <p className="text-[10px] text-purple-400 mb-1">משתנה</p>
-                <p className="text-lg font-black text-white">{formatCurrency(split.varTotal)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <FixedVariableSplitCard split={split} fixedLabel="קבועה" varLabel="משתנה" />
       )}
 
       {showChild && childTotals.length > 0 && (

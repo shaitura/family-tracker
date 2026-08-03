@@ -6,7 +6,7 @@ export { currentMonthKey };
 export const EARLIEST_DATA_MONTH = '2022-01';
 
 export type PeriodQuickPick =
-  | 'currentMonth' | 'selectedYear' | 'lastQuarter' | 'last12' | 'last18' | 'allTime' | 'custom';
+  | 'currentMonth' | 'lastMonth' | 'selectedYear' | 'lastQuarter' | 'last12' | 'last18' | 'allTime' | 'custom';
 
 export interface ReportPeriod {
   quickPick: PeriodQuickPick;
@@ -32,6 +32,12 @@ export function buildPeriod(
 
   if (quickPick === 'currentMonth') {
     return { quickPick, startMonth: nowMonth, endMonth: nowMonth, year, isAllTime: false };
+  }
+  // The last *complete* calendar month: expenses have landed and salaries are in,
+  // so it reads as a finished month rather than a partial one.
+  if (quickPick === 'lastMonth') {
+    const prev = subtractMonths(nowMonth, 1);
+    return { quickPick, startMonth: prev, endMonth: prev, year, isAllTime: false };
   }
   if (quickPick === 'selectedYear') {
     return { quickPick, startMonth: `${year}-01`, endMonth: `${year}-12`, year, isAllTime: false };

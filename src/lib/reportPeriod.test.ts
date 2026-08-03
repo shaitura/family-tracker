@@ -11,6 +11,35 @@ describe('buildPeriod', () => {
     expect(p.isAllTime).toBe(false);
   });
 
+  it('lastMonth is the single previous calendar month', () => {
+    const p = buildPeriod('lastMonth', { now: NOW });
+    expect(p.startMonth).toBe('2026-06');
+    expect(p.endMonth).toBe('2026-06');
+    expect(p.isAllTime).toBe(false);
+    expect(periodMonths(p)).toEqual(['2026-06']);
+  });
+
+  it('lastMonth crosses the year boundary from January', () => {
+    const p = buildPeriod('lastMonth', { now: new Date(2026, 0, 3) }); // 2026-01-03
+    expect(p.startMonth).toBe('2025-12');
+    expect(p.endMonth).toBe('2025-12');
+  });
+
+  it('lastMonth on the 1st of the month still points at the finished month', () => {
+    const p = buildPeriod('lastMonth', { now: new Date(2026, 2, 1) }); // 2026-03-01
+    expect(p.startMonth).toBe('2026-02');
+  });
+
+  it('lastMonth labels as the month itself, not a range', () => {
+    expect(periodLabel(buildPeriod('lastMonth', { now: NOW }))).toBe('2026-06');
+  });
+
+  it('lastMonth prior period is the month before it', () => {
+    const prior = priorPeriod(buildPeriod('lastMonth', { now: NOW }));
+    expect(prior.startMonth).toBe('2026-05');
+    expect(prior.endMonth).toBe('2026-05');
+  });
+
   it('selectedYear', () => {
     const p = buildPeriod('selectedYear', { now: NOW, year: '2025' });
     expect(p.startMonth).toBe('2025-01');

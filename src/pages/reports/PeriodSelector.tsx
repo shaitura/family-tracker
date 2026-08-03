@@ -2,6 +2,7 @@ import { PeriodQuickPick, ReportPeriod, buildPeriod, EARLIEST_DATA_MONTH } from 
 
 const QUICK_PICKS: { key: PeriodQuickPick; label: string }[] = [
   { key: 'currentMonth', label: 'החודש הנוכחי' },
+  { key: 'lastMonth', label: 'חודש קודם' },
   { key: 'selectedYear', label: 'שנה נבחרת' },
   { key: 'lastQuarter', label: 'רבעון אחרון' },
   { key: 'last12', label: '12 חודשים אחרונים' },
