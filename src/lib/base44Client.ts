@@ -3,6 +3,7 @@ import {
   query, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { docToEntity } from './entityMapping';
 import { Transaction, Budget, Asset, MileageSettings, MileageReading, Subscription, RecurringRule, Category, Payer, PaymentMethod, ExpenseClass } from '@/types';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
         ? query(base, where('date', '>=', opts.dateRange.start), where('date', '<=', opts.dateRange.end))
         : base;
       const snap = await getDocs(q);
-      let data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
+      let data = snap.docs.map((d) => docToEntity<T>(d.id, d.data()));
       if (opts?.filters) {
         for (const f of opts.filters) {
           data = data.filter((item) => {

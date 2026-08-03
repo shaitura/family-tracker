@@ -10,7 +10,7 @@ import {
 
 // Bumped on every deploy while diagnosing the "rows survive every filter" report.
 // Lets a screenshot prove which bundle the browser is actually running.
-const ADMIN_BUILD = 'diag-2 · 2026-08-03';
+const ADMIN_BUILD = 'diag-3 · docId-fix · 2026-08-03';
 
 /** Count occurrences of a field across rows, sorted desc. Diagnostic only. */
 function tally(rows: Transaction[], pick: (t: Transaction) => string, top = 10): [string, number][] {
@@ -323,6 +323,7 @@ export default function Admin() {
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [showColFilters, setShowColFilters] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [writeError, setWriteError] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastCheckedIdx = useRef<number | null>(null);
   const [pasteOpen, setPasteOpen]         = useState(false);
@@ -396,7 +397,15 @@ export default function Admin() {
     // Clearing the child tag must write null: base44Client.update() strips
     // undefined, and an empty string would persist as a bogus tag value.
     const v = field === 'child' && value === NO_CHILD ? null : value;
-    await base44.entities.Transaction.update(id, { [field]: v } as Partial<Transaction>);
+    try {
+      await base44.entities.Transaction.update(id, { [field]: v } as Partial<Transaction>);
+      setWriteError('');
+    } catch (e) {
+      // A rejected write used to vanish: no catch, so the cell simply reverted and
+      // the invalidate below never ran — the row looked frozen with no explanation.
+      console.error('[ADMIN] update failed', { id, field, e });
+      setWriteError(`שמירה נכשלה (שורה ${id}, שדה ${field}): ${String(e)}`);
+    }
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
   }
 
@@ -982,6 +991,13 @@ export default function Admin() {
         </div>
       </div>
 
+      {writeError && (
+        <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border-b border-red-200 text-xs text-red-700">
+          <span className="flex-1">⚠️ {writeError}</span>
+          <button onClick={() => setWriteError('')} className="text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
       {/* ── Diagnostic panel (temporary) ──
           Re-runs both predicates on the rows actually being rendered. If a
           displayed row reports pass:true for a filter it visibly violates, the
@@ -1001,7 +1017,8 @@ export default function Admin() {
   matchedByCategory: tally(rows, (t) => String(t.category ?? '')),
   matchedTopSubs: tally(rows, (t) => (t.sub_category ?? '').slice(0, 34), 8),
   rendered: rows.slice(0, 6).map((r) => ({
-    id: r.id.slice(0, 8),
+    id: r.id,
+    idLen: r.id.length,
     date: r.date,
     category: r.category,
     sub: (r.sub_category ?? '').slice(0, 28),
