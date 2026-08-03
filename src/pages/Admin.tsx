@@ -2,13 +2,23 @@ import { useState, useRef, useEffect, Fragment } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { base44, migrateLocalToFirestore, hasLocalData } from '@/lib/base44Client';
-import { Transaction, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, Category, IncomeCategory, PaymentMethod } from '@/types';
+import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, CHILD_TAGS, Category, IncomeCategory, PaymentMethod } from '@/types';
+import { CHILD_LABELS } from '@/utils';
+
+// Child-tag column: '' is a real, selectable value meaning "no child assigned".
+// Stored as null (never undefined — base44Client.update strips undefined, which
+// would silently leave a stale tag behind instead of clearing it).
+const NO_CHILD = '';
+// Sentinel used ONLY by the column-filter dropdown, where '' already means "all".
+const FILTER_NO_CHILD = '__none__';
+const CHILD_COL_OPTIONS: string[] = [NO_CHILD, ...CHILD_TAGS];
 
 // Display labels for enum values stored in English
 const OPTION_LABELS: Record<string, Record<string, string>> = {
   type:   { expense: 'הוצאה',  income: 'הכנסה' },
   payer:  { Shi: 'שי', Ortal: 'אורטל', Joint: 'משותפת' },
   status: { paid: 'שולם', pending: 'ממתין', future: 'עתידי' },
+  child:  { [NO_CHILD]: 'ללא שיוך', ...CHILD_LABELS },
 };
 
 function displayLabel(field: string, value: string): string {
@@ -26,6 +36,9 @@ const COLUMNS = [
   { key: 'notes',          label: 'הערות',               type: 'text',   width: 200 },
   { key: 'type',           label: 'הכנסה / הוצאה',       type: 'select', options: ['expense', 'income'],              width: 110 },
   { key: 'status',         label: 'סטטוס',               type: 'select', options: ['paid', 'pending', 'future'],      width: 90  },
+  // Appended LAST on purpose: PASTE_COL_ORDER maps clipboard cells by index, so a
+  // new column must not shift indices 0-9 of the existing Excel paste layout.
+  { key: 'child', label: 'שיוך לילד', type: 'select', options: CHILD_COL_OPTIONS, width: 110 },
 ] as const;
 
 // Paste column order — matches the Excel column order (right→left = A→last)
@@ -315,6 +328,7 @@ function matchesAllFields(t: Transaction, q: string): boolean {
     t.payment_method, t.expense_class ?? '',
     t.type, OPTION_LABELS.type?.[t.type] ?? '',
     t.status, OPTION_LABELS.status?.[t.status] ?? '',
+    t.child ?? '', CHILD_LABELS[t.child ?? ''] ?? '',
     String(t.amount),
   ].some((v) => v.toLowerCase().includes(s));
 }
@@ -359,6 +373,13 @@ export default function Admin() {
     queryFn: () => base44.entities.Transaction.filter(),
   });
 
+  // Recurring rules never appear as table rows (they are projected at read time),
+  // so the child wizard exposes them as its own selectable section.
+  const { data: recurringRules = [] } = useQuery({
+    queryKey: ['recurringRules'],
+    queryFn: () => base44.entities.RecurringRule.filter(),
+  });
+
   const activeColFilters = Object.values(colFilters).filter(Boolean).length;
   const [reviewIds, setReviewIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('ft_review_ids') || '[]')); }
@@ -377,6 +398,12 @@ export default function Admin() {
       if (search && !matchesAllFields(t, search)) return false;
       for (const [key, val] of Object.entries(colFilters)) {
         if (!val) continue;
+        // child filters exact-match (a substring test can't express "no tag at all")
+        if (key === 'child') {
+          const cv = String(t.child ?? '');
+          if (val === FILTER_NO_CHILD ? cv !== '' : cv !== val) return false;
+          continue;
+        }
         const tv = String(t[key as keyof Transaction] ?? '').toLowerCase();
         if (!tv.includes(val.toLowerCase())) return false;
       }
@@ -391,7 +418,10 @@ export default function Admin() {
 
   // ── CRUD helpers ────────────────────────────────────────────────────────
   async function updateCell(id: string, field: string, value: string | number) {
-    await base44.entities.Transaction.update(id, { [field]: value } as Partial<Transaction>);
+    // Clearing the child tag must write null: base44Client.update() strips
+    // undefined, and an empty string would persist as a bogus tag value.
+    const v = field === 'child' && value === NO_CHILD ? null : value;
+    await base44.entities.Transaction.update(id, { [field]: v } as Partial<Transaction>);
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
   }
 
@@ -490,6 +520,62 @@ export default function Admin() {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setBulkCatOpen(false);
     setBulkCatTarget('');
+  }
+
+  // ── Child-assignment wizard ────────────────────────────────────────────
+  function openChildWizard() {
+    setChildWizOpen(true);
+    setChildWizTarget(null);
+    setChildWizRuleIds(new Set());
+    setChildWizStatus('');
+  }
+
+  function closeChildWizard() {
+    setChildWizOpen(false);
+    setChildWizTarget(null);
+    setChildWizRuleIds(new Set());
+    setChildWizStatus('');
+  }
+
+  async function runChildAssign() {
+    if (childWizTarget === null) return;
+    // '' clears the tag; it must reach Firestore as null, not undefined.
+    const value = (childWizTarget === NO_CHILD ? null : childWizTarget) as Transaction['child'];
+    // Selection can outlive a row (deleted elsewhere) — resolve against live data.
+    const rowIds = transactions.filter((t) => selectedIds.has(t.id)).map((t) => t.id);
+    const ruleIds = recurringRules.filter((r) => childWizRuleIds.has(r.id)).map((r) => r.id);
+    if (rowIds.length === 0 && ruleIds.length === 0) {
+      setChildWizStatus('לא נבחרו שורות או כללים');
+      return;
+    }
+    setChildWizLoading(true);
+    setChildWizStatus('מעדכן…');
+    try {
+      if (rowIds.length) {
+        await base44.entities.Transaction.bulkUpdate(
+          rowIds.map((id) => ({ id, data: { child: value } as Partial<Transaction> })),
+          (done, total) => setChildWizStatus(`מעדכן עסקאות… ${done}/${total}`),
+        );
+      }
+      if (ruleIds.length) {
+        setChildWizStatus('מעדכן כללים קבועים…');
+        await base44.entities.RecurringRule.bulkUpdate(
+          ruleIds.map((id) => ({ id, data: { child: value } as Partial<RecurringRule> })),
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['recurringRules'] });
+      const label = childWizTarget === NO_CHILD ? 'הוסר השיוך' : `שויכו ל${displayLabel('child', childWizTarget)}`;
+      const parts = [
+        rowIds.length ? `${rowIds.length} עסקאות` : '',
+        ruleIds.length ? `${ruleIds.length} כללים קבועים` : '',
+      ].filter(Boolean);
+      setChildWizStatus(`✅ ${label}: ${parts.join(' · ')}`);
+      setChildWizRuleIds(new Set());
+    } catch (e) {
+      setChildWizStatus(`❌ שגיאה: ${String(e)}`);
+    }
+    setChildWizLoading(false);
   }
 
   async function createBackup() {
@@ -669,6 +755,12 @@ export default function Admin() {
   const [wizardFixing, setWizardFixing]           = useState(false);
   const [wizardFixed, setWizardFixed]             = useState(0);
   const [wizardMarkReview, setWizardMarkReview]   = useState(false);
+  // ── Child-assignment wizard ──
+  const [childWizOpen, setChildWizOpen]           = useState(false);
+  const [childWizTarget, setChildWizTarget]       = useState<string | null>(null); // null = nothing picked yet
+  const [childWizRuleIds, setChildWizRuleIds]     = useState<Set<string>>(new Set());
+  const [childWizLoading, setChildWizLoading]     = useState(false);
+  const [childWizStatus, setChildWizStatus]       = useState('');
 
   async function importAnnualData() {
     setAnnualLoading(true);
@@ -821,6 +913,8 @@ export default function Admin() {
     // ── Display (read-only) ──
     let display = displayLabel(col.key, String(value));
     if (col.key === 'amount') display = `₪${Number(value).toLocaleString()}`;
+    // An untagged row shows a quiet dash — "ללא שיוך" on every row is pure noise.
+    if (col.key === 'child' && !value) display = '—';
 
     return (
       <div
@@ -887,6 +981,9 @@ export default function Admin() {
           )}
           <button onClick={exportCSV}        className="bg-gray-200  text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">⬇ ייצא CSV</button>
           <button onClick={() => { setFixCatStatus(''); setFixCatRows([]); setFixCatOpen(true); }} className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded text-sm hover:bg-teal-200 border border-teal-300">🔧 תקן קטגוריות</button>
+          <button onClick={openChildWizard} className="bg-cyan-100 text-cyan-700 px-3 py-1.5 rounded text-sm hover:bg-cyan-200 border border-cyan-300">
+            🧒 שיוך לילדים{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+          </button>
           <button onClick={openWizard} className="bg-violet-100 text-violet-700 px-3 py-1.5 rounded text-sm hover:bg-violet-200 border border-violet-300">🔬 Finetune Wizard</button>
           <button onClick={() => { setDeleteYearStatus(''); setDeleteYearOpen(true); }} className="bg-orange-100 text-orange-700 px-3 py-1.5 rounded text-sm hover:bg-orange-200 border border-orange-300">🗓 מחק שנה</button>
           <button onClick={() => setConfirmClear(true)} className="bg-red-100 text-red-700 px-3 py-1.5 rounded text-sm hover:bg-red-200 border border-red-300">🧹 אפס נתונים</button>
@@ -950,7 +1047,12 @@ export default function Admin() {
                       >
                         <option value="">הכל</option>
                         {(col.options as readonly string[]).map((opt) => (
-                          <option key={opt} value={opt}>{displayLabel(col.key, opt)}</option>
+                          <option
+                            key={opt}
+                            value={col.key === 'child' && opt === NO_CHILD ? FILTER_NO_CHILD : opt}
+                          >
+                            {displayLabel(col.key, opt)}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -1557,6 +1659,158 @@ export default function Admin() {
                 <button onClick={closeWizard} className="px-5 py-2 border rounded-lg hover:bg-gray-50 text-sm">סגור</button>
               </div>
             )}
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* ── Child Assignment Wizard ── */}
+      {childWizOpen && (() => {
+        const selRows   = transactions.filter((t) => selectedIds.has(t.id));
+        const nonKids   = selRows.filter((t) => t.category !== 'ילדים').length;
+        const breakdown: Record<string, number> = {};
+        for (const t of selRows) {
+          const k = String(t.child ?? NO_CHILD);
+          breakdown[k] = (breakdown[k] ?? 0) + 1;
+        }
+        // canonical order first, then any legacy value still stored on a row
+        const sortedBreakdown = [
+          ...CHILD_COL_OPTIONS,
+          ...Object.keys(breakdown).filter((k) => !CHILD_COL_OPTIONS.includes(k)),
+        ].filter((k) => breakdown[k]);
+        const totalTargets = selRows.length + childWizRuleIds.size;
+        const allRulesPicked = recurringRules.length > 0 && childWizRuleIds.size === recurringRules.length;
+
+        return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h2 className="text-lg font-bold">🧒 שיוך לילדים</h2>
+                <p className="text-xs text-gray-500 mt-0.5">שיוך רוחבי לשורות המסומנות ולכללים קבועים</p>
+              </div>
+              <button onClick={closeChildWizard} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-5 space-y-5">
+
+              {/* ── Section 1: selected rows ── */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-2">1 · שורות מסומנות בטבלה</h3>
+                {selRows.length === 0 ? (
+                  <div className="bg-gray-50 border rounded-lg p-3 text-sm text-gray-500">
+                    לא סומנו שורות. סגור, סמן שורות ב-☑ בתחילת השורה, ופתח שוב — או שייך כללים קבועים בלבד למטה.
+                  </div>
+                ) : (
+                  <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3">
+                    <p className="text-sm font-medium text-cyan-800 mb-2">{selRows.length} שורות נבחרו · שיוך נוכחי:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sortedBreakdown.map((k) => (
+                        <span key={k || 'none'} className="bg-white border border-cyan-200 rounded-full px-2.5 py-0.5 text-sm text-cyan-700">
+                          {displayLabel('child', k)} <span className="text-cyan-400">×{breakdown[k]}</span>
+                        </span>
+                      ))}
+                    </div>
+                    {nonKids > 0 && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-2">
+                        ℹ️ {nonKids} מהשורות אינן בקטגוריית "ילדים". השיוך יישמר עליהן, אך פילוח הילדים בדוחות מציג כרגע רק את קטגוריית "ילדים".
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Section 2: recurring rules ── */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-bold text-gray-700">
+                    2 · כללים קבועים <span className="font-normal text-gray-400">(לא מופיעים בטבלה)</span>
+                  </h3>
+                  {recurringRules.length > 0 && (
+                    <button
+                      onClick={() => setChildWizRuleIds(allRulesPicked ? new Set() : new Set(recurringRules.map((r) => r.id)))}
+                      className="text-xs text-cyan-600 hover:underline"
+                    >
+                      {allRulesPicked ? 'נקה הכל' : 'בחר הכל'}
+                    </button>
+                  )}
+                </div>
+                {recurringRules.length === 0 ? (
+                  <div className="bg-gray-50 border rounded-lg p-3 text-sm text-gray-500">אין כללים קבועים מוגדרים.</div>
+                ) : (
+                  <div className="border rounded-lg max-h-52 overflow-y-auto divide-y">
+                    {recurringRules.map((r) => (
+                      <label key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={childWizRuleIds.has(r.id)}
+                          onChange={(e) => setChildWizRuleIds((prev) => {
+                            const n = new Set(prev);
+                            e.target.checked ? n.add(r.id) : n.delete(r.id);
+                            return n;
+                          })}
+                        />
+                        <span className="font-medium text-gray-800 truncate">{r.sub_category || r.category}</span>
+                        <span className="text-gray-400 text-xs shrink-0">{r.category} · ₪{r.amount.toLocaleString()} · {r.start_month}→{r.end_month}</span>
+                        <span className="mr-auto text-xs shrink-0 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {displayLabel('child', String(r.child ?? NO_CHILD))}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {childWizRuleIds.size > 0 && (
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    שינוי כלל קבוע חל על כל החודשים שהוא מייצר.
+                  </p>
+                )}
+              </div>
+
+              {/* ── Section 3: target ── */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-2">3 · שייך ל:</h3>
+                <div className="flex flex-wrap gap-2">
+                  {CHILD_COL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt || 'none'}
+                      onClick={() => setChildWizTarget(opt)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                        childWizTarget === opt
+                          ? 'bg-cyan-500 text-white border-cyan-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-cyan-50'
+                      }`}
+                    >
+                      {displayLabel('child', opt)}
+                    </button>
+                  ))}
+                </div>
+                {childWizTarget === NO_CHILD && (
+                  <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1.5 mt-2">
+                    ⚠️ "ללא שיוך" ימחק את השיוך הקיים מכל הפריטים שנבחרו.
+                  </p>
+                )}
+              </div>
+
+              {childWizStatus && (
+                <p className={`text-sm font-medium rounded-lg px-3 py-2 text-center ${
+                  childWizStatus.startsWith('✅') ? 'text-green-700 bg-green-50'
+                  : childWizStatus.startsWith('❌') ? 'text-red-700 bg-red-50'
+                  : 'text-cyan-700 bg-cyan-50'
+                }`}>{childWizStatus}</p>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end p-4 border-t">
+              <button onClick={closeChildWizard} disabled={childWizLoading} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm disabled:opacity-60">סגור</button>
+              <button
+                onClick={runChildAssign}
+                disabled={childWizLoading || childWizTarget === null || totalTargets === 0}
+                className="px-5 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 text-sm font-medium disabled:opacity-40"
+              >
+                {childWizLoading ? 'מעדכן…' : `החל על ${totalTargets} פריטים →`}
+              </button>
+            </div>
           </div>
         </div>
         );

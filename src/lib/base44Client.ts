@@ -74,6 +74,28 @@ function makeEntity<T extends { id: string }>(collectionName: string) {
       return { id, ...updates } as T;
     },
 
+    // bulk-update distinct docs with per-doc payloads — chunked batches.
+    // Same undefined/null contract as update(): undefined is stripped, null clears.
+    async bulkUpdate(items: { id: string; data: Partial<T> }[], onProgress?: (done: number, total: number) => void): Promise<void> {
+      const CHUNK = 400;
+      const total = items.length;
+      let done = 0;
+      for (let i = 0; i < total; i += CHUNK) {
+        const batch = writeBatch(db);
+        const chunk = items.slice(i, i + CHUNK);
+        for (const { id, data } of chunk) {
+          const clean = Object.fromEntries(
+            Object.entries(data as Record<string, unknown>).filter(([, v]) => v !== undefined),
+          );
+          if (Object.keys(clean).length === 0) continue;
+          batch.update(doc(db, collectionName, id), clean);
+        }
+        await batch.commit();
+        done += chunk.length;
+        onProgress?.(done, total);
+      }
+    },
+
     async delete(id: string): Promise<void> {
       await deleteDoc(doc(db, collectionName, id));
     },

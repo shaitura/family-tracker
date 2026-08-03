@@ -214,12 +214,16 @@ const TransactionRow = memo(function TransactionRow({
                   </div>
                   <div>
                     <Label className="text-[10px] mb-1 block">קטגוריה</Label>
-                    <select value={editForm.category ?? ''} onChange={(e) => { const c = e.target.value as Category; setE('category', c); if (c !== 'ילדים') setE('child', undefined); }}
+                    {/* Changing the category no longer clears the child tag — a tag set from
+                        the Admin table (where any row can be tagged) must survive an edit here. */}
+                    <select value={editForm.category ?? ''} onChange={(e) => setE('category', e.target.value as Category)}
                       className="w-full h-8 rounded-xl border border-white/15 bg-white/5 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50" dir="rtl">
                       {CATEGORIES.map((c) => <option key={c} value={c} className="bg-slate-800">{c}</option>)}
                     </select>
                   </div>
-                  {editForm.category === 'ילדים' && (
+                  {/* Shown for the "ילדים" category, and for any row that already carries a
+                      tag — otherwise an Admin-set tag would be invisible and uneditable here. */}
+                  {(editForm.category === 'ילדים' || editForm.child) && (
                     <div>
                       <Label className="text-[10px] mb-1 block">שיוך לילד/ה</Label>
                       <div className="flex flex-wrap gap-1">
@@ -465,7 +469,8 @@ export default function Transactions() {
         if (data.payer) ruleUpdate.payer = data.payer;
         if (data.payment_method) ruleUpdate.payment_method = data.payment_method;
         if (data.notes !== undefined) ruleUpdate.notes = data.notes || undefined;
-        if ('child' in data) ruleUpdate.child = (data.category ?? tx.category) === 'ילדים' ? (data.child || undefined) : undefined;
+        // child is independent of the category; null clears it (undefined is stripped by update()).
+        if ('child' in data) ruleUpdate.child = (data.child || null) as RecurringRule['child'];
         await base44.entities.RecurringRule.update(tx.recurrence_id, ruleUpdate);
         return;
       }
@@ -483,7 +488,9 @@ export default function Transactions() {
           expense_class: 'קבועה',
           notes: data.notes ?? tx.notes,
           status: data.status ?? tx.status,
-          child: cat === 'ילדים' ? (data.child ?? tx.child) : undefined,
+          // `'child' in data` distinguishes "cleared" from "not edited" — `??` alone
+          // would resurrect the inherited tag whenever the user cleared it.
+          child: 'child' in data ? (data.child || undefined) : tx.child,
           recurrence_id: tx.recurrence_id,
           recurrence_month: tx.recurrence_month,
         };
@@ -507,9 +514,11 @@ export default function Transactions() {
         return;
       }
       // ── Plain real row ──
-      // Normalize the child tag: valid only on "ילדים"; null clears it (undefined would be stripped, leaving a stale tag).
-      const isKids = (data.category ?? tx.category) === 'ילדים';
-      const clean = { ...data, child: (isKids && data.child ? data.child : null) as Transaction['child'] };
+      // The child tag is independent of the category (the Admin table can tag any row),
+      // so only an edit that explicitly carries `child` may touch it. Clearing writes
+      // null — undefined would be stripped by update(), leaving the stale tag behind.
+      const clean: Partial<Transaction> = { ...data };
+      if ('child' in data) clean.child = (data.child || null) as Transaction['child'];
       await base44.entities.Transaction.update(tx.id, clean);
     },
     onSuccess: (_, { scope }) => {
