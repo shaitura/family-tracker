@@ -10,7 +10,10 @@ import {
 
 // Bumped on every deploy while diagnosing the "rows survive every filter" report.
 // Lets a screenshot prove which bundle the browser is actually running.
-const ADMIN_BUILD = 'diag-3 · docId-fix · 2026-08-03';
+// Injected from git at build time (see vite.config.ts). Never hand-edit a version
+// string here — the panel exists to answer "which build is this browser running",
+// and a stale answer to that is worse than no answer.
+const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
 
 /** Count occurrences of a field across rows, sorted desc. Diagnostic only. */
 function tally(rows: Transaction[], pick: (t: Transaction) => string, top = 10): [string, number][] {
@@ -998,39 +1001,57 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ── Diagnostic panel (temporary) ──
-          Re-runs both predicates on the rows actually being rendered. If a
-          displayed row reports pass:true for a filter it visibly violates, the
-          predicate is wrong; if it reports false, the table is not rendering
-          `rows` at all. One screenshot settles which. */}
-      {diagOpen && (
-        <div className="px-3 py-2 bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto whitespace-pre border-b" dir="ltr">
-{JSON.stringify({
-  build: ADMIN_BUILD,
-  search,
-  colFilters,
-  showReviewOnly,
-  total: transactions.length,
-  matched: rows.length,
-  // If the filter works, every matched row carries the filtered category — so a
-  // surprising row inside this set is a DATA problem, not a filtering one.
-  matchedByCategory: tally(rows, (t) => String(t.category ?? '')),
-  matchedTopSubs: tally(rows, (t) => (t.sub_category ?? '').slice(0, 34), 8),
-  rendered: rows.slice(0, 6).map((r) => ({
-    id: r.id,
-    idLen: r.id.length,
-    date: r.date,
-    category: r.category,
-    sub: (r.sub_category ?? '').slice(0, 28),
-    child: r.child ?? null,
-    virtual: !!r.is_virtual,
-    skip: !!r.recurrence_skip,
-    passSearch: !search || matchesSearch(r, search),
-    passCols: matchesColFilters(r, colFilters),
-  })),
-}, null, 1)}
-        </div>
-      )}
+      {/* ── 🐞 Diagnostic panel ──
+          Answers "why is this row here / why won't it save" without DevTools:
+          which build is running, the exact filter state, and the two predicates
+          re-run against the rows actually on screen. A displayed row reporting
+          pass:true for a filter it visibly violates means the predicate is
+          wrong; pass:false means the table is not rendering the filtered list.
+          Lazily rendered — costs nothing while closed. */}
+      {diagOpen && (() => {
+        const payload = {
+          build: BUILD_ID,
+          search,
+          colFilters,
+          showReviewOnly,
+          total: transactions.length,
+          matched: rows.length,
+          // If filtering is sound, every matched row carries the filtered value —
+          // so a surprising row inside this set is a DATA problem, not a filter one.
+          matchedByCategory: tally(rows, (t) => String(t.category ?? '')),
+          matchedTopSubs: tally(rows, (t) => (t.sub_category ?? '').slice(0, 34), 8),
+          rendered: rows.slice(0, 6).map((r) => ({
+            id: r.id,
+            // A Firestore auto-id is 20 chars. Anything else means the row carries
+            // a foreign id — the class of bug that made rows silently unwritable.
+            idLen: r.id.length,
+            date: r.date,
+            category: r.category,
+            sub: (r.sub_category ?? '').slice(0, 28),
+            child: r.child ?? null,
+            virtual: !!r.is_virtual,
+            skip: !!r.recurrence_skip,
+            passSearch: !search || matchesSearch(r, search),
+            passCols: matchesColFilters(r, colFilters),
+          })),
+        };
+        const text = JSON.stringify(payload, null, 1);
+        return (
+          <div className="bg-slate-900 border-b" dir="ltr">
+            <div className="flex items-center gap-3 px-3 pt-2" dir="rtl">
+              <span className="text-[11px] text-slate-300 font-medium">🐞 אבחון</span>
+              <button
+                onClick={() => navigator.clipboard?.writeText(text)}
+                className="text-[11px] text-cyan-300 hover:text-cyan-200 hover:underline"
+              >
+                העתק JSON
+              </button>
+              <span className="text-[11px] text-slate-500">{BUILD_ID}</span>
+            </div>
+            <pre className="px-3 pb-2 pt-1 text-slate-100 text-[11px] font-mono overflow-x-auto">{text}</pre>
+          </div>
+        );
+      })()}
 
       {/* ── Template hint ── */}
       <div className="px-3 py-1.5 bg-blue-50 border-b text-xs text-blue-700">
