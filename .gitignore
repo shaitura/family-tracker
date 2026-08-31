@@ -5,6 +5,9 @@ node_modules/
 # Build output — never commit, CI deploys automatically
 dist/
 index.html
+# ...but the harness has its own entry page; the rule above is unanchored and
+# would otherwise swallow it at any depth.
+!harness/index.html
 
 # Environment variables — NEVER commit these
 .env

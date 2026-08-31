@@ -1,7 +1,7 @@
 // src/pages/reports/exportReport.ts
 import { Transaction } from '@/types';
 import { formatCurrency, PAYER_LABELS } from '@/utils';
-import { ReportPeriod, periodMonths, periodLabel } from '@/lib/reportPeriod';
+import { ReportPeriod, displayMonths, periodLabel } from '@/lib/reportPeriod';
 import { byCategory, byMonth, byPayer, fixedVariableSplit } from '@/lib/reportAggregates';
 
 function inRange(t: Transaction, period: ReportPeriod): boolean {
@@ -15,7 +15,9 @@ export async function exportExcel(transactions: Transaction[], period: ReportPer
   const wb = utils.book_new();
   const filtered = transactions.filter((t) => t.type === txType && inRange(t, period));
   const total = filtered.reduce((s, t) => s + t.amount, 0);
-  const months = periodMonths(period);
+  // displayMonths, not periodMonths: otherwise the by-month sheet exports empty
+  // for כל הזמן, which has no month range of its own.
+  const months = displayMonths(period, filtered.map((t) => t.date));
 
   const rtl = (ws: ReturnType<typeof utils.json_to_sheet>) => { ws['!views'] = [{ rightToLeft: true }]; return ws; };
   const ILS = '"₪"#,##0';

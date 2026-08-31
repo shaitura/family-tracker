@@ -22,7 +22,11 @@ export function createPageUrl(page: string): string {
 
 // ── Formatters ───────────────────────────────────────────────────────────────
 export function formatCurrency(amount: number): string {
-  return `₪${Math.abs(amount).toLocaleString('he-IL', { maximumFractionDigits: 0 })}`;
+  // The sign is load-bearing: a deficit used to render identically to a surplus
+  // of the same size, distinguished only by the colour the caller chose. Rounded
+  // first so a value like -0.4 reads "₪0" rather than "-₪0".
+  const sign = Math.round(amount) < 0 ? '-' : '';
+  return `${sign}₪${Math.abs(amount).toLocaleString('he-IL', { maximumFractionDigits: 0 })}`;
 }
 
 export function formatDate(dateStr: string): string {
