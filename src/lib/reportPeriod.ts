@@ -67,6 +67,27 @@ export function periodMonths(period: ReportPeriod): string[] {
   return monthsInRange(period.startMonth, period.endMonth);
 }
 
+/**
+ * The months a by-month view should render as columns/series.
+ *
+ * Same as periodMonths() for every bounded period. "All time" is the exception:
+ * it has no bounds of its own, so periodMonths() returns [] and anything mapping
+ * over it renders nothing — which is why the by-month, by-payer and
+ * category-by-month cards came up blank under "כל הזמן". Here the range comes
+ * from the data instead, so those views show the real history.
+ */
+export function displayMonths(period: ReportPeriod, dates: string[]): string[] {
+  if (!period.isAllTime) return periodMonths(period);
+  let min = '', max = '';
+  for (const d of dates) {
+    const m = d.slice(0, 7);
+    if (!m) continue;
+    if (!min || m < min) min = m;
+    if (!max || m > max) max = m;
+  }
+  return min ? monthsInRange(min, max) : [];
+}
+
 /** True if a transaction date falls within the period (allTime always matches). */
 export function inPeriod(dateStr: string, period: ReportPeriod): boolean {
   if (period.isAllTime) return true;
@@ -76,7 +97,12 @@ export function inPeriod(dateStr: string, period: ReportPeriod): boolean {
 
 /** The equal-length period immediately preceding this one — used for anomaly comparisons. */
 export function priorPeriod(period: ReportPeriod): ReportPeriod {
-  if (period.isAllTime) return { ...period, startMonth: '', endMonth: '' };
+  // "All time" already covers everything, so nothing precedes it. Spreading the
+  // period kept isAllTime true, and inPeriod() then matched every date — the
+  // prior window came back equal to the current one and the insights summary
+  // compared the period to itself ("stable, 0%"). An empty window matches
+  // nothing, so callers drop the comparison instead of stating a tautology.
+  if (period.isAllTime) return { ...period, quickPick: 'custom', startMonth: '', endMonth: '', isAllTime: false };
   const len = periodMonths(period).length;
   const priorEnd = subtractMonths(period.startMonth, 1);
   const priorStart = subtractMonths(priorEnd, len - 1);
