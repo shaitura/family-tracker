@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Resp
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Transaction, CHILD_TAGS } from '@/types';
 import { formatCurrency, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
-import { ReportPeriod, periodMonths, inPeriod } from '@/lib/reportPeriod';
+import { ReportPeriod, displayMonths, inPeriod } from '@/lib/reportPeriod';
 import { byCategory, byPayer, byMonth, fixedVariableSplit, categoryMonthMatrix } from '@/lib/reportAggregates';
 import { ChartTooltip } from './ChartTooltip';
 import { FixedVariableSplitCard } from './FixedVariableSplitCard';
@@ -15,13 +15,16 @@ type SubTab = 'category' | 'month' | 'payer' | 'split';
 
 export function ExpensesTab({ transactions, period, category }: { transactions: Transaction[]; period: ReportPeriod; category: string }) {
   const [subTab, setSubTab] = useState<SubTab>('category');
-  const months = useMemo(() => periodMonths(period), [period]);
-  const isMultiMonth = months.length > 1 || period.isAllTime;
-
   const filtered = useMemo(
     () => transactions.filter((t) => t.type === 'expense' && (!category || t.category === category) && inPeriod(t.date, period)),
     [transactions, category, period],
   );
+
+  // displayMonths, not periodMonths: under "כל הזמן" the period carries no month
+  // range, so every by-month view below mapped over an empty array and rendered
+  // an empty card. The months come from the filtered rows in that case.
+  const months = useMemo(() => displayMonths(period, filtered.map((t) => t.date)), [period, filtered]);
+  const isMultiMonth = months.length > 1;
 
   const total = filtered.reduce((s, t) => s + t.amount, 0);
   const catData = useMemo(() => byCategory(filtered), [filtered]);

@@ -5,7 +5,7 @@ import { Sparkles, Brain, ChevronDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Transaction } from '@/types';
 import { formatCurrency } from '@/utils';
-import { ReportPeriod, periodMonths, priorPeriod, inPeriod, periodLabel } from '@/lib/reportPeriod';
+import { ReportPeriod, periodMonths, displayMonths, priorPeriod, inPeriod, periodLabel } from '@/lib/reportPeriod';
 import {
   findAnomalies, findLeaks, yearOverYear, seasonalPeaks, paymentMethodByMonth, PAYMENT_METHODS_LIST,
   payerCategoryBreakdown, executiveSummary, cashflowForecast, miscDrift, analystInsights,
@@ -49,7 +49,9 @@ export function InsightsTab({
   const currentYear = now.getFullYear();
 
   const allExpenses = useMemo(() => transactions.filter((t) => t.type === 'expense' && (!category || t.category === category)), [transactions, category]);
-  const months = useMemo(() => periodMonths(period), [period]);
+  // displayMonths, not periodMonths: כל הזמן carries no month range, which left the
+  // trend charts below rendering nothing. Derived from the expenses instead.
+  const months = useMemo(() => displayMonths(period, allExpenses.map((t) => t.date)), [period, allExpenses]);
   const prior = useMemo(() => priorPeriod(period), [period]);
   const priorMonths = useMemo(() => periodMonths(prior), [prior]);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPeriod, periodMonths, inPeriod, priorPeriod, periodLabel } from './reportPeriod';
+import { buildPeriod, periodMonths, displayMonths, inPeriod, priorPeriod, periodLabel } from './reportPeriod';
 
 const NOW = new Date(2026, 6, 15); // 2026-07-15
 
@@ -101,6 +101,32 @@ describe('inPeriod', () => {
   });
 });
 
+describe('displayMonths', () => {
+  const DATES = ['2024-03-09', '2024-01-05', '2026-08-17', '2025-11-02'];
+
+  it('matches periodMonths for a bounded period, ignoring the data', () => {
+    const p = buildPeriod('custom', { customStart: '2026-05', customEnd: '2026-07' });
+    expect(displayMonths(p, DATES)).toEqual(periodMonths(p));
+    expect(displayMonths(p, [])).toEqual(['2026-05', '2026-06', '2026-07']);
+  });
+
+  it('allTime spans the first month of data to the last', () => {
+    const p = buildPeriod('allTime', { now: NOW });
+    const out = displayMonths(p, DATES);
+    expect(out[0]).toBe('2024-01');
+    expect(out[out.length - 1]).toBe('2026-08');
+    expect(out).toHaveLength(32);
+  });
+
+  it('allTime with a single month of data returns that one month', () => {
+    expect(displayMonths(buildPeriod('allTime', { now: NOW }), ['2025-04-10'])).toEqual(['2025-04']);
+  });
+
+  it('allTime with no data returns empty rather than a bogus range', () => {
+    expect(displayMonths(buildPeriod('allTime', { now: NOW }), [])).toEqual([]);
+  });
+});
+
 describe('priorPeriod', () => {
   it('equal-length window immediately before', () => {
     const p = buildPeriod('custom', { customStart: '2026-05', customEnd: '2026-07' }); // 3 months
@@ -114,6 +140,15 @@ describe('priorPeriod', () => {
     const prior = priorPeriod(p);
     expect(prior.startMonth).toBe('2026-06');
     expect(prior.endMonth).toBe('2026-06');
+  });
+
+  it('allTime has no prior period — it must not match itself', () => {
+    const prior = priorPeriod(buildPeriod('allTime', { now: NOW }));
+    expect(prior.isAllTime).toBe(false);
+    // Nothing at all falls inside it, so a caller comparing against it gets 0.
+    expect(inPeriod('2019-01-01', prior)).toBe(false);
+    expect(inPeriod('2026-08-31', prior)).toBe(false);
+    expect(periodMonths(prior)).toEqual([]);
   });
 });
 
