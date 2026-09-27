@@ -65,12 +65,17 @@ export async function exportExcel(transactions: Transaction[], period: ReportPer
 export function exportPdf(transactions: Transaction[], period: ReportPeriod) {
   const label = periodLabel(period);
   const fmtILS = (n: number) => formatCurrency(n);
+  // Escape DB-derived category names before they enter the printed HTML (defense-in-depth;
+  // writers are allowlisted today, but this keeps the export safe if that ever widens).
+  const esc = (s: string) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
   const section = (title: string, txType: 'expense' | 'income') => {
     const txs = transactions.filter((t) => t.type === txType && inRange(t, period));
     const total = txs.reduce((s, t) => s + t.amount, 0);
     if (total === 0) return '';
     const cats = byCategory(txs);
-    const rows = cats.map(({ name, value }) => `<div class="lrow"><span class="lname">${name}</span><span class="lamt">${fmtILS(value)}</span></div>`).join('');
+    const rows = cats.map(({ name, value }) => `<div class="lrow"><span class="lname">${esc(name)}</span><span class="lamt">${fmtILS(value)}</span></div>`).join('');
     return `<div class="section"><h2>${title}<span>${fmtILS(total)}</span></h2><h3>לפי קטגוריה</h3><div class="legend">${rows}</div></div>`;
   };
   const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>דוח משפחתי — ${label}</title>
