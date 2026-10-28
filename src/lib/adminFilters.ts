@@ -36,18 +36,23 @@ export const EXACT_MATCH_FILTER_FIELDS = new Set([
   'expense_class', 'payer', 'payment_method', 'category', 'type', 'status', 'child',
 ]);
 
-/** Free-text search across every visible field. Substring by design. */
+/**
+ * Free-text search across every visible field. Substring by design.
+ * Shared by the Expenses and Admin pages. Every value goes through String(?? '')
+ * because stored rows can lack fields the type calls required — one such row
+ * used to throw here and blank the whole page on the first keystroke.
+ */
 export function matchesSearch(t: Transaction, q: string): boolean {
   const s = q.toLowerCase();
   return [
-    t.date, t.sub_category ?? '', t.category, t.notes ?? '',
-    t.payer, OPTION_LABELS.payer?.[t.payer] ?? '',
-    t.payment_method, t.expense_class ?? '',
-    t.type, OPTION_LABELS.type?.[t.type] ?? '',
-    t.status, OPTION_LABELS.status?.[t.status] ?? '',
-    t.child ?? '', CHILD_LABELS[t.child ?? ''] ?? '',
-    String(t.amount),
-  ].some((v) => v.toLowerCase().includes(s));
+    t.date, t.sub_category, t.category, t.notes,
+    t.payer, OPTION_LABELS.payer?.[t.payer],
+    t.payment_method, t.expense_class,
+    t.type, OPTION_LABELS.type?.[t.type],
+    t.status, OPTION_LABELS.status?.[t.status],
+    t.child, CHILD_LABELS[t.child ?? ''],
+    t.amount,
+  ].some((v) => String(v ?? '').toLowerCase().includes(s));
 }
 
 /** Per-column filters. Exact for option-list columns, substring for free text. */

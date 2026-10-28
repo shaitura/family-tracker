@@ -36,6 +36,23 @@ describe('matchesSearch', () => {
     expect(matchesSearch(KIDS, 'יובל')).toBe(true);
     expect(matchesSearch(MOR, 'יובל')).toBe(false);
   });
+
+  // Stored rows predate some fields: the type says required, Firestore says
+  // otherwise. One such row used to throw inside the filter and blank the whole
+  // Expenses/Admin page on the first keystroke.
+  it('does not throw on a stored row missing "required" fields', () => {
+    const partial = { id: 'old', amount: 50, notes: 'ישן' } as unknown as Transaction;
+    expect(() => matchesSearch(partial, 'x')).not.toThrow();
+    expect(matchesSearch(partial, 'ישן')).toBe(true);
+    expect(matchesSearch(partial, '50')).toBe(true);
+    expect(matchesSearch(partial, 'אשראי')).toBe(false);
+  });
+
+  it('does not throw on non-string values (e.g. a numeric date)', () => {
+    const odd = tx({ date: 20260301 as unknown as string, category: null as unknown as Category });
+    expect(() => matchesSearch(odd, '2026')).not.toThrow();
+    expect(matchesSearch(odd, '2026')).toBe(true);
+  });
 });
 
 describe('matchesColFilters — option-list columns are exact', () => {

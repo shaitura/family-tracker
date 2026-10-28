@@ -27,3 +27,13 @@ drivers point at `/opt/pw-browsers/chromium` via `executablePath`; change that
 line if your Chromium lives elsewhere. Note `xlsx` installs only from
 cdn.sheetjs.com, so on a network that blocks it, install without the package and
 stub it in `node_modules` — the harness never touches the export paths.
+
+## Expenses page (`pages.html`)
+
+`harness/pages.html` runs the real `Layout` + `Transactions` page (and the
+`ErrorBoundary`) on the same seed plus one legacy row that lacks the fields the
+type calls required — the shape that used to blank the page on a search.
+`@/lib/firebase` is swapped for a dummy-config stub (`firebase.ts`), since the
+real one throws at import time without an `.env`. `#/boom` renders a component
+that throws, to see the boundary. Open
+`http://127.0.0.1:5178/harness/pages.html#/` after starting the server above.

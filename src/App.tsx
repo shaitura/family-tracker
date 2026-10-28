@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { HashRouter as BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useState, useEffect, ReactNode } from 'react';
+import { HashRouter as BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -7,6 +7,7 @@ import { isAllowedEmail, toUserInfo, UserInfo } from '@/lib/auth';
 import { Toaster } from '@/components/ui/toaster';
 import Layout from '@/components/Layout';
 import LoginScreen from '@/components/LoginScreen';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import Home from '@/pages/Home';
 import Transactions from '@/pages/Transactions';
 import Reports from '@/pages/Reports';
@@ -21,6 +22,12 @@ import Subscriptions from '@/pages/Subscriptions';
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, gcTime: 1000 * 60 * 15, retry: false, refetchOnWindowFocus: false } },
 });
+
+/** Keyed on the path so a crashed page is cleared by navigating away from it. */
+function RouteBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+}
 
 export default function App() {
   const [user, setUser] = useState<UserInfo | null | 'loading'>('loading');
@@ -55,6 +62,7 @@ export default function App() {
       <Toaster>
         <BrowserRouter>
           <Layout user={user} onLogout={() => signOut(auth)}>
+            <RouteBoundary>
             <Routes>
               <Route path="/"                  element={<Home />} />
               <Route path="/add-transaction"   element={<Transactions />} />
@@ -68,6 +76,7 @@ export default function App() {
               <Route path="/subscriptions"    element={<Subscriptions />} />
               <Route path="/admin"             element={<Admin />} />
             </Routes>
+            </RouteBoundary>
           </Layout>
         </BrowserRouter>
       </Toaster>

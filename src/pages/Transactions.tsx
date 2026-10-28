@@ -15,6 +15,7 @@ import { Transaction, RecurringRule, CATEGORIES, INCOME_CATEGORIES, PAYMENT_METH
 import { formatCurrency, formatDate, formatMonth, categoryColor, PAYER_LABELS, CHILD_LABELS } from '@/utils';
 import { useTransactions } from '@/hooks/useTransactions';
 import { isVirtualId, monthsInRange } from '@/lib/recurrence';
+import { matchesSearch } from '@/lib/adminFilters';
 import { auth } from '@/lib/firebase';
 
 // ── AddTransaction helpers ────────────────────────────────────────────────
@@ -80,22 +81,6 @@ const BULK_FIELDS = [
 
 const MONTH_NAMES = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
 const MONTHS_PER_PAGE = 4;
-
-function matchesSearch(t: Transaction, q: string): boolean {
-  const s = q.toLowerCase();
-  return (
-    (t.sub_category ?? '').toLowerCase().includes(s) ||
-    t.category.toLowerCase().includes(s) ||
-    (t.notes ?? '').toLowerCase().includes(s) ||
-    t.payer.toLowerCase().includes(s) ||
-    t.payment_method.toLowerCase().includes(s) ||
-    (t.expense_class ?? '').toLowerCase().includes(s) ||
-    t.status.toLowerCase().includes(s) ||
-    String(t.amount).includes(s) ||
-    t.date.includes(s) ||
-    (PAYER_LABELS[t.payer] ?? '').toLowerCase().includes(s)
-  );
-}
 
 function monthKey(dateStr: string): string {
   if (dateStr.length < 7) return dateStr;
@@ -819,10 +804,35 @@ export default function Transactions() {
             <span>אוטו</span>
           </button>
         </div>
+        {/* Search + filter toggle — in the fixed bar (not position:sticky: <main> is
+            overflow-y-auto, so a sticky child binds to it, and <main> never scrolls —
+            the window does) so it stays reachable deep in the list. */}
+        <div className="flex gap-2 mt-2">
+          <div className="relative flex-1">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Input placeholder="חיפוש בכל השדות..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" dir="rtl" />
+          </div>
+          <Button
+            variant="outline" size="icon" className="relative shrink-0"
+            onClick={() => {
+              // The panel opens at the top of the list; bring it into view from deep down.
+              // Instant, not smooth: the panel's height animation interrupts a smooth scroll halfway.
+              if (!showFilters) window.scrollTo({ top: 0 });
+              setShowFilters(!showFilters);
+            }}
+          >
+            <Filter className="w-4 h-4" />
+            {activeFilters > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-cyan-500 text-white text-[9px] flex items-center justify-center font-bold">
+                {activeFilters}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
 
-      {/* Spacer — compensates for fixed button bar height (~54px) */}
-      <div className="h-[54px]" />
+      {/* Spacer — compensates for fixed bar height (buttons row + search row) */}
+      <div className="h-[102px]" />
 
       {/* ── Add Transaction Modal Popup ── */}
       <AnimatePresence>
@@ -1060,22 +1070,7 @@ export default function Transactions() {
         )}
       </AnimatePresence>
 
-      {/* ── List Panel ── */}
-      {/* Search + filter toggle */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-          <Input placeholder="חיפוש בכל השדות..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9" dir="rtl" />
-        </div>
-        <Button variant="outline" size="icon" onClick={() => setShowFilters(!showFilters)} className="relative shrink-0">
-          <Filter className="w-4 h-4" />
-          {activeFilters > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-cyan-500 text-white text-[9px] flex items-center justify-center font-bold">
-              {activeFilters}
-            </span>
-          )}
-        </Button>
-      </div>
+      {/* ── List Panel ── (search + filter toggle live in the fixed bar above) */}
 
       {/* Active filter chips */}
       {activeFilterChips.length > 0 && (
@@ -1315,7 +1310,7 @@ export default function Transactions() {
             const monthIncome = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
             const monthExpense = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
             return (
-              <motion.div key={monthKey} ref={monthKey === currentMonthKey ? currentMonthRef : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={monthKey === currentMonthKey ? { scrollMarginTop: '110px' } : undefined}>
+              <motion.div key={monthKey} ref={monthKey === currentMonthKey ? currentMonthRef : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={monthKey === currentMonthKey ? { scrollMarginTop: '158px' } : undefined}>
                 {/* Month header */}
                 <div data-month={monthKey} className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2">
