@@ -563,7 +563,9 @@ export default function Assets() {
       )}
 
       <Tabs defaultValue="list">
-        <TabsList>
+        {/* dir="rtl" on the strip only: read right to left as רשימה, סיכום, חיסכון ילדים.
+            (Radix Tabs is LTR by default; flipping the whole Tabs would mirror every card.) */}
+        <TabsList dir="rtl">
           <TabsTrigger value="list">רשימה</TabsTrigger>
           <TabsTrigger value="summary">סיכום</TabsTrigger>
           <TabsTrigger value="kids">👧 חיסכון ילדים</TabsTrigger>
@@ -801,7 +803,10 @@ export default function Assets() {
                     ללא נדל"ן
                     <span className="block text-[10px] text-white/35">החלוקה ל-100% של הנכסים הפיננסיים בלבד</span>
                   </span>
-                  <Switch checked={excludeRealEstate} onCheckedChange={setExcludeRealEstate} data-testid="exclude-re-toggle" />
+                  {/* dir="rtl": Radix Tabs stamps dir="ltr" on its content, and the shared
+                      Switch slides its thumb left (-translate-x-5) for "on", written for RTL.
+                      Under LTR the thumb left the track. Settings is RTL and unaffected. */}
+                  <Switch dir="rtl" checked={excludeRealEstate} onCheckedChange={setExcludeRealEstate} data-testid="exclude-re-toggle" />
                 </label>
               )}
 
