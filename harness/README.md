@@ -37,3 +37,17 @@ type calls required — the shape that used to blank the page on a search.
 real one throws at import time without an `.env`. `#/boom` renders a component
 that throws, to see the boundary. Open
 `http://127.0.0.1:5178/harness/pages.html#/` after starting the server above.
+
+## Assets page, percent mode (`assets.html`)
+
+`harness/assets.html` runs the real `Assets` page with its `['assets']` and
+`['transactions']` queries pre-filled (`assets-main.tsx`), so "הצגה באחוזים"
+can be checked without Firestore. The seed amounts are distinctive digit runs
+(1,234,567 / 2,109,876 / 2,468 ...), one holding is under 1% of the whole, and
+one policy has matching payments. The check: with the mode on, every tab's
+`innerText`, and every pie tooltip on hover, contains no `₪` and no 3+ digit
+number that is not a percentage, a year or a `#policy`. With the mode off, the
+same scan must find the amounts; that is the proof the scan can see them.
+Open `http://localhost:5178/harness/assets.html#/`. Note: in a background
+browser pane the pie may not draw on first mount; a re-render (toggle the mode)
+draws it. That happens with the mode off too and is not caused by the mode.

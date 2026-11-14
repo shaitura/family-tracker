@@ -1,0 +1,48 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { HashRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/toaster';
+import Assets from '@/pages/Assets';
+import '@/index.css';
+
+// The real Assets page with its two queries pre-filled, so percent mode can be
+// checked in a real browser without Firestore. staleTime: Infinity keeps the
+// page from ever calling the real queryFn.
+//
+// The figures are chosen to be recognisable: every amount contains a run of
+// digits ("123,457", "8,765"...) that verify-assets.mjs hunts for in percent
+// mode. One holding is tiny (<1% of the whole) and one insurance policy has
+// matching payments, so the hidden-payments path is exercised too.
+const assets = [
+  { id: 'a1', owner: 'Shi',   asset_class: 'נכס/השקעה', type: 'ניירות ערך',  provider: 'IBI',    product_name: 'תיק מסחר',      balance: 1234567, risk_level: 'מנייתי' },
+  { id: 'a2', owner: 'Ortal', asset_class: 'נכס/השקעה', type: 'קרן השתלמות', provider: 'מיטב',  product_name: 'השתלמות אורטל', balance: 345678,  risk_level: 'כללי' },
+  { id: 'a3', owner: 'Joint', asset_class: 'נכס/השקעה', type: 'נדל"ן',       provider: 'דירה',   product_name: 'דירה בחיפה',    balance: 2109876, risk_level: 'נדל"ן' },
+  { id: 'a4', owner: 'Yuval', asset_class: 'נכס/השקעה', type: 'חיסכון לכל ילד', provider: 'הראל', product_name: 'חיסכון יובל', balance: 9876 },
+  { id: 'i1', owner: 'Shi',   asset_class: 'ביטוח/קרן', type: 'בריאות',      provider: 'הפניקס', product_name: 'בריאות שי',     policy_number: '55443322', monthly_premium: 387, end_date: '2027-06-30' },
+  { id: 'i2', owner: 'Ortal', asset_class: 'ביטוח/קרן', type: 'ריסק',        provider: 'מגדל',   product_name: 'ריסק אורטל',    monthly_premium: 159, end_date: '2026-11-30' },
+  { id: 'i3', owner: 'Joint', asset_class: 'ביטוח/קרן', type: 'מבנה + תכולה', provider: 'ביטוח ישיר', product_name: 'דירה',      monthly_premium: 213 },
+  { id: 'i4', owner: 'Shi',   asset_class: 'ביטוח/קרן', type: 'פנסיה',       provider: 'כלל',    product_name: 'פנסיה שי',      monthly_premium: 2468 },
+];
+const transactions = ['2026-10-05', '2026-09-05', '2026-08-05'].map((date, i) => ({
+  id: `t${i}`, date, type: 'expense', category: 'ביטוחים', amount: 391, notes: 'הפניקס פוליסה 55443322',
+}));
+
+const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+qc.setQueryData(['assets'], assets);
+qc.setQueryData(['transactions'], transactions);
+(window as any).__ASSETS_SEED__ = { assets, transactions };
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={qc}>
+      <Toaster>
+        <HashRouter>
+          <div className="max-w-xl mx-auto p-4">
+            <Assets />
+          </div>
+        </HashRouter>
+      </Toaster>
+    </QueryClientProvider>
+  </React.StrictMode>,
+);

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil, AlertTriangle, Clock, CheckCircle, Percent } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import {
   AssetOwner, AssetType, AssetClass, RiskLevel,
 } from '@/types';
 import { formatCurrency, OWNER_LABELS } from '@/utils';
+import { usePercentMode, moneyOrShare } from '@/lib/privacyMode';
 
 const RISK_LEVELS: RiskLevel[] = ['סולידי', 'מנייתי', 'כללי', 'נדל"ן'];
 
@@ -202,12 +203,14 @@ const OWNER_CHART_COLORS: Record<string, string> = {
   Ziv: '#f59e0b', Joint: '#6366f1', Car_Private: '#94a3b8', Apt_Rent: '#f97316', Apt_Own: '#f97316',
 };
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
+// `fmt` decides how the hovered value reads: the amount, or in percent mode its
+// share. Without it a hover would show the shekel figure the mode hides.
+function ChartTooltip({ active, payload, fmt }: { active?: boolean; payload?: { name: string; value: number }[]; fmt: (v: number) => string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-slate-800 border border-white/15 rounded-lg px-3 py-2 text-xs" dir="rtl">
       <p className="text-white font-medium mb-0.5">{payload[0].name}</p>
-      <p className="text-emerald-400 font-bold">{payload[0].value.toLocaleString('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })}</p>
+      <p className="text-emerald-400 font-bold">{fmt(payload[0].value)}</p>
     </div>
   );
 }
@@ -293,6 +296,7 @@ export default function Assets() {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<Asset, 'id'>>(emptyAsset());
+  const [pctMode, setPctMode] = usePercentMode();
 
   const { data: assets = [] } = useQuery<Asset[]>({ queryKey: ['assets'], queryFn: () => base44.entities.Asset.filter() });
 
@@ -422,6 +426,13 @@ export default function Assets() {
     byInsOwner[a.owner].monthly += a.monthly_premium ?? 0;
     byInsOwner[a.owner].count++;
   });
+  // Every amount on this page goes through one of these two. Investments are a
+  // share of the total investment balance, insurance a share of the total
+  // monthly premium: two different wholes, never mixed.
+  const inv = (v: number) => moneyOrShare(pctMode, v, totalInvestmentBalance);
+  const ins = (v: number) => moneyOrShare(pctMode, v, totalMonthlyPremium);
+  const perMonth = pctMode ? '' : '/חודש';
+
   const byInsType: Record<string, number> = {};
   insuranceAssets.forEach((a) => { byInsType[a.type] = (byInsType[a.type] ?? 0) + (a.monthly_premium ?? 0); });
 
@@ -459,10 +470,34 @@ export default function Assets() {
     <div className="space-y-4 animate-fade-in" dir="rtl">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-white">נכסים וביטוחים</h1>
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="w-4 h-4 ml-1" /> הוסף
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPctMode(!pctMode)}
+            aria-pressed={pctMode}
+            data-testid="percent-mode-toggle"
+            className={`inline-flex items-center gap-1 h-8 px-3 rounded-xl text-xs font-medium border transition-colors ${
+              pctMode
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                : 'bg-white/5 text-white/60 border-white/15 hover:bg-white/10'
+            }`}
+          >
+            <Percent className="w-3.5 h-3.5" /> הצגה באחוזים
+          </button>
+          {/* Adding or editing shows real figures in the form, so not in this mode. */}
+          {!pctMode && (
+            <Button size="sm" onClick={openAdd}>
+              <Plus className="w-4 h-4 ml-1" /> הוסף
+            </Button>
+          )}
+        </div>
       </div>
+
+      {pctMode && (
+        <p className="text-[11px] text-amber-300/80 px-1 -mt-2" data-testid="percent-mode-note">
+          מוצג באחוזים מתוך השלם, הסכומים מוסתרים. השקעות: מתוך סך היתרות · ביטוחים: מתוך סך הפרמיה החודשית
+        </p>
+      )}
 
       <Tabs defaultValue="list">
         <TabsList>
@@ -496,7 +531,7 @@ export default function Assets() {
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <div className="text-left shrink-0">
                               {a.balance != null && (
-                                <p className="text-base font-bold text-emerald-400 leading-tight">{formatCurrency(a.balance)}</p>
+                                <p className="text-base font-bold text-emerald-400 leading-tight">{inv(a.balance)}</p>
                               )}
                             </div>
                             <p className="text-base font-semibold text-white leading-tight truncate">{a.product_name}</p>
@@ -520,9 +555,11 @@ export default function Assets() {
                         </div>
 
                         {/* Edit button */}
-                        <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        {!pctMode && (
+                          <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -592,7 +629,7 @@ export default function Assets() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-white/30">{groupAssets.length} פוליסות</span>
-                        {groupTotal > 0 && <span className="text-xs font-semibold text-cyan-400">{formatCurrency(groupTotal)}/חודש</span>}
+                        {groupTotal > 0 && <span className="text-xs font-semibold text-cyan-400">{ins(groupTotal)}{perMonth}</span>}
                       </div>
                     </div>
 
@@ -612,7 +649,7 @@ export default function Assets() {
                                   <div className="flex items-start justify-between gap-2 mb-1">
                                     <div className="text-left shrink-0">
                                       {a.monthly_premium != null && (
-                                        <p className="text-base font-bold text-cyan-400 leading-tight">{formatCurrency(a.monthly_premium)}<span className="text-xs font-normal text-white/40">/חודש</span></p>
+                                        <p className="text-base font-bold text-cyan-400 leading-tight">{ins(a.monthly_premium)}{!pctMode && <span className="text-xs font-normal text-white/40">/חודש</span>}</p>
                                       )}
                                     </div>
                                     <p className="text-base font-semibold text-white leading-tight truncate">{a.product_name}</p>
@@ -628,7 +665,8 @@ export default function Assets() {
                                     {a.start_date && <Badge variant="outline" className="text-xs">{a.start_date}</Badge>}
                                     <ExpiryBadge status={expStatus} daysLeft={daysLeft} endDate={a.end_date} assetType={a.type} />
                                   </div>
-                                  {recentTxs.length > 0 && (
+                                  {/* Actual payments are raw amounts with no meaningful whole: hidden in percent mode. */}
+                                  {!pctMode && recentTxs.length > 0 && (
                                     <div className="mt-3 pt-2.5 border-t border-white/8 space-y-1">
                                       <div className="flex items-center justify-between mb-1.5">
                                         <div className="flex items-center gap-1">
@@ -649,9 +687,11 @@ export default function Assets() {
                                     </div>
                                   )}
                                 </div>
-                                <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
+                                {!pctMode && (
+                                  <button onClick={() => openEdit(a)} className="text-white/25 hover:text-white/70 transition-colors shrink-0 self-start">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -681,7 +721,7 @@ export default function Assets() {
                   <CardContent className="pt-3 pb-3 flex items-center justify-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
                     <div className="text-center">
-                      <p className="text-lg font-bold text-emerald-400 leading-tight">{formatCurrency(totalInvestmentBalance)}</p>
+                      <p className="text-lg font-bold text-emerald-400 leading-tight">{pctMode ? '100%' : formatCurrency(totalInvestmentBalance)}</p>
                       <p className="text-[10px] text-white/40">סה"כ יתרות השקעה</p>
                     </div>
                   </CardContent>
@@ -690,10 +730,10 @@ export default function Assets() {
                   <Card className="col-span-3 sm:col-span-1 border-orange-500/20">
                     <CardContent className="pt-3 pb-3 text-center">
                       <p className="text-sm">🏠</p>
-                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{formatCurrency(totalRealEstate)}</p>
+                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{inv(totalRealEstate)}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         נדל"ן וקרקעות
-                        <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalRealEstate / totalInvestmentBalance) * 100) : 0}%)</span>
+                        {!pctMode && <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalRealEstate / totalInvestmentBalance) * 100) : 0}%)</span>}
                       </p>
                     </CardContent>
                   </Card>
@@ -702,10 +742,10 @@ export default function Assets() {
                   <Card className={`border-emerald-500/20 ${totalRealEstate > 0 ? 'col-span-3 sm:col-span-2' : 'col-span-3'}`}>
                     <CardContent className="pt-3 pb-3 text-center">
                       <p className="text-sm">📈</p>
-                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{formatCurrency(totalFinancial)}</p>
+                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{inv(totalFinancial)}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         השקעות פיננסיות
-                        <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalFinancial / totalInvestmentBalance) * 100) : 0}%)</span>
+                        {!pctMode && <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalFinancial / totalInvestmentBalance) * 100) : 0}%)</span>}
                       </p>
                     </CardContent>
                   </Card>
@@ -721,7 +761,7 @@ export default function Assets() {
                         <Pie data={invTypeChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" nameKey="name" strokeWidth={0}>
                           {invTypeChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip content={<ChartTooltip />} />
+                        <Tooltip content={<ChartTooltip fmt={inv} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-1.5 mt-1" dir="rtl">
@@ -734,8 +774,8 @@ export default function Assets() {
                             <div className="w-16 bg-white/5 rounded-full h-1.5 shrink-0">
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
                             </div>
-                            <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>
-                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{formatCurrency(entry.value)}</span>
+                            {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>}
+                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{inv(entry.value)}</span>
                           </div>
                         );
                       })}
@@ -753,7 +793,7 @@ export default function Assets() {
                       return (
                         <div key={entry.name}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold" style={{ color: entry.color }}>{formatCurrency(entry.value)}</span>
+                            <span className="font-bold" style={{ color: entry.color }}>{inv(entry.value)}</span>
                             <span className="text-white/70">{entry.name} · {entry.count} נכסים</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-2">
@@ -775,7 +815,7 @@ export default function Assets() {
                       return (
                         <div key={risk}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold text-emerald-400">{formatCurrency(balance)}</span>
+                            <span className="font-bold text-emerald-400">{inv(balance)}</span>
                             <span className="text-white/70">{risk}</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-1.5">
@@ -798,7 +838,7 @@ export default function Assets() {
               <Card>
                 <CardContent className="pt-4 pb-4 text-center">
                   <Shield className="w-6 h-6 mx-auto mb-1 text-cyan-400" />
-                  <p className="text-lg font-bold text-cyan-400">{formatCurrency(totalMonthlyPremium)}/חודש</p>
+                  <p className="text-lg font-bold text-cyan-400">{pctMode ? '100%' : `${formatCurrency(totalMonthlyPremium)}/חודש`}</p>
                   <p className="text-[11px] text-white/40 mt-0.5">סה"כ פרמיה חודשית</p>
                 </CardContent>
               </Card>
@@ -812,7 +852,7 @@ export default function Assets() {
                         <Pie data={insTypeChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" nameKey="name" strokeWidth={0}>
                           {insTypeChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip content={<ChartTooltip />} />
+                        <Tooltip content={<ChartTooltip fmt={ins} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-1.5 mt-1" dir="rtl">
@@ -825,8 +865,8 @@ export default function Assets() {
                             <div className="w-16 bg-white/5 rounded-full h-1.5 shrink-0">
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
                             </div>
-                            <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>
-                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{formatCurrency(entry.value)}/חודש</span>
+                            {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>}
+                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{ins(entry.value)}{perMonth}</span>
                           </div>
                         );
                       })}
@@ -844,7 +884,7 @@ export default function Assets() {
                       return (
                         <div key={entry.name}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold" style={{ color: entry.color }}>{formatCurrency(entry.value)}/חודש</span>
+                            <span className="font-bold" style={{ color: entry.color }}>{ins(entry.value)}{perMonth}</span>
                             <span className="text-white/70">{entry.name} · {entry.count} פוליסות</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-2">
@@ -968,7 +1008,7 @@ export default function Assets() {
                                 <span className="text-xs text-white/30">{personAssets.length} פוליסות</span>
                               </div>
                               {totalPremium > 0 && (
-                                <span className="text-xs font-semibold" style={{ color }}>{formatCurrency(totalPremium)}/חודש</span>
+                                <span className="text-xs font-semibold" style={{ color }}>{ins(totalPremium)}{perMonth}</span>
                               )}
                             </div>
                             {/* Policy list */}
@@ -997,7 +1037,7 @@ export default function Assets() {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                       {a.monthly_premium != null && a.monthly_premium > 0 && (
-                                        <span className="text-[10px] text-white/40">{formatCurrency(a.monthly_premium)}</span>
+                                        <span className="text-[10px] text-white/40">{ins(a.monthly_premium)}</span>
                                       )}
                                       {a.end_date || status !== 'none' ? (
                                         <span className="text-[10px] font-medium">
@@ -1024,7 +1064,7 @@ export default function Assets() {
       </Tabs>
 
       {/* Add / Edit dialog */}
-      <Dialog open={open} onOpenChange={(v) => { if (!v) closeDialog(); }}>
+      <Dialog open={open && !pctMode} onOpenChange={(v) => { if (!v) closeDialog(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editId ? 'עריכת נכס / ביטוח' : 'הוסף נכס / ביטוח'}</DialogTitle>
