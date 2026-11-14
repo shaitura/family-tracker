@@ -66,9 +66,14 @@ export function usePercentMode(): [boolean, (on: boolean) => void] {
 export function formatShare(value: number, total: number): string {
   if (!(total > 0) || !Number.isFinite(value)) return '—';
   const pct = (value / total) * 100;
-  if (pct > 0 && pct < 0.5) return '<1%';
+  if (pct > 0 && pct < 0.5) return LESS_THAN_ONE;
   return `${Math.round(pct)}%`;
 }
+
+// U+200E (left-to-right mark) in front: inside the app's RTL text the bare
+// "<1%" is reordered and reads "1%>" (seen on a phone, 15/11). The mark pins
+// the run left-to-right; it is invisible.
+export const LESS_THAN_ONE = '\u200E<1%';
 
 /** The amount in normal mode, its share of `total` in percent mode. */
 export function moneyOrShare(percentMode: boolean, value: number, total: number): string {

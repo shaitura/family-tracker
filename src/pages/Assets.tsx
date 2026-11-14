@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/toaster';
 import {
   Asset, Transaction, ASSET_OWNERS, ASSET_INSURANCE_TYPES, ASSET_INVESTMENT_TYPES,
@@ -20,6 +21,7 @@ import {
 import { formatCurrency, OWNER_LABELS } from '@/utils';
 import { usePercentMode, moneyOrShare, formatShare } from '@/lib/privacyMode';
 import { groupAssetsByType } from '@/lib/assetGroups';
+import { isRealEstate, summaryInvestments } from '@/lib/realEstate';
 import {
   isKidsSavings, isFamilyInvestment, isInsurance as isInsuranceAsset,
   summarizeKidsSavings, childOwnedFamilyAssets, type KidsSavingsSummary,
@@ -312,6 +314,9 @@ export default function Assets() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<Asset, 'id'>>(emptyAsset());
   const [pctMode, setPctMode] = usePercentMode();
+  // Summary → Investments only: take real estate out of the whole, so the
+  // financial assets alone split to 100%. The List tab keeps the full whole.
+  const [excludeRealEstate, setExcludeRealEstate] = useState(false);
 
   const { data: assets = [] } = useQuery<Asset[]>({ queryKey: ['assets'], queryFn: () => base44.entities.Asset.filter() });
 
@@ -458,17 +463,19 @@ export default function Assets() {
 
   // Investment summary
   const totalInvestmentBalance = investmentAssets.reduce((s, a) => s + (a.balance ?? 0), 0);
-  const REAL_ESTATE_TYPES = new Set(['נדל"ן', 'קרקע']);
-  const totalRealEstate   = investmentAssets.filter(a => REAL_ESTATE_TYPES.has(a.type)).reduce((s, a) => s + (a.balance ?? 0), 0);
+  const totalRealEstate   = investmentAssets.filter(isRealEstate).reduce((s, a) => s + (a.balance ?? 0), 0);
   const totalFinancial    = totalInvestmentBalance - totalRealEstate;
+  // What Summary → Investments is computed over, and its 100%.
+  const summaryInv   = summaryInvestments(investmentAssets, excludeRealEstate);
+  const summaryTotal = summaryInv.reduce((s, a) => s + (a.balance ?? 0), 0);
   const byInvOwner: Record<string, { balance: number; count: number }> = {};
-  investmentAssets.forEach((a) => {
+  summaryInv.forEach((a) => {
     if (!byInvOwner[a.owner]) byInvOwner[a.owner] = { balance: 0, count: 0 };
     byInvOwner[a.owner].balance += a.balance ?? 0;
     byInvOwner[a.owner].count++;
   });
   const byRisk: Record<string, number> = {};
-  investmentAssets.forEach((a) => {
+  summaryInv.forEach((a) => {
     const k = a.risk_level ?? 'לא מוגדר';
     byRisk[k] = (byRisk[k] ?? 0) + (a.balance ?? 0);
   });
@@ -485,6 +492,7 @@ export default function Assets() {
   // share of the total investment balance, insurance a share of the total
   // monthly premium: two different wholes, never mixed.
   const inv = (v: number) => moneyOrShare(pctMode, v, totalInvestmentBalance);
+  const invS = (v: number) => moneyOrShare(pctMode, v, summaryTotal);   // Summary → Investments
   const ins = (v: number) => moneyOrShare(pctMode, v, totalMonthlyPremium);
   const perMonth = pctMode ? '' : '/חודש';
 
@@ -493,7 +501,7 @@ export default function Assets() {
 
   // Chart data
   const byInvType: Record<string, number> = {};
-  investmentAssets.forEach((a) => { byInvType[a.type] = (byInvType[a.type] ?? 0) + (a.balance ?? 0); });
+  summaryInv.forEach((a) => { byInvType[a.type] = (byInvType[a.type] ?? 0) + (a.balance ?? 0); });
 
   const invTypeChartData = Object.entries(byInvType)
     .filter(([, v]) => v > 0)
@@ -786,37 +794,48 @@ export default function Assets() {
 
             {/* Investments sub-tab */}
             <TabsContent value="investments" className="space-y-4 mt-3">
+              {/* Real-estate toggle: only when there is real estate to take out */}
+              {totalRealEstate > 0 && (
+                <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-white/10 bg-white/3 cursor-pointer">
+                  <span className="text-xs text-white/70">
+                    ללא נדל"ן
+                    <span className="block text-[10px] text-white/35">החלוקה ל-100% של הנכסים הפיננסיים בלבד</span>
+                  </span>
+                  <Switch checked={excludeRealEstate} onCheckedChange={setExcludeRealEstate} data-testid="exclude-re-toggle" />
+                </label>
+              )}
+
               {/* KPI row: total + real-estate + financial */}
               <div className="grid grid-cols-3 gap-2">
                 <Card className="col-span-3">
                   <CardContent className="pt-3 pb-3 flex items-center justify-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
                     <div className="text-center">
-                      <p className="text-lg font-bold text-emerald-400 leading-tight">{pctMode ? '100%' : formatCurrency(totalInvestmentBalance)}</p>
-                      <p className="text-[10px] text-white/40">סה"כ יתרות השקעה</p>
+                      <p className="text-lg font-bold text-emerald-400 leading-tight">{pctMode ? '100%' : formatCurrency(summaryTotal)}</p>
+                      <p className="text-[10px] text-white/40" data-testid="inv-summary-label">{excludeRealEstate ? 'סה"כ נכסים פיננסיים (ללא נדל"ן)' : 'סה"כ יתרות השקעה'}</p>
                     </div>
                   </CardContent>
                 </Card>
-                {totalRealEstate > 0 && (
+                {!excludeRealEstate && totalRealEstate > 0 && (
                   <Card className="col-span-3 sm:col-span-1 border-orange-500/20">
                     <CardContent className="pt-3 pb-3 text-center">
                       <p className="text-sm">🏠</p>
-                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{inv(totalRealEstate)}</p>
+                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{invS(totalRealEstate)}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         נדל"ן וקרקעות
-                        {!pctMode && <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalRealEstate / totalInvestmentBalance) * 100) : 0}%)</span>}
+                        {!pctMode && <span className="mr-1 text-white/25">({summaryTotal > 0 ? Math.round((totalRealEstate / summaryTotal) * 100) : 0}%)</span>}
                       </p>
                     </CardContent>
                   </Card>
                 )}
-                {totalFinancial > 0 && (
+                {!excludeRealEstate && totalFinancial > 0 && (
                   <Card className={`border-emerald-500/20 ${totalRealEstate > 0 ? 'col-span-3 sm:col-span-2' : 'col-span-3'}`}>
                     <CardContent className="pt-3 pb-3 text-center">
                       <p className="text-sm">📈</p>
-                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{inv(totalFinancial)}</p>
+                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{invS(totalFinancial)}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         השקעות פיננסיות
-                        {!pctMode && <span className="mr-1 text-white/25">({totalInvestmentBalance > 0 ? Math.round((totalFinancial / totalInvestmentBalance) * 100) : 0}%)</span>}
+                        {!pctMode && <span className="mr-1 text-white/25">({summaryTotal > 0 ? Math.round((totalFinancial / summaryTotal) * 100) : 0}%)</span>}
                       </p>
                     </CardContent>
                   </Card>
@@ -832,12 +851,12 @@ export default function Assets() {
                         <Pie data={invTypeChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" nameKey="name" strokeWidth={0}>
                           {invTypeChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip content={<ChartTooltip fmt={inv} />} />
+                        <Tooltip content={<ChartTooltip fmt={invS} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-1.5 mt-1" dir="rtl">
                       {invTypeChartData.map((entry) => {
-                        const pct = totalInvestmentBalance > 0 ? (entry.value / totalInvestmentBalance) * 100 : 0;
+                        const pct = summaryTotal > 0 ? (entry.value / summaryTotal) * 100 : 0;
                         return (
                           <div key={entry.name} className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
@@ -845,8 +864,8 @@ export default function Assets() {
                             <div className="w-16 bg-white/5 rounded-full h-1.5 shrink-0">
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
                             </div>
-                            {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>}
-                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{inv(entry.value)}</span>
+                            {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{formatShare(entry.value, summaryTotal)}</span>}
+                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{invS(entry.value)}</span>
                           </div>
                         );
                       })}
@@ -860,11 +879,11 @@ export default function Assets() {
                   <CardHeader className="pb-1"><CardTitle className="text-sm">לפי בעלים</CardTitle></CardHeader>
                   <CardContent className="space-y-2 pt-0" dir="rtl">
                     {invOwnerChartData.map((entry) => {
-                      const pct = totalInvestmentBalance > 0 ? (entry.value / totalInvestmentBalance) * 100 : 0;
+                      const pct = summaryTotal > 0 ? (entry.value / summaryTotal) * 100 : 0;
                       return (
                         <div key={entry.name}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold" style={{ color: entry.color }}>{inv(entry.value)}</span>
+                            <span className="font-bold" style={{ color: entry.color }}>{invS(entry.value)}</span>
                             <span className="text-white/70">{entry.name} · {entry.count} נכסים</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-2">
@@ -882,11 +901,11 @@ export default function Assets() {
                   <CardHeader className="pb-1"><CardTitle className="text-sm">לפי רמת סיכון</CardTitle></CardHeader>
                   <CardContent className="space-y-1.5 pt-0" dir="rtl">
                     {Object.entries(byRisk).map(([risk, balance]) => {
-                      const pct = totalInvestmentBalance > 0 ? (balance / totalInvestmentBalance) * 100 : 0;
+                      const pct = summaryTotal > 0 ? (balance / summaryTotal) * 100 : 0;
                       return (
                         <div key={risk}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold text-emerald-400">{inv(balance)}</span>
+                            <span className="font-bold text-emerald-400">{invS(balance)}</span>
                             <span className="text-white/70">{risk}</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-1.5">
@@ -936,7 +955,7 @@ export default function Assets() {
                             <div className="w-16 bg-white/5 rounded-full h-1.5 shrink-0">
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
                             </div>
-                            {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{Math.round(pct)}%</span>}
+                            {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{formatShare(entry.value, totalMonthlyPremium)}</span>}
                             <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{ins(entry.value)}{perMonth}</span>
                           </div>
                         );

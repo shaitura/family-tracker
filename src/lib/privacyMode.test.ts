@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatShare, moneyOrShare } from './privacyMode';
+import { formatShare, moneyOrShare, LESS_THAN_ONE } from './privacyMode';
 
 describe('formatShare', () => {
   it('rounds to a whole percent', () => {
@@ -7,7 +7,9 @@ describe('formatShare', () => {
   });
 
   it('a small but non-zero share is "<1%", never "0%"', () => {
-    expect(formatShare(1_000, 1_000_000)).toBe('<1%');
+    expect(formatShare(1_000, 1_000_000)).toBe(LESS_THAN_ONE);
+    // Pinned left-to-right so RTL text cannot flip it to "1%>".
+    expect(LESS_THAN_ONE).toBe('\u200E<1%');
   });
 
   it('zero is 0%', () => {
