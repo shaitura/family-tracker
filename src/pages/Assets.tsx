@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil, AlertTriangle, Clock, CheckCircle, Percent } from 'lucide-react';
+import { Plus, Shield, TrendingUp, Wallet, Loader2, Pencil, AlertTriangle, Clock, CheckCircle, Percent, Trash2 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { base44 } from '@/lib/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -351,7 +351,16 @@ export default function Assets() {
     onError: (e) => toast({ title: 'שגיאה בעדכון', description: String(e), variant: 'destructive' }),
   });
 
-  const isPending = isAdding || isUpdating;
+  // Deleting is permanent (Firestore deleteDoc, no trash), so the first tap only
+  // arms a confirmation that names the asset; the second one deletes.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { mutate: deleteAsset, isPending: isDeleting } = useMutation({
+    mutationFn: () => base44.entities.Asset.delete(editId!),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assets'] }); closeDialog(); toast({ title: 'נכס נמחק', variant: 'success' }); },
+    onError: (e) => toast({ title: 'שגיאה במחיקה', description: String(e), variant: 'destructive' }),
+  });
+
+  const isPending = isAdding || isUpdating || isDeleting;
 
   function openAdd() {
     setEditId(null);
@@ -367,6 +376,7 @@ export default function Assets() {
   }
 
   function closeDialog() {
+    setConfirmDelete(false);
     setOpen(false);
     setEditId(null);
     setForm(emptyAsset());
@@ -1204,7 +1214,41 @@ export default function Assets() {
             )}
           </div>
 
+          {editId && confirmDelete && (
+            <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 p-3 space-y-2" data-testid="delete-confirm">
+              <p className="text-sm text-red-200">
+                למחוק את <span className="font-bold">'{form.product_name || form.type}'</span>? לא ניתן לשחזר.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)} disabled={isDeleting}>ביטול</Button>
+                {/* variant=secondary: the default variant's gradient is a background-image
+                    and would paint over bg-red-600, making a permanent action look routine. */}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => deleteAsset()}
+                  disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  data-testid="delete-confirm-btn"
+                >
+                  {isDeleting ? <><Loader2 className="w-4 h-4 animate-spin" /> מוחק...</> : 'מחק לצמיתות'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
+            {editId && !confirmDelete && (
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDelete(true)}
+                disabled={isPending}
+                className="text-red-300 border-red-500/40 hover:bg-red-500/10 sm:mr-auto"
+                data-testid="delete-asset-btn"
+              >
+                <Trash2 className="w-4 h-4 ml-1" /> מחק
+              </Button>
+            )}
             <Button variant="outline" onClick={closeDialog}>ביטול</Button>
             <Button onClick={() => editId ? updateAsset() : addAsset()} disabled={isPending || !form.product_name || !form.provider}>
               {isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> שומר...</> : 'שמור'}

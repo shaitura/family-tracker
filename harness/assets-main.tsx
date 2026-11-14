@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import Assets from '@/pages/Assets';
+import { base44 } from '@/lib/base44Client';
 import '@/index.css';
 
 // The real Assets page with its two queries pre-filled, so percent mode can be
@@ -32,6 +33,20 @@ const assets = [
 const transactions = ['2026-10-05', '2026-09-05', '2026-08-05'].map((date, i) => ({
   id: `t${i}`, date, type: 'expense', category: 'ביטוחים', amount: 391, notes: 'הפניקס פוליסה 55443322',
 }));
+
+// The Asset entity talks to Firestore; here its delete and filter work on the
+// in-memory seed instead, and every deleted id is recorded in __DELETED__ so
+// the check can assert exactly which asset was removed (and that cancel removed
+// nothing). The invalidate after a delete refetches through filter().
+(window as any).__DELETED__ = [] as string[];
+base44.entities.Asset.delete = async (id: string) => {
+  // window.__FAIL_DELETE__ = true simulates a rejected write (offline, rules).
+  if ((window as any).__FAIL_DELETE__) throw new Error('harness: simulated delete failure');
+  (window as any).__DELETED__.push(id);
+  const i = assets.findIndex((a) => a.id === id);
+  if (i >= 0) assets.splice(i, 1);
+};
+base44.entities.Asset.filter = async () => [...assets] as any;
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
 qc.setQueryData(['assets'], assets);
