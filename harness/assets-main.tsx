@@ -19,6 +19,11 @@ const assets = [
   { id: 'a2', owner: 'Ortal', asset_class: 'נכס/השקעה', type: 'קרן השתלמות', provider: 'מיטב',  product_name: 'השתלמות אורטל', balance: 345678,  risk_level: 'כללי' },
   { id: 'a3', owner: 'Joint', asset_class: 'נכס/השקעה', type: 'נדל"ן',       provider: 'דירה',   product_name: 'דירה בחיפה',    balance: 2109876, risk_level: 'נדל"ן' },
   { id: 'a4', owner: 'Yuval', asset_class: 'נכס/השקעה', type: 'חיסכון לכל ילד', provider: 'הראל', product_name: 'חיסכון יובל', balance: 9876 },
+  // A second fund of an existing type: the by-type grouping needs a group of
+  // more than one card, and this one is larger than a2, so it must lead its group.
+  { id: 'a5', owner: 'Shi',   asset_class: 'נכס/השקעה', type: 'קרן השתלמות', provider: 'אלטשולר', product_name: 'השתלמות שי', balance: 456789, risk_level: 'מנייתי' },
+  // No balance at all: its group has a zero total and must still render, last.
+  { id: 'a6', owner: 'Joint', asset_class: 'נכס/השקעה', type: 'עו"ש',        provider: 'לאומי',  product_name: 'עו"ש משותף' },
   { id: 'i1', owner: 'Shi',   asset_class: 'ביטוח/קרן', type: 'בריאות',      provider: 'הפניקס', product_name: 'בריאות שי',     policy_number: '55443322', monthly_premium: 387, end_date: '2027-06-30' },
   { id: 'i2', owner: 'Ortal', asset_class: 'ביטוח/קרן', type: 'ריסק',        provider: 'מגדל',   product_name: 'ריסק אורטל',    monthly_premium: 159, end_date: '2026-11-30' },
   { id: 'i3', owner: 'Joint', asset_class: 'ביטוח/קרן', type: 'מבנה + תכולה', provider: 'ביטוח ישיר', product_name: 'דירה',      monthly_premium: 213 },

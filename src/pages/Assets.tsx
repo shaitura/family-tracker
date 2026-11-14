@@ -18,6 +18,7 @@ import {
 } from '@/types';
 import { formatCurrency, OWNER_LABELS } from '@/utils';
 import { usePercentMode, moneyOrShare } from '@/lib/privacyMode';
+import { groupAssetsByType } from '@/lib/assetGroups';
 
 const RISK_LEVELS: RiskLevel[] = ['סולידי', 'מנייתי', 'כללי', 'נדל"ן'];
 
@@ -40,6 +41,7 @@ function assetIcon(type: string): string {
   if (type === 'עו"ש') return '🏧';
   if (type === 'מט"ח') return '💱';
   if (type === 'קרקע') return '🌍';
+  if (type === 'נדל"ן') return '🏠';
   if (type === 'קריפטו') return '₿';
   if (type === 'אחר') return '🗂️';
   return '📋';
@@ -517,7 +519,20 @@ export default function Assets() {
           {investmentAssets.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold text-emerald-400/80 px-1">📊 נכסים והשקעות</p>
-              {investmentAssets.map((a, i) => (
+              {groupAssetsByType(investmentAssets).map((group) => (
+                <div key={group.type} className="space-y-2" data-testid="inv-type-group">
+                  {/* Group header: same shape as the insurance groups below */}
+                  <div className="flex items-center justify-between px-1 py-1.5 rounded-lg bg-white/3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{assetIcon(group.type)}</span>
+                      <span className="text-xs font-bold text-white/70" data-testid="inv-type-name">{group.type}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/30">{group.assets.length === 1 ? 'נכס אחד' : `${group.assets.length} נכסים`}</span>
+                      {group.total > 0 && <span className="text-xs font-semibold text-emerald-400" data-testid="inv-type-total">{inv(group.total)}</span>}
+                    </div>
+                  </div>
+              {group.assets.map((a, i) => (
                 <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                   <Card className="border border-emerald-500/10">
                     <CardContent className="py-4 px-4">
@@ -564,6 +579,8 @@ export default function Assets() {
                     </CardContent>
                   </Card>
                 </motion.div>
+              ))}
+                </div>
               ))}
             </div>
           )}
