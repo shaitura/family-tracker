@@ -19,7 +19,15 @@ const assets = [
   { id: 'a1', owner: 'Shi',   asset_class: 'נכס/השקעה', type: 'ניירות ערך',  provider: 'IBI',    product_name: 'תיק מסחר',      balance: 1234567, risk_level: 'מנייתי' },
   { id: 'a2', owner: 'Ortal', asset_class: 'נכס/השקעה', type: 'קרן השתלמות', provider: 'מיטב',  product_name: 'השתלמות אורטל', balance: 345678,  risk_level: 'כללי' },
   { id: 'a3', owner: 'Joint', asset_class: 'נכס/השקעה', type: 'נדל"ן',       provider: 'דירה',   product_name: 'דירה בחיפה',    balance: 2109876, risk_level: 'נדל"ן' },
-  { id: 'a4', owner: 'Yuval', asset_class: 'נכס/השקעה', type: 'חיסכון לכל ילד', provider: 'הראל', product_name: 'חיסכון יובל', balance: 9876 },
+  // A child's holding entered before the children's tab existed, with the old
+  // type 'קופת גמל להשקעה - ילדים' (not in the children's type list): it must be
+  // listed as "still family", and moving it must keep its balance and type.
+  { id: 'a4', owner: 'Yuval', asset_class: 'נכס/השקעה', type: 'קופת גמל להשקעה - ילדים', provider: 'הראל', product_name: 'חיסכון יובל', balance: 9876 },
+  // Children's savings: total 12,345 + 23,456 + 3,456 + 789 = 40,046; deposits 57 + 200 = 257/month.
+  { id: 'k1', owner: 'Yuval', asset_class: 'חיסכון ילדים', type: 'חיסכון לכל ילד',  provider: 'ביטוח לאומי', product_name: 'חסל"י יובל', balance: 12345, monthly_deposit: 57 },
+  { id: 'k2', owner: 'Yuval', asset_class: 'חיסכון ילדים', type: 'קופת גמל להשקעה', provider: 'אלטשולר', product_name: 'גמל יובל', balance: 23456, monthly_deposit: 200 },
+  { id: 'k3', owner: 'Aviv',  asset_class: 'חיסכון ילדים', type: 'חיסכון בבנק',     provider: 'לאומי',   product_name: 'פיקדון אביב', balance: 3456 },
+  { id: 'k4', owner: 'Joint', asset_class: 'חיסכון ילדים', type: 'חיסכון פיזי',     provider: '',        product_name: 'קופה בבית', balance: 789 },
   // A second fund of an existing type: the by-type grouping needs a group of
   // more than one card, and this one is larger than a2, so it must lead its group.
   { id: 'a5', owner: 'Shi',   asset_class: 'נכס/השקעה', type: 'קרן השתלמות', provider: 'אלטשולר', product_name: 'השתלמות שי', balance: 456789, risk_level: 'מנייתי' },
@@ -47,6 +55,20 @@ base44.entities.Asset.delete = async (id: string) => {
   if (i >= 0) assets.splice(i, 1);
 };
 base44.entities.Asset.filter = async () => [...assets] as any;
+// Saves are recorded too, so the check can read exactly what the form wrote.
+(window as any).__SAVED__ = [] as any[];
+base44.entities.Asset.update = async (id: string, data: any) => {
+  (window as any).__SAVED__.push({ op: 'update', id, data });
+  const i = assets.findIndex((a) => a.id === id);
+  if (i >= 0) assets[i] = { ...assets[i], ...data, id } as any;
+  return assets[i] as any;
+};
+base44.entities.Asset.create = async (data: any) => {
+  const row = { ...data, id: `new${assets.length}` };
+  (window as any).__SAVED__.push({ op: 'create', id: row.id, data });
+  assets.push(row);
+  return row as any;
+};
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
 qc.setQueryData(['assets'], assets);

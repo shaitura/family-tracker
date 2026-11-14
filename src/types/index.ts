@@ -43,10 +43,20 @@ export const ASSET_INVESTMENT_TYPES = [
   'חיסכון לכל ילד', 'מניות RSU', 'חשבון מסחר עצמאי', 'קריפטו', 'אחר',
 ] as const;
 
-export const ASSET_TYPES = [...ASSET_INSURANCE_TYPES, ...ASSET_INVESTMENT_TYPES] as const;
+// Children's savings (asset_class 'חיסכון ילדים', 15/11/2026). Kept apart from
+// the family's own assets: they never count in the family totals.
+export const ASSET_KIDS_TYPES = [
+  'קופת גמל להשקעה', 'חיסכון לכל ילד', 'חיסכון בבנק', 'חיסכון פיזי',
+  'חשבון מסחר עצמאי', 'קריפטו', 'אחר',
+] as const;
+
+// Who a children's-savings asset belongs to. 'Joint' here reads "משותף לילדים".
+export const KIDS_ASSET_OWNERS = ['Yuval', 'Aviv', 'Ziv', 'Joint'] as const;
+
+export const ASSET_TYPES = [...ASSET_INSURANCE_TYPES, ...ASSET_INVESTMENT_TYPES, ...ASSET_KIDS_TYPES] as const;
 export type AssetType = typeof ASSET_TYPES[number];
 
-export type AssetClass = 'ביטוח/קרן' | 'נכס/השקעה';
+export type AssetClass = 'ביטוח/קרן' | 'נכס/השקעה' | 'חיסכון ילדים';
 export type RiskLevel = 'סולידי' | 'מנייתי' | 'כללי' | 'נדל"ן';
 
 export interface Transaction {
@@ -124,6 +134,8 @@ export interface Asset {
   start_date?: string;
   end_date?: string;
   monthly_premium?: number;
+  /** Children's savings only: how much goes in each month. Absent on every older record. */
+  monthly_deposit?: number;
   num_payments?: number;
   annual_premium?: number;
   balance?: number;

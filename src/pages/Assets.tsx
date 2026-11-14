@@ -14,11 +14,16 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toaster';
 import {
   Asset, Transaction, ASSET_OWNERS, ASSET_INSURANCE_TYPES, ASSET_INVESTMENT_TYPES,
+  ASSET_KIDS_TYPES, KIDS_ASSET_OWNERS,
   AssetOwner, AssetType, AssetClass, RiskLevel,
 } from '@/types';
 import { formatCurrency, OWNER_LABELS } from '@/utils';
-import { usePercentMode, moneyOrShare } from '@/lib/privacyMode';
+import { usePercentMode, moneyOrShare, formatShare } from '@/lib/privacyMode';
 import { groupAssetsByType } from '@/lib/assetGroups';
+import {
+  isKidsSavings, isFamilyInvestment, isInsurance as isInsuranceAsset,
+  summarizeKidsSavings, childOwnedFamilyAssets, type KidsSavingsSummary,
+} from '@/lib/kidsSavings';
 
 const RISK_LEVELS: RiskLevel[] = ['סולידי', 'מנייתי', 'כללי', 'נדל"ן'];
 
@@ -28,6 +33,8 @@ function assetIcon(type: string): string {
   if (type.includes('קופת גמל')) return '🏺';
   if (type.includes('חיסכון לכל ילד')) return '👶';
   if (type.includes('ביטוח') || type.includes('בריאות') || type.includes('חיים') || type.includes('מחלות')) return '🛡️';
+  if (type === 'חיסכון פיזי') return '🐷';
+  if (type === 'חיסכון בבנק') return '🏛️';
   if (type.includes('חיסכון')) return '💰';
   if (type.includes('משכנתא')) return '🏠';
   if (type === 'מבנה' || type === 'תכולה' || type === 'מבנה + תכולה') return '🏡';
@@ -186,11 +193,17 @@ function ProviderAvatar({ provider, isInvestment }: { provider: string; isInvest
 function typeChartColor(type: string): string {
   if (type === 'ניירות ערך' || type === 'מניות RSU' || type === 'חשבון מסחר עצמאי' || type === 'משכנתא') return '#10b981';
   if (type === 'קרן השתלמות') return '#a855f7';
-  if (type.includes('קופת גמל') || type.includes('חיסכון לכל ילד')) return '#ec4899';
+  // Split (15/11): the two most common children's types shared one pink, so a
+  // child's breakdown bar could not tell them apart.
+  if (type.includes('חיסכון לכל ילד')) return '#a3e635';
+  if (type.includes('קופת גמל')) return '#ec4899';
   if (type === 'עו"ש') return '#06b6d4';
   if (type === 'מט"ח') return '#f59e0b';
   if (type === 'קרקע' || type === 'נדל"ן') return '#f97316';
   if (type === 'קריפטו') return '#eab308';
+  if (type === 'חיסכון בבנק') return '#0ea5e9';
+  if (type === 'חיסכון פיזי') return '#fb7185';
+  if (type === 'אחר') return '#94a3b8';
   if (type.includes('פנסיה') || type.includes('מנהלים')) return '#6366f1';
   if (type.includes('ריסק') || type.includes('אובדן כושר') || type.includes('מחלות')) return '#ef4444';
   if (type.includes('חיים')) return '#f43f5e';
@@ -368,6 +381,13 @@ export default function Assets() {
     setOpen(true);
   }
 
+  /** Add, with the form already set to children's savings (optionally for one child). */
+  function openAddKids(owner: AssetOwner = 'Yuval') {
+    setEditId(null);
+    setForm({ ...emptyAsset(), asset_class: 'חיסכון ילדים', type: 'חיסכון לכל ילד' as AssetType, owner });
+    setOpen(true);
+  }
+
   function openEdit(a: Asset) {
     setEditId(a.id);
     const { id, ...rest } = a;
@@ -385,18 +405,31 @@ export default function Assets() {
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   function switchClass(cls: AssetClass) {
-    const defaultType = cls === 'ביטוח/קרן' ? 'פנסיה' : 'ניירות ערך';
-    setForm((f) => ({
-      ...f,
-      asset_class: cls,
-      type: defaultType as AssetType,
-      monthly_premium: undefined,
-      annual_premium: undefined,
-      balance: undefined,
-      risk_level: undefined,
-      start_date: '',
-      end_date: '',
-    }));
+    setForm((f) => {
+      const ownerFits = cls !== 'חיסכון ילדים' || (KIDS_ASSET_OWNERS as readonly string[]).includes(f.owner);
+      const owner = (ownerFits ? f.owner : 'Yuval') as AssetOwner;
+      // Moving a holding between "נכס / השקעה" and "חיסכון ילדים" is how an
+      // existing child's asset gets moved to the children's tab: the balance,
+      // type and risk must survive it. (The reset below used to wipe the balance.)
+      const balanceClasses: (AssetClass | undefined)[] = ['נכס/השקעה', 'חיסכון ילדים'];
+      if (balanceClasses.includes(f.asset_class) && balanceClasses.includes(cls)) {
+        return { ...f, asset_class: cls, owner, monthly_deposit: cls === 'חיסכון ילדים' ? f.monthly_deposit : undefined };
+      }
+      const defaultType = cls === 'ביטוח/קרן' ? 'פנסיה' : cls === 'חיסכון ילדים' ? 'חיסכון לכל ילד' : 'ניירות ערך';
+      return {
+        ...f,
+        asset_class: cls,
+        owner,
+        type: defaultType as AssetType,
+        monthly_premium: undefined,
+        annual_premium: undefined,
+        balance: undefined,
+        monthly_deposit: undefined,
+        risk_level: undefined,
+        start_date: '',
+        end_date: '',
+      };
+    });
   }
 
   function setMonthlyPremium(val: number | undefined) {
@@ -407,11 +440,21 @@ export default function Assets() {
     }));
   }
 
-  const isInsurance = form.asset_class !== 'נכס/השקעה';
-  const typeList = isInsurance ? ASSET_INSURANCE_TYPES : ASSET_INVESTMENT_TYPES;
+  const formIsKids = form.asset_class === 'חיסכון ילדים';
+  const isInsurance = !formIsKids && form.asset_class !== 'נכס/השקעה';
+  const baseTypeList: readonly string[] = formIsKids ? ASSET_KIDS_TYPES : isInsurance ? ASSET_INSURANCE_TYPES : ASSET_INVESTMENT_TYPES;
+  // A stored type outside the current list (e.g. 'קופת גמל להשקעה - ילדים' on a
+  // holding moved to the children's tab) stays selectable: otherwise the
+  // <select> would show the first option and saving would silently change it.
+  const typeList = baseTypeList.includes(form.type) ? baseTypeList : [form.type, ...baseTypeList];
+  const ownerList: readonly string[] = formIsKids ? KIDS_ASSET_OWNERS : ASSET_OWNERS;
+  const ownerLabel = (o: string) => (formIsKids && o === 'Joint' ? 'משותף לילדים' : OWNER_LABELS[o] || o);
 
-  const insuranceAssets = assets.filter((a) => a.asset_class !== 'נכס/השקעה');
-  const investmentAssets = assets.filter((a) => a.asset_class === 'נכס/השקעה');
+  // Three sections. Children's savings never count in the family lists or totals.
+  const insuranceAssets = assets.filter(isInsuranceAsset);
+  const investmentAssets = assets.filter(isFamilyInvestment);
+  const kidsSummary = summarizeKidsSavings(assets);
+  const kidsToMove = childOwnedFamilyAssets(assets);
 
   // Investment summary
   const totalInvestmentBalance = investmentAssets.reduce((s, a) => s + (a.balance ?? 0), 0);
@@ -515,6 +558,7 @@ export default function Assets() {
         <TabsList>
           <TabsTrigger value="list">רשימה</TabsTrigger>
           <TabsTrigger value="summary">סיכום</TabsTrigger>
+          <TabsTrigger value="kids">👧 חיסכון ילדים</TabsTrigger>
         </TabsList>
 
         {/* List tab */}
@@ -1088,31 +1132,45 @@ export default function Assets() {
             </TabsContent>
           </Tabs>
         </TabsContent>
+        {/* Children's savings tab */}
+        <TabsContent value="kids" className="space-y-4">
+          <KidsSavingsTab
+            summary={kidsSummary}
+            toMove={kidsToMove}
+            pctMode={pctMode}
+            onEdit={openEdit}
+            onAdd={openAddKids}
+          />
+        </TabsContent>
       </Tabs>
 
       {/* Add / Edit dialog */}
       <Dialog open={open && !pctMode} onOpenChange={(v) => { if (!v) closeDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editId ? 'עריכת נכס / ביטוח' : 'הוסף נכס / ביטוח'}</DialogTitle>
+            <DialogTitle>{formIsKids ? (editId ? 'עריכת חיסכון לילד' : 'הוספת חיסכון לילד') : editId ? 'עריכת נכס / ביטוח' : 'הוסף נכס / ביטוח'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
 
             {/* Class toggle */}
             <div className="flex rounded-xl overflow-hidden border border-white/15">
-              {(['ביטוח/קרן', 'נכס/השקעה'] as AssetClass[]).map((cls) => (
+              {(['ביטוח/קרן', 'נכס/השקעה', 'חיסכון ילדים'] as AssetClass[]).map((cls) => (
                 <button
                   key={cls}
+                  type="button"
                   onClick={() => switchClass(cls)}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                  data-testid={`class-${cls}`}
+                  className={`flex-1 py-2 px-1 text-xs sm:text-sm font-medium transition-colors ${
                     form.asset_class === cls
                       ? cls === 'נכס/השקעה'
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-cyan-600 text-white'
+                        : cls === 'חיסכון ילדים'
+                          ? 'bg-pink-600 text-white'
+                          : 'bg-cyan-600 text-white'
                       : 'bg-white/5 text-white/50 hover:bg-white/10'
                   }`}
                 >
-                  {cls === 'ביטוח/קרן' ? '🛡️ ביטוח / קרן' : '📊 נכס / השקעה'}
+                  {cls === 'ביטוח/קרן' ? '🛡️ ביטוח / קרן' : cls === 'נכס/השקעה' ? '📊 נכס / השקעה' : '👧 חיסכון ילדים'}
                 </button>
               ))}
             </div>
@@ -1120,14 +1178,14 @@ export default function Assets() {
             {/* Owner + Type */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="mb-1 block">בעלים</Label>
-                <select value={form.owner} onChange={(e) => set('owner', e.target.value as AssetOwner)} className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl">
-                  {ASSET_OWNERS.map((o) => <option key={o} value={o} className="bg-slate-800">{OWNER_LABELS[o] || o}</option>)}
+                <Label className="mb-1 block">{formIsKids ? 'שייך לילד' : 'בעלים'}</Label>
+                <select value={form.owner} onChange={(e) => set('owner', e.target.value as AssetOwner)} className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl" data-testid="owner-select">
+                  {ownerList.map((o) => <option key={o} value={o} className="bg-slate-800">{ownerLabel(o)}</option>)}
                 </select>
               </div>
               <div>
                 <Label className="mb-1 block">סוג</Label>
-                <select value={form.type} onChange={(e) => set('type', e.target.value as AssetType)} className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl">
+                <select value={form.type} onChange={(e) => set('type', e.target.value as AssetType)} className="w-full h-10 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white focus:outline-none" dir="rtl" data-testid="type-select">
                   {typeList.map((t) => <option key={t} value={t} className="bg-slate-800">{t}</option>)}
                 </select>
               </div>
@@ -1186,8 +1244,34 @@ export default function Assets() {
               </>
             )}
 
+            {/* ── חיסכון ילדים fields ── */}
+            {formIsKids && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1 block">יתרה נוכחית (₪)</Label>
+                  <Input
+                    type="number"
+                    value={form.balance ?? ''}
+                    onChange={(e) => set('balance', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    placeholder="0"
+                    data-testid="kids-balance"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1 block">הפקדה חודשית (₪)</Label>
+                  <Input
+                    type="number"
+                    value={form.monthly_deposit ?? ''}
+                    onChange={(e) => set('monthly_deposit', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    placeholder="0"
+                    data-testid="kids-deposit"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* ── נכס/השקעה fields ── */}
-            {!isInsurance && (
+            {!isInsurance && !formIsKids && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1 block">יתרה נוכחית (₪)</Label>
@@ -1250,12 +1334,182 @@ export default function Assets() {
               </Button>
             )}
             <Button variant="outline" onClick={closeDialog}>ביטול</Button>
-            <Button onClick={() => editId ? updateAsset() : addAsset()} disabled={isPending || !form.product_name || !form.provider}>
+            <Button onClick={() => editId ? updateAsset() : addAsset()} disabled={isPending || !form.product_name || (!formIsKids && !form.provider)}>
               {isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> שומר...</> : 'שמור'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ── Children's savings tab ──────────────────────────────────────────────────
+// Its own whole: every share here is of the children's total (balances) or of
+// their total monthly deposit, never of the family's assets.
+function KidsSavingsTab({ summary, toMove, pctMode, onEdit, onAdd }: {
+  summary: KidsSavingsSummary;
+  toMove: Asset[];
+  pctMode: boolean;
+  onEdit: (a: Asset) => void;
+  onAdd: (owner?: AssetOwner) => void;
+}) {
+  const bal = (v: number) => moneyOrShare(pctMode, v, summary.total);
+  const dep = (v: number) => moneyOrShare(pctMode, v, summary.monthly);
+  const kidName = (o: string) => (o === 'Joint' ? 'משותף לילדים' : OWNER_LABELS[o] || o);
+  const kidColor = (o: string) => OWNER_CHART_COLORS[o] || '#6b7280';
+  const hasAny = summary.kids.some((k) => k.assets.length > 0);
+
+  return (
+    <div className="space-y-4" data-testid="kids-tab">
+      {/* Totals for all the children */}
+      <Card className="border-pink-500/20">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-right">
+              <p className="text-[11px] text-white/40">סה"כ חיסכון לכל הילדים</p>
+              <p className="text-xl font-bold text-pink-300 leading-tight" data-testid="kids-total">
+                {pctMode ? '100%' : formatCurrency(summary.total)}
+              </p>
+              {summary.monthly > 0 && (
+                <p className="text-xs text-white/50 mt-0.5" data-testid="kids-monthly">
+                  {pctMode ? 'הפקדות חודשיות: 100%' : `${formatCurrency(summary.monthly)} הפקדה חודשית`}
+                </p>
+              )}
+            </div>
+            {!pctMode && (
+              <Button size="sm" onClick={() => onAdd()} data-testid="kids-add">
+                <Plus className="w-4 h-4 ml-1" /> הוסף חיסכון
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Comparison between the children */}
+      {hasAny && (
+        <Card>
+          <CardHeader className="pb-1"><CardTitle className="text-sm">השוואה בין הילדים</CardTitle></CardHeader>
+          <CardContent className="space-y-2.5 pt-0" dir="rtl">
+            {summary.kids.map((k) => {
+              const pct = summary.total > 0 ? (k.total / summary.total) * 100 : 0;
+              return (
+                <div key={k.owner} data-testid="kids-compare-row">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold" style={{ color: kidColor(k.owner) }}>{bal(k.total)}</span>
+                    <span className="text-white/70">
+                      {kidName(k.owner)}
+                      {k.monthly > 0 && <span className="text-white/35"> · {dep(k.monthly)}{pctMode ? ' מההפקדות' : '/חודש'}</span>}
+                    </span>
+                  </div>
+                  <div className="w-full bg-white/5 rounded-full h-2">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: kidColor(k.owner) }} />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* One card per child */}
+      {summary.kids.map((k) => (
+        <Card key={k.owner} className="border border-white/8" data-testid="kid-card">
+          <CardContent className="pt-3 pb-3 px-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ background: kidColor(k.owner) }}>
+                  {kidName(k.owner)[0]}
+                </div>
+                <span className="font-bold text-sm text-white" data-testid="kid-name">{kidName(k.owner)}</span>
+                <span className="text-xs text-white/30">{k.assets.length === 1 ? 'נכס אחד' : `${k.assets.length} נכסים`}</span>
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold" style={{ color: kidColor(k.owner) }} data-testid="kid-total">{bal(k.total)}</p>
+                {k.monthly > 0 && <p className="text-[10px] text-white/40">{dep(k.monthly)}{pctMode ? ' מההפקדות' : '/חודש'}</p>}
+              </div>
+            </div>
+
+            {k.assets.length === 0 ? (
+              <div className="flex items-center justify-between rounded-lg border border-dashed border-white/10 px-3 py-2">
+                <span className="text-xs text-white/35">אין עדיין חיסכון</span>
+                {!pctMode && (
+                  <button type="button" onClick={() => onAdd(k.owner as AssetOwner)} className="text-xs text-pink-300 hover:text-pink-200">
+                    + הוסף
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Breakdown by type: one stacked bar + legend */}
+                <div className="flex h-2 rounded-full overflow-hidden bg-white/5">
+                  {k.byType.filter((g) => g.total > 0).map((g) => (
+                    <div key={g.type} style={{ width: `${k.total > 0 ? (g.total / k.total) * 100 : 0}%`, background: typeChartColor(g.type) }} />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 justify-end">
+                  {k.byType.map((g) => (
+                    <span key={g.type} className="flex items-center gap-1 text-[10px] text-white/60">
+                      <span className="w-2 h-2 rounded-full" style={{ background: typeChartColor(g.type) }} />
+                      {g.type} {k.total > 0 && <span className="text-white/35">{formatShare(g.total, k.total)}</span>}
+                    </span>
+                  ))}
+                </div>
+
+                {/* The child's holdings, grouped by type */}
+                <div className="space-y-1.5">
+                  {k.byType.flatMap((g) => g.assets).map((a) => (
+                    <div key={a.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border bg-white/3 border-white/8" data-testid="kid-asset-row">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm shrink-0">{assetIcon(a.type)}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs text-white/85 truncate">{a.product_name || a.type}</p>
+                          <p className="text-[10px] text-white/35 truncate">{[a.type, a.provider].filter(Boolean).join(' · ')}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-left">
+                          <p className="text-xs font-semibold text-white/80">{bal(a.balance ?? 0)}</p>
+                          {(a.monthly_deposit ?? 0) > 0 && (
+                            <p className="text-[10px] text-white/35">{dep(a.monthly_deposit ?? 0)}{pctMode ? '' : '/חודש'}</p>
+                          )}
+                        </div>
+                        {!pctMode && (
+                          <button onClick={() => onEdit(a)} className="text-white/25 hover:text-white/70 transition-colors" aria-label="עריכה">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+
+      {/* Child-owned holdings still filed as family assets (not moved automatically) */}
+      {toMove.length > 0 && (
+        <Card className="border border-amber-500/25 bg-amber-500/5" data-testid="kids-to-move">
+          <CardContent className="pt-3 pb-3 px-4 space-y-2">
+            <p className="text-xs font-semibold text-amber-300">נכסים בבעלות ילד שעדיין רשומים כנכסי משפחה</p>
+            <p className="text-[10px] text-white/40">
+              הם נספרים בסה"כ המשפחתי ולא כאן. כדי להעביר: פתח עריכה ובחר "👧 חיסכון ילדים". היתרה נשמרת.
+            </p>
+            {toMove.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-white/75 truncate">{assetIcon(a.type)} {a.product_name || a.type} · {OWNER_LABELS[a.owner] || a.owner}</span>
+                {!pctMode && (
+                  <button onClick={() => onEdit(a)} className="text-amber-300 hover:text-amber-200 shrink-0" data-testid="kids-move-edit">
+                    העבר
+                  </button>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
