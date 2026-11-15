@@ -465,9 +465,23 @@ export default function Assets() {
   const totalInvestmentBalance = investmentAssets.reduce((s, a) => s + (a.balance ?? 0), 0);
   const totalRealEstate   = investmentAssets.filter(isRealEstate).reduce((s, a) => s + (a.balance ?? 0), 0);
   const totalFinancial    = totalInvestmentBalance - totalRealEstate;
-  // What Summary → Investments is computed over, and its 100%.
+  // What the List and Summary → Investments are computed over, and their 100%.
   const summaryInv   = summaryInvestments(investmentAssets, excludeRealEstate);
   const summaryTotal = summaryInv.reduce((s, a) => s + (a.balance ?? 0), 0);
+  const realEstateCount = investmentAssets.filter(isRealEstate).length;
+  // One switch, shown in two tabs, bound to the same state.
+  const reToggle = (testId: string) => (
+    <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-white/10 bg-white/3 cursor-pointer">
+      <span className="text-xs text-white/70">
+        ללא נדל"ן
+        <span className="block text-[10px] text-white/35">החלוקה ל-100% של הנכסים הפיננסיים בלבד</span>
+      </span>
+      {/* dir="rtl": Radix Tabs stamps dir="ltr" on its content, and the shared
+          Switch slides its thumb left (-translate-x-5) for "on", written for RTL.
+          Under LTR the thumb left the track. Settings is RTL and unaffected. */}
+      <Switch dir="rtl" checked={excludeRealEstate} onCheckedChange={setExcludeRealEstate} data-testid={testId} />
+    </label>
+  );
   const byInvOwner: Record<string, { balance: number; count: number }> = {};
   summaryInv.forEach((a) => {
     if (!byInvOwner[a.owner]) byInvOwner[a.owner] = { balance: 0, count: 0 };
@@ -491,8 +505,9 @@ export default function Assets() {
   // Every amount on this page goes through one of these two. Investments are a
   // share of the total investment balance, insurance a share of the total
   // monthly premium: two different wholes, never mixed.
-  const inv = (v: number) => moneyOrShare(pctMode, v, totalInvestmentBalance);
-  const invS = (v: number) => moneyOrShare(pctMode, v, summaryTotal);   // Summary → Investments
+  // The List and Summary → Investments share one whole (summaryTotal), so the
+  // "ללא נדל"ן" switch gives the same percentage for an asset in both tabs.
+  const inv = (v: number) => moneyOrShare(pctMode, v, summaryTotal);
   const ins = (v: number) => moneyOrShare(pctMode, v, totalMonthlyPremium);
   const perMonth = pctMode ? '' : '/חודש';
 
@@ -583,7 +598,13 @@ export default function Assets() {
           {investmentAssets.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold text-emerald-400/80 px-1">📊 נכסים והשקעות</p>
-              {groupAssetsByType(investmentAssets).map((group) => (
+              {totalRealEstate > 0 && reToggle('exclude-re-toggle-list')}
+              {excludeRealEstate && realEstateCount > 0 && (
+                <p className="text-[11px] text-white/35 px-1" data-testid="re-hidden-note">
+                  נדל"ן מוסתר ({realEstateCount === 1 ? 'נכס אחד' : `${realEstateCount} נכסים`})
+                </p>
+              )}
+              {groupAssetsByType(summaryInv).map((group) => (
                 <div key={group.type} className="space-y-2" data-testid="inv-type-group">
                   {/* Group header: same shape as the insurance groups below */}
                   <div className="flex items-center justify-between px-1 py-1.5 rounded-lg bg-white/3">
@@ -798,16 +819,7 @@ export default function Assets() {
             <TabsContent value="investments" className="space-y-4 mt-3">
               {/* Real-estate toggle: only when there is real estate to take out */}
               {totalRealEstate > 0 && (
-                <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-white/10 bg-white/3 cursor-pointer">
-                  <span className="text-xs text-white/70">
-                    ללא נדל"ן
-                    <span className="block text-[10px] text-white/35">החלוקה ל-100% של הנכסים הפיננסיים בלבד</span>
-                  </span>
-                  {/* dir="rtl": Radix Tabs stamps dir="ltr" on its content, and the shared
-                      Switch slides its thumb left (-translate-x-5) for "on", written for RTL.
-                      Under LTR the thumb left the track. Settings is RTL and unaffected. */}
-                  <Switch dir="rtl" checked={excludeRealEstate} onCheckedChange={setExcludeRealEstate} data-testid="exclude-re-toggle" />
-                </label>
+                reToggle('exclude-re-toggle')
               )}
 
               {/* KPI row: total + real-estate + financial */}
@@ -825,7 +837,7 @@ export default function Assets() {
                   <Card className="col-span-3 sm:col-span-1 border-orange-500/20">
                     <CardContent className="pt-3 pb-3 text-center">
                       <p className="text-sm">🏠</p>
-                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{invS(totalRealEstate)}</p>
+                      <p className="text-base font-bold text-orange-400 leading-tight mt-0.5">{inv(totalRealEstate)}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         נדל"ן וקרקעות
                         {!pctMode && <span className="mr-1 text-white/25">({summaryTotal > 0 ? Math.round((totalRealEstate / summaryTotal) * 100) : 0}%)</span>}
@@ -837,7 +849,7 @@ export default function Assets() {
                   <Card className={`border-emerald-500/20 ${totalRealEstate > 0 ? 'col-span-3 sm:col-span-2' : 'col-span-3'}`}>
                     <CardContent className="pt-3 pb-3 text-center">
                       <p className="text-sm">📈</p>
-                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{invS(totalFinancial)}</p>
+                      <p className="text-base font-bold text-emerald-400 leading-tight mt-0.5">{inv(totalFinancial)}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         השקעות פיננסיות
                         {!pctMode && <span className="mr-1 text-white/25">({summaryTotal > 0 ? Math.round((totalFinancial / summaryTotal) * 100) : 0}%)</span>}
@@ -856,7 +868,7 @@ export default function Assets() {
                         <Pie data={invTypeChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" nameKey="name" strokeWidth={0}>
                           {invTypeChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip content={<ChartTooltip fmt={invS} />} />
+                        <Tooltip content={<ChartTooltip fmt={inv} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-1.5 mt-1" dir="rtl">
@@ -870,7 +882,7 @@ export default function Assets() {
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: entry.color }} />
                             </div>
                             {!pctMode && <span className="text-xs font-medium w-8 text-left shrink-0 text-white/50">{formatShare(entry.value, summaryTotal)}</span>}
-                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{invS(entry.value)}</span>
+                            <span className="text-xs font-bold shrink-0" style={{ color: entry.color }}>{inv(entry.value)}</span>
                           </div>
                         );
                       })}
@@ -888,7 +900,7 @@ export default function Assets() {
                       return (
                         <div key={entry.name}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold" style={{ color: entry.color }}>{invS(entry.value)}</span>
+                            <span className="font-bold" style={{ color: entry.color }}>{inv(entry.value)}</span>
                             <span className="text-white/70">{entry.name} · {entry.count} נכסים</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-2">
@@ -910,7 +922,7 @@ export default function Assets() {
                       return (
                         <div key={risk}>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="font-bold text-emerald-400">{invS(balance)}</span>
+                            <span className="font-bold text-emerald-400">{inv(balance)}</span>
                             <span className="text-white/70">{risk}</span>
                           </div>
                           <div className="w-full bg-white/5 rounded-full h-1.5">

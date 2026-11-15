@@ -1,7 +1,7 @@
 import type { Asset } from '@/types';
 
-// Real estate and land: the holdings the "ללא נדל"ן" toggle on Assets → Summary
-// → Investments takes out, so the remaining 100% is the financial assets alone.
+// Real estate and land: the holdings the "ללא נדל"ן" toggle on Assets (List and Summary
+// → Investments) takes out, so the remaining 100% is the financial assets alone.
 export const REAL_ESTATE_TYPES: ReadonlySet<string> = new Set(['נדל"ן', 'קרקע']);
 
 export const isRealEstate = (a: Asset) => REAL_ESTATE_TYPES.has(a.type);
